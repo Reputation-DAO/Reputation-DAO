@@ -1,0 +1,16 @@
+{
+  "canisters": {
+    "reputation_dao": {
+      "main": "src/reputation_dao/main.mo",
+      "type": "motoko"
+    }
+  },
+  "dfx": "0.17.0",
+  "networks": {
+    "local": {
+      "bind": "127.0.0.1:8000",
+      "type": "ephemeral"
+    }
+  },
+  "version": 1
+}
