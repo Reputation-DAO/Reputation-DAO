@@ -1,13 +1,35 @@
-import React from 'react';
-import { Box, Paper, Stack, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Avatar } from '@mui/material';
+import React, { useState } from 'react';
+import { Box, Paper, Stack, Typography, Avatar, TextField, Button } from '@mui/material';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 
-const dummyBalances = [
-  { id: 'aaaa-bbbb-cccc', name: 'Alice', balance: 120 },
-  { id: 'dddd-eeee-ffff', name: 'Eve', balance: 80 },
-];
+// TODO: Replace this with your actual canister call
+async function fetchBalance(principal: string): Promise<number> {
+  // Simulate API call
+  // Replace with: await reputationDaoActor.getBalance(principal)
+  if (principal === 'aaaa-bbbb-cccc') return 120;
+  if (principal === 'dddd-eeee-ffff') return 80;
+  return 0;
+}
 
 const ViewBalances: React.FC = () => {
+  const [principal, setPrincipal] = useState('');
+  const [balance, setBalance] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFetch = async () => {
+    setLoading(true);
+    setError(null);
+    setBalance(null);
+    try {
+      const result = await fetchBalance(principal.trim());
+      setBalance(result);
+    } catch (e) {
+      setError('Failed to fetch balance.');
+    }
+    setLoading(false);
+  };
+
   return (
     <Box
       sx={{
@@ -29,28 +51,32 @@ const ViewBalances: React.FC = () => {
             <AccountBalanceWalletIcon fontSize="large" />
           </Avatar>
           <Typography variant="h5" fontWeight={600} color="info.main">
-            View Balances
+            View Balance
           </Typography>
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>User</TableCell>
-                  <TableCell>User ID</TableCell>
-                  <TableCell align="right">Reputation</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {dummyBalances.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell>{row.name}</TableCell>
-                    <TableCell>{row.id}</TableCell>
-                    <TableCell align="right">{row.balance}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <TextField
+            label="Enter Principal"
+            value={principal}
+            onChange={(e) => setPrincipal(e.target.value)}
+            fullWidth
+            autoFocus
+          />
+          <Button
+            variant="contained"
+            color="info"
+            onClick={handleFetch}
+            disabled={loading || !principal.trim()}
+            fullWidth
+          >
+            {loading ? 'Fetching...' : 'Get Balance'}
+          </Button>
+          {error && (
+            <Typography color="error">{error}</Typography>
+          )}
+          {balance !== null && !error && (
+            <Typography variant="h6" color="text.primary">
+              Reputation: <b>{balance}</b>
+            </Typography>
+          )}
         </Stack>
       </Paper>
     </Box>
