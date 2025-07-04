@@ -219,11 +219,10 @@ getAwardHistory(user: Principal): [AwardLog]
 
 # ✅ Hackathon Deliverables
 
-* [x] `main.mo` + `dfx.json` (Deployed Canister)
-* [x] Clear Documentation
-* [x] Open-source License
-* [x] Demo Video (Award/Revoke flow)
-* [x] Defined Rules for Minting, Revoking, Usage
+* [] `main.mo` + `dfx.json` (Deployed Canister)
+* [] Clear Documentation
+* [] Demo Video (Award/Revoke flow)
+* [] Defined Rules for Minting, Revoking, Usage
 
 ---
 
