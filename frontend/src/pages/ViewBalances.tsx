@@ -1,11 +1,17 @@
 import React, { useState } from 'react';
-import { Box, Paper, Stack, Typography, Avatar, TextField, Button } from '@mui/material';
+import {
+  Box,
+  Paper,
+  Stack,
+  Typography,
+  Avatar,
+  TextField,
+  Button,
+} from '@mui/material';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 
 // TODO: Replace this with your actual canister call
 async function fetchBalance(principal: string): Promise<number> {
-  // Simulate API call
-  // Replace with: await reputationDaoActor.getBalance(principal)
   if (principal === 'aaaa-bbbb-cccc') return 120;
   if (principal === 'dddd-eeee-ffff') return 80;
   return 0;
@@ -34,46 +40,115 @@ const ViewBalances: React.FC = () => {
     <Box
       sx={{
         width: '100%',
-        minHeight: 'calc(100vh - 64px)',
-        marginLeft: '410px',
-        marginTop: '85px',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'flex-start',
-        background: 'transparent',
-        pt: 6,
+        minHeight: '100vh',
+        backgroundColor: 'hsl(var(--background))',
+        color: 'hsl(var(--foreground))',
+        px: { xs: 2, sm: 4, md: 8 },
+        py: { xs: 6, sm: 8 },
+        transition: 'background-color var(--transition-smooth), color var(--transition-smooth)',
       }}
     >
-      <Paper elevation={4} sx={{ p: 4, minWidth: 350, maxWidth: 600 }}>
+      <Paper
+        elevation={4}
+        sx={{
+          maxWidth: 500,
+          mx: 'auto',
+          mt: { xs: 4, md: 6 },
+          p: { xs: 3, sm: 5 },
+          borderRadius: 3,
+          background: 'linear-gradient(135deg, hsla(var(--primary), 0.2), hsla(var(--muted), 0.9))',
+          color: 'hsl(var(--foreground))',
+          border: 'var(--glass-border)',
+          backdropFilter: 'var(--glass-blur)',
+          boxShadow: 'var(--shadow-md)',
+        }}
+      >
         <Stack spacing={3} alignItems="center">
-          <Avatar sx={{ bgcolor: 'info.main', width: 56, height: 56 }}>
+          <Avatar
+            sx={{
+              bgcolor: 'hsl(var(--info))',
+              color: 'hsl(var(--primary-foreground))',
+              width: 64,
+              height: 64,
+            }}
+          >
             <AccountBalanceWalletIcon fontSize="large" />
           </Avatar>
-          <Typography variant="h5" fontWeight={600} color="info.main">
+
+          <Typography
+            variant="h5"
+            fontWeight={600}
+            sx={{ color: 'hsl(var(--foreground))' }}
+          >
             View Balance
           </Typography>
+
           <TextField
             label="Enter Principal"
             value={principal}
             onChange={(e) => setPrincipal(e.target.value)}
             fullWidth
             autoFocus
+            InputLabelProps={{
+              sx: {
+                color: 'hsl(var(--foreground))',
+              },
+            }}
+            InputProps={{
+              sx: {
+                color: 'hsl(var(--foreground))',
+                backgroundColor: 'hsl(var(--muted))',
+                borderRadius: 2,
+                '& fieldset': {
+                  borderColor: 'hsl(var(--border))',
+                },
+                '&:hover fieldset': {
+                  borderColor: 'hsl(var(--primary))',
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: 'hsl(var(--primary))',
+                },
+              },
+            }}
           />
-          <Button
-            variant="contained"
-            color="info"
+
+         <Button
+            type="button"
             onClick={handleFetch}
             disabled={loading || !principal.trim()}
             fullWidth
+            sx={{
+              mt: 1,
+              py: 1.25,
+              fontWeight: 600,
+              borderRadius: 2,
+              fontSize: '0.95rem',
+              backgroundColor: 'hsl(var(--info))',
+              color: 'hsl(var(--primary-foreground))',
+              transition: 'all var(--transition-smooth)',
+              '&:hover': {
+                backgroundColor: 'hsl(var(--accent))',
+                color: 'hsl(var(--accent-foreground))',
+              },
+              '&.Mui-disabled': {
+                opacity: 0.6,
+                backgroundColor: 'hsl(var(--muted))',
+                color: 'hsl(var(--muted-foreground))',
+              },
+            }}
           >
             {loading ? 'Fetching...' : 'Get Balance'}
           </Button>
+
+
           {error && (
-            <Typography color="error">{error}</Typography>
+            <Typography color="error" variant="body2">
+              {error}
+            </Typography>
           )}
+
           {balance !== null && !error && (
-            <Typography variant="h6" color="text.primary">
+            <Typography variant="h6" sx={{ color: 'hsl(var(--foreground))' }}>
               Reputation: <b>{balance}</b>
             </Typography>
           )}

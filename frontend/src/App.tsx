@@ -1,6 +1,7 @@
-import React from 'react';
+
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { Layout } from './Layout';
+import Layout from './components/layout/Layout';
+
 import Dashboard from './pages/Dashboard';
 import AwardRep from './pages/AwardRep';
 import RevokeRep from './pages/RevokeRep';
@@ -10,15 +11,48 @@ import ViewBalances from './pages/ViewBalances';
 function App() {
   return (
     <Router>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/award" element={<AwardRep />} />
-          <Route path="/revoke" element={<RevokeRep />} />
-          <Route path="/awarders" element={<ManageAwarders />} />
-          <Route path="/balances" element={<ViewBalances />} />
-        </Routes>
-      </Layout>
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <Layout>
+              <Dashboard />
+            </Layout>
+          }
+        />
+        <Route
+          path="/award"
+          element={
+            <Layout>
+              <AwardRep />
+            </Layout>
+          }
+        />
+        <Route
+          path="/revoke"
+          element={
+            <Layout>
+              <RevokeRep />
+            </Layout>
+          }
+        />
+        <Route
+          path="/awarders"
+          element={
+            <Layout>
+              <ManageAwarders />
+            </Layout>
+          }
+        />
+        <Route
+          path="/balances"
+          element={
+            <Layout>
+              <ViewBalances />
+            </Layout>
+          }
+        />
+      </Routes>
     </Router>
   );
 }
