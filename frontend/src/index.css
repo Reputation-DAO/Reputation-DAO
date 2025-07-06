@@ -1,68 +1,81 @@
-:root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
-
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
-}
-
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
-
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
-@media (prefers-color-scheme: light) {
+@layer base {
   :root {
-    color: #213547;
-    background-color: #ffffff;
+    --background: 0 0% 98%;            /* Soft light bg */
+    --foreground: 220 15% 15%;         /* Almost-black text */
+
+    --primary: 208 91% 52%;            /* Slightly softened #0A80ED */
+    --primary-foreground: 220 15% 15%; /* soft black */
+
+    --accent: 208 91% 85%;             /* Softer hover blue */
+    --accent-foreground: 220 20% 10%;
+
+    --info: 200 100% 48%;              /* Vibrant blue for info elements */
+    --info-foreground: 0 0% 100%;      /* Pure white for contrast */
+
+    --border: 220 15% 90%;             /* Subtle border */
+    --muted: 220 20% 95%;              /* Light gray */
+    --muted-foreground: 220 10% 40%;
+
+    --glass-blur: blur(14px);
+    --glass-border: 1px solid rgba(0, 0, 0, 0.08);
+
+    --shadow-lg: 0 6px 20px rgba(0, 0, 0, 0.1);
+    --transition-fast: 150ms ease-in-out;
+    --transition-smooth: 300ms ease-in-out;
+
+    --gradient-header: linear-gradient(135deg, hsl(208 91% 52% / 0.85), hsl(220 20% 97% / 0.95));
   }
-  a:hover {
-    color: #747bff;
+
+  .dark {
+    --background: 222 30% 7%;           /* Not pitch black */
+    --foreground: 0 0% 90%;             /* Slightly off-white */
+
+    --primary: 208 91% 60%;             /* A touch more glow */
+    --primary-foreground: 0 0% 100%;
+
+    --accent: 208 91% 70%;              /* Softer hover */
+    --accent-foreground: 0 0% 100%;
+
+    --info: 200 100% 58%;               /* Slightly brighter in dark mode */
+    --info-foreground: 0 0% 100%;
+
+    --border: 222 15% 20%;
+    --muted: 222 20% 12%;
+    --muted-foreground: 220 10% 65%;
+
+    --glass-blur: blur(14px);
+    --glass-border: 1px solid rgba(255, 255, 255, 0.12);
+
+    --shadow-lg: 0 6px 20px rgba(0, 0, 0, 0.25);
+    --transition-fast: 150ms ease-in-out;
+    --transition-smooth: 300ms ease-in-out;
+
+    --gradient-header: linear-gradient(135deg, hsl(208 91% 52% / 0.9), hsl(222 30% 7% / 0.95));
   }
-  button {
-    background-color: #f9f9f9;
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    margin: 0;
+    min-height: 100vh;
+    font-family: system-ui, sans-serif;
+  }
+
+  /* Hide scrollbars but allow scrolling */
+  html, body {
+    overflow: auto;
+    scrollbar-width: none;         /* Firefox */
+    -ms-overflow-style: none;      /* Internet Explorer 10+ */
+  }
+
+  body::-webkit-scrollbar {
+    display: none;                 /* Chrome, Safari, Opera */
   }
 }
