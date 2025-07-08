@@ -7,6 +7,7 @@ import AwardRep from './pages/AwardRep';
 import RevokeRep from './pages/RevokeRep';
 import ManageAwarders from './pages/ManageAwarders';
 import ViewBalances from './pages/ViewBalances';
+import TransactionLogSimple from './pages/TransactionLogSimple';
 
 function App() {
   return (
@@ -49,6 +50,14 @@ function App() {
           element={
             <Layout>
               <ViewBalances />
+            </Layout>
+          }
+        />
+        <Route
+          path="/transactions"
+          element={
+            <Layout>
+              <TransactionLogSimple />
             </Layout>
           }
         />
