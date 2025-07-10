@@ -15,8 +15,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const drawerPaperStyles = {
     boxSizing: 'border-box',
     width: drawerWidth,
-    backgroundColor: 'var(--background)',
-    color: 'var(--foreground)',
+    backgroundColor: 'hsl(var(--background))',
+    color: 'hsl(var(--foreground))',
     transition: 'background-color var(--transition-smooth), color var(--transition-smooth)',
   };
 
@@ -61,8 +61,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           flexGrow: 1,
        
           width: { sm: `calc(100% - ${drawerWidth}px)` },
-          backgroundColor: 'var(--background)',
-          color: 'var(--foreground)',
+          backgroundColor: 'hsl(var(--background))',
+          color: 'hsl(var(--foreground))',
           minHeight: '100vh',
           transition: 'background-color var(--transition-smooth), color var(--transition-smooth)',
         }}

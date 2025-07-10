@@ -20,7 +20,7 @@ interface AppBarHeaderProps {
 const AppBarHeader: React.FC<AppBarHeaderProps> = ({ onMenuClick }) => {
   const theme = useTheme();
   const [mode, setMode] = useState<'light' | 'dark'>(
-    typeof window !== 'undefined' && localStorage.getItem('theme') === 'dark' ? 'dark' : 'light'
+    typeof window !== 'undefined' && localStorage.getItem('theme') === 'light' ? 'light' : 'dark'
   );
 
   useEffect(() => {
