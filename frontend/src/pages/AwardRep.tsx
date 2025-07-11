@@ -15,6 +15,7 @@ import { Principal } from '@dfinity/principal';
 const AwardRep: React.FC = () => {
   const [userId, setUserId] = useState('');
   const [points, setPoints] = useState('');
+  const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
@@ -24,6 +25,7 @@ const AwardRep: React.FC = () => {
   setLoading(true);
   setSuccess(false);
   setError('');
+
 
   try {
     if (!userId || !points || isNaN(Number(points))) {
@@ -51,6 +53,7 @@ const AwardRep: React.FC = () => {
     setLoading(false);
   }
 };
+
 
   return (
     <Box
@@ -144,6 +147,38 @@ const AwardRep: React.FC = () => {
       required
       type="number"
       inputProps={{ min: 1 }}
+      InputLabelProps={{
+        sx: {
+          color: 'hsl(var(--foreground))',
+        },
+      }}
+      InputProps={{
+        sx: {
+          color: 'hsl(var(--foreground))',
+          backgroundColor: 'hsl(var(--muted))',
+          borderRadius: 2,
+          '& fieldset': {
+            borderColor: 'hsl(var(--border))',
+          },
+          '&:hover fieldset': {
+            borderColor: 'hsl(var(--primary))',
+          },
+          '&.Mui-focused fieldset': {
+            borderColor: 'hsl(var(--primary))',
+          },
+        },
+      }}
+    />
+
+    <TextField
+      label="Reason (Optional)"
+      variant="outlined"
+      fullWidth
+      value={reason}
+      onChange={(e) => setReason(e.target.value)}
+      multiline
+      rows={3}
+      placeholder="Why are you awarding these points?"
       InputLabelProps={{
         sx: {
           color: 'hsl(var(--foreground))',
