@@ -9,6 +9,8 @@ import {
   Paper,
 } from '@mui/material';
 import RemoveCircleIcon from '@mui/icons-material/RemoveCircle';
+import { Principal } from '@dfinity/principal';
+import { getPlugActor } from '../components/canister/reputationDao';
 
 const RevokeRep: React.FC = () => {
   const [userId, setUserId] = useState('');
@@ -23,16 +25,30 @@ const RevokeRep: React.FC = () => {
     setSuccess(false);
     setError('');
 
-    setTimeout(() => {
-      setLoading(false);
-      if (userId && points && !isNaN(Number(points))) {
+    try {
+      if (!userId || !points || isNaN(Number(points))) {
+        throw new Error('Please enter a valid User ID and numeric points.');
+      }
+
+      const actor = await getPlugActor();
+      const principal = Principal.fromText(userId.trim());
+      const amount = BigInt(points.trim());
+
+      const result = await actor.revokeRep(principal, amount);
+
+      if (result.startsWith('Success')) {
         setSuccess(true);
         setUserId('');
         setPoints('');
       } else {
-        setError('Please enter a valid User ID and numeric points.');
+        setError(result); // Canister returns error string
       }
-    }, 1200);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Failed to revoke reputation.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -96,24 +112,16 @@ const RevokeRep: React.FC = () => {
                 onChange={(e) => setUserId(e.target.value)}
                 required
                 InputLabelProps={{
-                  sx: {
-                    color: 'hsl(var(--foreground))',
-                  },
+                  sx: { color: 'hsl(var(--foreground))' },
                 }}
                 InputProps={{
                   sx: {
                     color: 'hsl(var(--foreground))',
                     backgroundColor: 'hsl(var(--muted))',
                     borderRadius: 2,
-                    '& fieldset': {
-                      borderColor: 'hsl(var(--border))',
-                    },
-                    '&:hover fieldset': {
-                      borderColor: 'hsl(var(--primary))',
-                    },
-                    '&.Mui-focused fieldset': {
-                      borderColor: 'hsl(var(--primary))',
-                    },
+                    '& fieldset': { borderColor: 'hsl(var(--border))' },
+                    '&:hover fieldset': { borderColor: 'hsl(var(--primary))' },
+                    '&.Mui-focused fieldset': { borderColor: 'hsl(var(--primary))' },
                   },
                 }}
               />
@@ -128,24 +136,16 @@ const RevokeRep: React.FC = () => {
                 type="number"
                 inputProps={{ min: 1 }}
                 InputLabelProps={{
-                  sx: {
-                    color: 'hsl(var(--foreground))',
-                  },
+                  sx: { color: 'hsl(var(--foreground))' },
                 }}
                 InputProps={{
                   sx: {
                     color: 'hsl(var(--foreground))',
                     backgroundColor: 'hsl(var(--muted))',
                     borderRadius: 2,
-                    '& fieldset': {
-                      borderColor: 'hsl(var(--border))',
-                    },
-                    '&:hover fieldset': {
-                      borderColor: 'hsl(var(--primary))',
-                    },
-                    '&.Mui-focused fieldset': {
-                      borderColor: 'hsl(var(--primary))',
-                    },
+                    '& fieldset': { borderColor: 'hsl(var(--border))' },
+                    '&:hover fieldset': { borderColor: 'hsl(var(--primary))' },
+                    '&.Mui-focused fieldset': { borderColor: 'hsl(var(--primary))' },
                   },
                 }}
               />

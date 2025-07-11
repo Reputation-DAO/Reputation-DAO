@@ -9,6 +9,8 @@ import {
   Paper,
 } from '@mui/material';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import { getPlugActor } from '../components/canister/reputationDao'; // <-- Make sure path is correct
+import { Principal } from '@dfinity/principal';
 
 const AwardRep: React.FC = () => {
   const [userId, setUserId] = useState('');
@@ -18,23 +20,37 @@ const AwardRep: React.FC = () => {
   const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setSuccess(false);
-    setError('');
+  e.preventDefault();
+  setLoading(true);
+  setSuccess(false);
+  setError('');
 
-    // TODO: Integrate with backend/ICP canister call here
-    setTimeout(() => {
-      setLoading(false);
-      if (userId && points && !isNaN(Number(points))) {
-        setSuccess(true);
-        setUserId('');
-        setPoints('');
-      } else {
-        setError('Please enter a valid User ID and numeric points.');
-      }
-    }, 1200);
-  };
+  try {
+    if (!userId || !points || isNaN(Number(points))) {
+      throw new Error('Please enter a valid user ID and numeric points.');
+    }
+
+    const principal = Principal.fromText(userId.trim());
+    const amount = BigInt(points.trim());
+
+  const actor = await getPlugActor();
+  const result = await actor.awardRep(principal, amount);
+
+
+    if (result.startsWith('Success')) {
+      setSuccess(true);
+      setUserId('');
+      setPoints('');
+    } else {
+      setError(result); // Canister returns error as string
+    }
+  } catch (err: any) {
+    console.error(err);
+    setError(err.message || 'Failed to award reputation. ');
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <Box

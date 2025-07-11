@@ -32,8 +32,10 @@ actor ReputationDAO {
 
 
     // Owner/admin principal (replace with your actual principal before deploy)
-    stable var owner : Principal = Principal.fromText("ofkbl-m6bgx-xlgm3-ko4y6-mh7i4-kp6b4-sojbh-wyy2r-aznnp-gmqtb-xqe"); // TODO: Set your admin principal
 
+
+    // TODO: Set your admin principal aka your plug id here 
+    stable var owner : Principal = Principal.fromText("ofkbl-m6bgx-xlgm3-ko4y6-mh7i4-kp6b4-sojbh-wyy2r-aznnp-gmqtb-xqe"); 
 
     // --- Utility functions and core logic ---
 
@@ -54,7 +56,7 @@ public shared({caller}) func awardRep(to: Principal, amount: Nat) : async Text {
 
     // Check: caller is trusted awarder
     switch (Trie.get<Principal, ()>(trustedAwarders, callerKey, Principal.equal)) {
-        case null { return "Error: Not a trusted awarder." };
+        case null { return "Error: Not a trusted awarder. Caller: " # Principal.toText(caller); };
         case _ {};
     };
 
