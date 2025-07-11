@@ -12,6 +12,8 @@ import Nat "mo:base/Nat";
 import Int "mo:base/Int";
 import Array "mo:base/Array";
 import Buffer "mo:base/Buffer";
+import Iter "mo:base/Iter";
+
 
 // Main Reputation DAO actor
 actor ReputationDAO {
@@ -31,6 +33,11 @@ actor ReputationDAO {
         timestamp: Nat;   // Unix timestamp
         reason: ?Text;    // Optional reason for the transaction
     };
+    public type Awarder = {
+      id: Principal;
+      name: Text;
+    };
+
 
     // --- Stable State ---
 
@@ -38,7 +45,8 @@ actor ReputationDAO {
     stable var balances : Trie.Trie<Principal, Nat> = Trie.empty();
 
     // Trusted awarders: Principal -> () (acts as a set)
-    stable var trustedAwarders : Trie.Trie<Principal, ()> = Trie.empty();
+    stable var trustedAwarders : Trie.Trie<Principal, Text> = Trie.empty();
+
 
     // Daily minted amount per awarder: Principal -> Nat
     stable var dailyMinted : Trie.Trie<Principal, Nat> = Trie.empty();
@@ -54,7 +62,7 @@ actor ReputationDAO {
 
 
     // TODO: Set your admin principal aka your plug id here 
-    stable var owner : Principal = Principal.fromText("ofkbl-m6bgx-xlgm3-ko4y6-mh7i4-kp6b4-sojbh-wyy2r-aznnp-gmqtb-xqe"); 
+    stable var owner : Principal = Principal.fromText("6irei-lbuuz-kvkkd-j64xq-iqmzo-xbwxo-xl2gz-qgy6f-youtz-6awsa-7qe"); 
 
     // --- Utility functions and core logic ---
 
@@ -92,7 +100,7 @@ public shared({caller}) func awardRep(to: Principal, amount: Nat, reason: ?Text)
     let toKey = { key = to; hash = Principal.hash(to) };
 
     // Check: caller is trusted awarder
-    switch (Trie.get<Principal, ()>(trustedAwarders, callerKey, Principal.equal)) {
+    switch (Trie.get<Principal, Text>(trustedAwarders, callerKey, Principal.equal)) {
         case null { return "Error: Not a trusted awarder. Caller: " # Principal.toText(caller); };
         case _ {};
     };
@@ -149,15 +157,15 @@ public shared({caller}) func revokeRep(from: Principal, amount: Nat, reason: ?Te
     Debug.print("Rep revoked: " # Nat.toText(amount) # " from " # Principal.toText(from));
     return "Success: Rep revoked.";
 };
-    
+
     // --- 3️⃣ addTrustedAwarder: Owner can add a trusted awarder ---
-public shared({caller}) func addTrustedAwarder(p: Principal) : async Text {
+public shared({caller}) func addTrustedAwarder(p: Principal, name: Text) : async Text {
     if (not Principal.equal(caller, owner)) {
         return "Error: Only owner can add awarders.";
     };
     let pKey = { key = p; hash = Principal.hash(p) };
-    trustedAwarders := Trie.put<Principal, ()>(trustedAwarders, pKey, Principal.equal, ()).0;
-    Debug.print("Trusted awarder added: " # Principal.toText(p));
+    trustedAwarders := Trie.put<Principal, Text>(trustedAwarders, pKey, Principal.equal, name).0;
+    Debug.print("Trusted awarder added: " # Principal.toText(p) # " with name: " # name);
     return "Success: Awarder added.";
 };
 
@@ -167,7 +175,7 @@ public shared({caller}) func removeTrustedAwarder(p: Principal) : async Text {
         return "Error: Only owner can remove awarders.";
     };
     let pKey = { key = p; hash = Principal.hash(p) };
-    trustedAwarders := Trie.remove<Principal, ()>(trustedAwarders, pKey, Principal.equal).0;
+    trustedAwarders := Trie.remove<Principal, Text>(trustedAwarders, pKey, Principal.equal).0;
     Debug.print("Trusted awarder removed: " # Principal.toText(p));
     return "Success: Awarder removed.";
 };
@@ -205,6 +213,15 @@ public shared({caller}) func removeTrustedAwarder(p: Principal) : async Text {
         transactionHistory.size()
     };
 
-   
+    // basically to get already registered awarders
+    public query func getTrustedAwarders() : async [Awarder] {
+      let entries = Iter.toArray(Trie.iter(trustedAwarders));
+      Array.map<(Principal, Text), Awarder>(
+        entries,
+        func((p: Principal, name: Text)) : Awarder {
+          { id = p; name = name }
+        }
+      )
+    }
 
 };

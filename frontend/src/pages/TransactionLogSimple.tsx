@@ -16,6 +16,7 @@ import {
   CircularProgress
 } from '@mui/material';
 import HistoryIcon from '@mui/icons-material/History';
+import { getPlugActor } from '../components/canister/reputationDao';
 
 interface Transaction {
   id: number;
@@ -30,42 +31,33 @@ interface Transaction {
 const TransactionLogSimple: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Mock data for testing - load immediately
-    const mockTransactions: Transaction[] = [
-      {
-        id: 1,
-        transactionType: { Award: null },
-        from: 'rdmx6-jaaaa-aaaah-qcaiq-cai',
-        to: 'rrkah-fqaaa-aaaah-qcaiq-cai',
-        amount: 10,
-        timestamp: Math.floor(Date.now() / 1000) - 3600,
-        reason: ['Good trading behavior']
-      },
-      {
-        id: 2,
-        transactionType: { Revoke: null },
-        from: 'rdmx6-jaaaa-aaaah-qcaiq-cai',
-        to: 'rrkah-fqaaa-aaaah-qcaiq-cai',
-        amount: 5,
-        timestamp: Math.floor(Date.now() / 1000) - 1800,
-        reason: ['Violation of rules']
-      },
-      {
-        id: 3,
-        transactionType: { Award: null },
-        from: 'rdmx6-jaaaa-aaaah-qcaiq-cai',
-        to: 'abc12-3def4-5ghi6-7jkl8-9mno0',
-        amount: 15,
-        timestamp: Math.floor(Date.now() / 1000) - 7200,
-        reason: ['Excellent community contribution']
+    const fetchTransactions = async () => {
+      try {
+        const actor = await getPlugActor();
+        const result = await actor.getTransactionHistory();
+        // Transform bigint and Principal into usable JS format
+        const formatted = result.map((tx: any) => ({
+          id: Number(tx.id),
+          transactionType: tx.transactionType,
+          from: tx.from.toText(),
+          to: tx.to.toText(),
+          amount: Number(tx.amount),
+          timestamp: Number(tx.timestamp),
+          reason: tx.reason,
+        }));
+        setTransactions(formatted);
+      } catch (err: any) {
+        console.error(err);
+        setError(err.message || 'Failed to fetch transactions.');
+      } finally {
+        setLoading(false);
       }
-    ];
+    };
 
-    // Load immediately, no artificial delay
-    setTransactions(mockTransactions);
-    setLoading(false);
+    fetchTransactions();
   }, []);
 
   const formatTimestamp = (timestamp: number): string => {
@@ -95,7 +87,6 @@ const TransactionLogSimple: React.FC = () => {
           color: 'hsl(var(--foreground))',
           px: { xs: 2, sm: 4, md: 8 },
           py: { xs: 6, sm: 8 },
-          transition: 'background-color var(--transition-smooth), color var(--transition-smooth)',
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
@@ -115,7 +106,6 @@ const TransactionLogSimple: React.FC = () => {
         color: 'hsl(var(--foreground))',
         px: { xs: 2, sm: 4, md: 8 },
         py: { xs: 6, sm: 8 },
-        transition: 'background-color var(--transition-smooth), color var(--transition-smooth)',
       }}
     >
       <Paper
@@ -127,7 +117,6 @@ const TransactionLogSimple: React.FC = () => {
           p: { xs: 3, sm: 5 },
           borderRadius: 3,
           background: 'linear-gradient(135deg, hsla(var(--primary), 0.2), hsla(var(--muted), 0.9))',
-          color: 'hsl(var(--foreground))',
           border: 'var(--glass-border)',
           backdropFilter: 'var(--glass-blur)',
           boxShadow: 'var(--shadow-md)',
@@ -145,211 +134,51 @@ const TransactionLogSimple: React.FC = () => {
             <HistoryIcon fontSize="large" />
           </Avatar>
 
-          <Typography
-            variant="h4"
-            component="h1"
-            textAlign="center"
-            fontWeight={600}
-            sx={{ color: 'hsl(var(--foreground))' }}
-          >
+          <Typography variant="h4" fontWeight={600} textAlign="center">
             Transaction Log
           </Typography>
 
-          <Typography
-            variant="body1"
-            textAlign="center"
-            sx={{ 
-              color: 'hsl(var(--muted-foreground))',
-              maxWidth: 600,
-              mx: 'auto'
-            }}
-          >
-            Complete history of all reputation awards and revocations
-          </Typography>
-
-          <Alert 
-            severity="info" 
-            sx={{ 
-              width: '100%',
-              backgroundColor: 'hsla(var(--primary), 0.1)',
-              color: 'hsl(var(--foreground))',
-              borderColor: 'hsl(var(--border))',
-              '& .MuiAlert-icon': {
-                color: 'hsl(var(--primary))',
-              },
-            }}
-          >
-            This is a test version with mock data. Connect to the canister to see real transactions.
-          </Alert>
+          {error && (
+            <Alert severity="error" sx={{ width: '100%' }}>
+              {error}
+            </Alert>
+          )}
 
           {transactions.length === 0 ? (
-            <Box sx={{ mt: 4, textAlign: 'center', width: '100%' }}>
-              <Typography variant="h6" sx={{ color: 'hsl(var(--muted-foreground))' }}>
-                No transactions found
-              </Typography>
-            </Box>
+            <Typography variant="body1" sx={{ color: 'hsl(var(--muted-foreground))' }}>
+              No transactions found.
+            </Typography>
           ) : (
             <Box sx={{ width: '100%', overflowX: 'auto' }}>
-              <TableContainer 
-                component={Paper}
-                sx={{
-                  backgroundColor: 'hsl(var(--card))',
-                  borderRadius: 2,
-                  border: '1px solid hsl(var(--border))',
-                  boxShadow: 'var(--shadow-sm)',
-                }}
-              >
-                <Table sx={{ minWidth: { xs: 650, md: 750 } }}>
+              <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
+                <Table>
                   <TableHead>
-                    <TableRow sx={{ backgroundColor: 'hsl(var(--muted))' }}>
-                      <TableCell sx={{ 
-                        color: 'hsl(var(--foreground))', 
-                        fontWeight: 600,
-                        borderColor: 'hsl(var(--border))'
-                      }}>
-                        ID
-                      </TableCell>
-                      <TableCell sx={{ 
-                        color: 'hsl(var(--foreground))', 
-                        fontWeight: 600,
-                        borderColor: 'hsl(var(--border))'
-                      }}>
-                        Type
-                      </TableCell>
-                      <TableCell sx={{ 
-                        color: 'hsl(var(--foreground))', 
-                        fontWeight: 600,
-                        borderColor: 'hsl(var(--border))'
-                      }}>
-                        From
-                      </TableCell>
-                      <TableCell sx={{ 
-                        color: 'hsl(var(--foreground))', 
-                        fontWeight: 600,
-                        borderColor: 'hsl(var(--border))'
-                      }}>
-                        To
-                      </TableCell>
-                      <TableCell sx={{ 
-                        color: 'hsl(var(--foreground))', 
-                        fontWeight: 600,
-                        borderColor: 'hsl(var(--border))'
-                      }}>
-                        Amount
-                      </TableCell>
-                      <TableCell sx={{ 
-                        color: 'hsl(var(--foreground))', 
-                        fontWeight: 600,
-                        borderColor: 'hsl(var(--border))'
-                      }}>
-                        Timestamp
-                      </TableCell>
-                      <TableCell sx={{ 
-                        color: 'hsl(var(--foreground))', 
-                        fontWeight: 600,
-                        borderColor: 'hsl(var(--border))'
-                      }}>
-                        Reason
-                      </TableCell>
+                    <TableRow>
+                      <TableCell>ID</TableCell>
+                      <TableCell>Type</TableCell>
+                      <TableCell>From</TableCell>
+                      <TableCell>To</TableCell>
+                      <TableCell>Amount</TableCell>
+                      <TableCell>Timestamp</TableCell>
+                      <TableCell>Reason</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {transactions.map((transaction, index) => (
-                      <TableRow 
-                        key={transaction.id}
-                        sx={{
-                          backgroundColor: index % 2 === 0 
-                            ? 'hsl(var(--card))' 
-                            : 'hsla(var(--muted), 0.3)',
-                          '&:hover': {
-                            backgroundColor: 'hsla(var(--primary), 0.1)',
-                          },
-                          transition: 'background-color var(--transition-smooth)',
-                        }}
-                      >
-                        <TableCell sx={{ 
-                          color: 'hsl(var(--foreground))',
-                          borderColor: 'hsl(var(--border))',
-                          fontWeight: 500
-                        }}>
-                          {transaction.id}
-                        </TableCell>
-                        <TableCell sx={{ borderColor: 'hsl(var(--border))' }}>
+                    {transactions.map((tx) => (
+                      <TableRow key={tx.id}>
+                        <TableCell>{tx.id}</TableCell>
+                        <TableCell>
                           <Chip
-                            label={getTransactionTypeText(transaction.transactionType)}
-                            color={getTransactionTypeColor(transaction.transactionType)}
+                            label={getTransactionTypeText(tx.transactionType)}
+                            color={getTransactionTypeColor(tx.transactionType)}
                             size="small"
-                            sx={{
-                              fontWeight: 600,
-                              ...(getTransactionTypeColor(transaction.transactionType) === 'success' && {
-                                backgroundColor: 'hsla(var(--primary), 0.2)',
-                                color: 'hsl(var(--primary))',
-                              }),
-                              ...(getTransactionTypeColor(transaction.transactionType) === 'error' && {
-                                backgroundColor: 'hsla(var(--destructive), 0.3)',
-                                color: 'hsl(var(--foreground))', // Changed to foreground color for better visibility
-                              }),
-                            }}
                           />
                         </TableCell>
-                        <TableCell sx={{ borderColor: 'hsl(var(--border))' }}>
-                          <Typography 
-                            variant="body2" 
-                            fontFamily="monospace"
-                            sx={{ 
-                              color: 'hsl(var(--muted-foreground))',
-                              fontSize: '0.75rem'
-                            }}
-                          >
-                            {formatPrincipal(transaction.from)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell sx={{ borderColor: 'hsl(var(--border))' }}>
-                          <Typography 
-                            variant="body2" 
-                            fontFamily="monospace"
-                            sx={{ 
-                              color: 'hsl(var(--muted-foreground))',
-                              fontSize: '0.75rem'
-                            }}
-                          >
-                            {formatPrincipal(transaction.to)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell sx={{ borderColor: 'hsl(var(--border))' }}>
-                          <Typography 
-                            variant="body2" 
-                            fontWeight="bold"
-                            sx={{ color: 'hsl(var(--foreground))' }}
-                          >
-                            {transaction.amount}
-                          </Typography>
-                        </TableCell>
-                        <TableCell sx={{ borderColor: 'hsl(var(--border))' }}>
-                          <Typography 
-                            variant="body2"
-                            sx={{ 
-                              color: 'hsl(var(--muted-foreground))',
-                              fontSize: '0.75rem'
-                            }}
-                          >
-                            {formatTimestamp(transaction.timestamp)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell sx={{ borderColor: 'hsl(var(--border))' }}>
-                          <Typography 
-                            variant="body2"
-                            sx={{ 
-                              color: 'hsl(var(--foreground))',
-                              maxWidth: 200,
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap'
-                            }}
-                          >
-                            {transaction.reason.length > 0 ? transaction.reason[0] : '-'}
-                          </Typography>
-                        </TableCell>
+                        <TableCell>{formatPrincipal(tx.from)}</TableCell>
+                        <TableCell>{formatPrincipal(tx.to)}</TableCell>
+                        <TableCell>{tx.amount}</TableCell>
+                        <TableCell>{formatTimestamp(tx.timestamp)}</TableCell>
+                        <TableCell>{tx.reason.length ? tx.reason[0] : '-'}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

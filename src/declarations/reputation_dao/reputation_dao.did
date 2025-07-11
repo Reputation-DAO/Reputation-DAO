@@ -1,7 +1,32 @@
+type TransactionType = 
+ variant {
+   Award;
+   Revoke;
+ };
+type Transaction = 
+ record {
+   amount: nat;
+   from: principal;
+   id: nat;
+   reason: opt text;
+   timestamp: nat;
+   to: principal;
+   transactionType: TransactionType;
+ };
+type Awarder = 
+ record {
+   id: principal;
+   name: text;
+ };
 service : {
-  addTrustedAwarder: (p: principal) -> (text);
-  awardRep: (to: principal, amount: nat) -> (text);
+  addTrustedAwarder: (p: principal, name: text) -> (text);
+  awardRep: (to: principal, amount: nat, reason: opt text) -> (text);
   getBalance: (p: principal) -> (nat) query;
+  getTransactionById: (id: nat) -> (opt Transaction) query;
+  getTransactionCount: () -> (nat) query;
+  getTransactionHistory: () -> (vec Transaction) query;
+  getTransactionsByUser: (user: principal) -> (vec Transaction) query;
+  getTrustedAwarders: () -> (vec Awarder) query;
   removeTrustedAwarder: (p: principal) -> (text);
-  revokeRep: (from: principal, amount: nat) -> (text);
+  revokeRep: (from: principal, amount: nat, reason: opt text) -> (text);
 }

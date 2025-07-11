@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Paper,
@@ -8,7 +8,6 @@ import {
   List,
   ListItem,
   ListItemAvatar,
-  ListItemText,
   Avatar,
   Divider,
   TextField,
@@ -19,6 +18,12 @@ import PersonRemoveIcon from '@mui/icons-material/PersonRemove';
 import { getPlugActor } from '../components/canister/reputationDao';
 import { Principal } from '@dfinity/principal';
 
+// 🔧 Utility to shorten principal ID
+const formatPrincipalShort = (principal: string): string => {
+  if (principal.length <= 13) return principal;
+  return `${principal.slice(0, 6)}...${principal.slice(-6)}`;
+};
+
 const ManageAwarders: React.FC = () => {
   const [awarders, setAwarders] = useState<{ id: string; name: string }[]>([]);
   const [newAwarderId, setNewAwarderId] = useState('');
@@ -26,6 +31,25 @@ const ManageAwarders: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  useEffect(() => {
+    const fetchAwarders = async () => {
+      try {
+        const actor = await getPlugActor();
+        const fetched = await actor.getTrustedAwarders();
+        setAwarders(
+          fetched.map((a: { id: Principal; name: string }) => ({
+            id: a.id.toText(),
+            name: a.name,
+          }))
+        );
+      } catch (e) {
+        console.error('Failed to fetch awarders:', e);
+      }
+    };
+
+    fetchAwarders();
+  }, []);
 
   const handleAddAwarder = async () => {
     try {
@@ -35,10 +59,13 @@ const ManageAwarders: React.FC = () => {
 
       const principal = Principal.fromText(newAwarderId.trim());
       const actor = await getPlugActor();
-      const result = await actor.addTrustedAwarder(principal);
+      const result = await actor.addTrustedAwarder(principal, newAwarderName.trim() || 'Unnamed');
 
       if (result.startsWith('Success')) {
-        setAwarders([...awarders, { id: newAwarderId.trim(), name: newAwarderName.trim() || 'Unnamed' }]);
+        setAwarders([
+          ...awarders,
+          { id: newAwarderId.trim(), name: newAwarderName.trim() || 'Unnamed' },
+        ]);
         setNewAwarderId('');
         setNewAwarderName('');
         setSuccessMsg('Awarder added.');
@@ -172,72 +199,75 @@ const ManageAwarders: React.FC = () => {
             {awarders.map((awarder) => (
               <React.Fragment key={awarder.id}>
                 <ListItem
-  disableGutters
-  sx={{
-    px: 2,
-    py: 1.5,
-    borderRadius: 2,
-    backgroundColor: 'hsla(var(--muted), 0.2)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-  }}
->
-  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1, minWidth: 0 }}>
-    <ListItemAvatar>
-      <Avatar
-        sx={{
-          bgcolor: 'hsl(var(--muted))',
-          color: 'hsl(var(--foreground))',
-          width: 48,
-          height: 48,
-        }}
-      >
-        <PersonAddIcon />
-      </Avatar>
-    </ListItemAvatar>
-    <Box sx={{ overflow: 'hidden' }}>
-      <Typography
-        fontWeight={600}
-        color="hsl(var(--foreground))"
-        sx={{ fontSize: '1rem', overflowWrap: 'break-word' }}
-      >
-        {awarder.name}
-      </Typography>
-      <Typography
-        variant="body2"
-        color="hsl(var(--muted-foreground))"
-        sx={{
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          wordBreak: 'break-all',
-        }}
-      >
-        {awarder.id}
-      </Typography>
-    </Box>
-  </Box>
+                  disableGutters
+                  sx={{
+                    px: 2,
+                    py: 1.5,
+                    borderRadius: 2,
+                    backgroundColor: 'hsla(var(--muted), 0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <Box
+                    sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1, minWidth: 0 }}
+                  >
+                    <ListItemAvatar>
+                      <Avatar
+                        sx={{
+                          bgcolor: 'hsl(var(--muted))',
+                          color: 'hsl(var(--foreground))',
+                          width: 48,
+                          height: 48,
+                        }}
+                      >
+                        <PersonAddIcon />
+                      </Avatar>
+                    </ListItemAvatar>
+                    <Box sx={{ overflow: 'hidden' }}>
+                      <Typography
+                        fontWeight={600}
+                        color="hsl(var(--foreground))"
+                        sx={{ fontSize: '1rem', overflowWrap: 'break-word' }}
+                      >
+                        {awarder.name}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        color="hsl(var(--muted-foreground))"
+                        title={awarder.id}
+                        sx={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          wordBreak: 'break-word',
+                        }}
+                      >
+                        {formatPrincipalShort(awarder.id)}
+                      </Typography>
+                    </Box>
+                  </Box>
 
-  <Button
-    startIcon={<PersonRemoveIcon />}
-    onClick={() => handleRemoveAwarder(awarder.id)}
-    disabled={loading}
-    sx={{
-      color: 'hsl(var(--destructive))',
-      ml: 2,
-      mt: { xs: 1.5, sm: 0 },
-      whiteSpace: 'nowrap',
-      alignSelf: 'flex-start',
-      '&:hover': {
-        color: 'hsl(var(--destructive-foreground))',
-        backgroundColor: 'transparent',
-      },
-    }}
-  >
-    Remove
-  </Button>
-</ListItem>
+                  <Button
+                    startIcon={<PersonRemoveIcon />}
+                    onClick={() => handleRemoveAwarder(awarder.id)}
+                    disabled={loading}
+                    sx={{
+                      color: 'hsl(var(--destructive))',
+                      ml: 2,
+                      mt: { xs: 1.5, sm: 0 },
+                      whiteSpace: 'nowrap',
+                      alignSelf: 'flex-start',
+                      '&:hover': {
+                        color: 'hsl(var(--destructive-foreground))',
+                        backgroundColor: 'transparent',
+                      },
+                    }}
+                  >
+                    Remove
+                  </Button>
+                </ListItem>
 
                 <Divider sx={{ backgroundColor: 'hsl(var(--border))', my: 0.5 }} />
               </React.Fragment>

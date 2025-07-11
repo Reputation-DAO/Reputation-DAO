@@ -35,7 +35,11 @@ const RevokeRep: React.FC = () => {
       const principal = Principal.fromText(userId.trim());
       const amount = BigInt(points.trim());
 
-      const result = await actor.revokeRep(principal, amount);
+      const result = await actor.revokeRep(
+        principal,
+        amount,
+        reason.trim() === '' ? [] : [reason.trim()]
+      );
 
       if (result.startsWith('Success')) {
         setSuccess(true);
@@ -43,7 +47,7 @@ const RevokeRep: React.FC = () => {
         setPoints('');
         setReason('');
       } else {
-        setError(result); // Canister returns error string
+        setError(result);
       }
     } catch (err: any) {
       console.error(err);
