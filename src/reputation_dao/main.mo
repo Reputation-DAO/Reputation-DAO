@@ -62,7 +62,7 @@ actor ReputationDAO {
 
 
     // TODO: Set your admin principal aka your plug id here 
-    stable var owner : Principal = Principal.fromText("your-plug-id"); 
+    stable var owner : Principal = Principal.fromText("6irei-lbuuz-kvkkd-j64xq-iqmzo-xbwxo-xl2gz-qgy6f-youtz-6awsa-7qe"); 
 
     // --- Utility functions and core logic ---
 
