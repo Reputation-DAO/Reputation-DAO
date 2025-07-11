@@ -1,7 +1,0 @@
-service : {
-  addTrustedAwarder: (principal) -> (text);
-  awardRep: (principal, nat) -> (text);
-  getBalance: (principal) -> (nat) query;
-  removeTrustedAwarder: (principal) -> (text);
-  revokeRep: (principal, nat) -> (text);
-}
