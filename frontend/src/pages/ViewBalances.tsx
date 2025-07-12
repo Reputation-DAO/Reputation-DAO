@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Card,
@@ -22,31 +22,6 @@ import {
   Chip,
   CircularProgress
 } from '@mui/material';
-<<<<<<< HEAD
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
-import { Principal } from '@dfinity/principal';
-import { getPlugActor } from '../components/canister/reputationDao';
-
-const ViewBalances: React.FC = () => {
-  const [principal, setPrincipal] = useState('');
-  const [balance, setBalance] = useState<bigint | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleFetch = async () => {
-    setLoading(true);
-    setError(null);
-    setBalance(null);
-    try {
-      const actor = await getPlugActor();
-      const result = await actor.getBalance(Principal.fromText(principal.trim()));
-      setBalance(result);
-    } catch (e: any) {
-      console.error(e);
-      setError('Failed to fetch balance.');
-    } finally {
-      setLoading(false);
-=======
 import {
   AccountBalanceWallet,
   Search,
@@ -57,6 +32,8 @@ import {
   Download,
   FilterList
 } from '@mui/icons-material';
+import { Principal } from '@dfinity/principal';
+import { reputationService } from '../components/canister/reputationDao';
 
 interface UserBalance {
   id: string;
@@ -69,13 +46,18 @@ interface UserBalance {
   status: 'active' | 'inactive';
 }
 
-// TODO: Replace this with your actual canister call
+// Real backend function to fetch balance
 async function fetchBalance(principal: string): Promise<number> {
-  if (principal === 'aaaa-bbbb-cccc') return 120;
-  if (principal === 'dddd-eeee-ffff') return 80;
-  if (principal === 'alice.icp') return 1250;
-  if (principal === 'bob.icp') return 980;
-  return 0;
+  try {
+    console.log('Fetching balance for principal:', principal);
+    const principalObj = Principal.fromText(principal);
+    const balance = await reputationService.getBalance(principalObj);
+    console.log('Raw balance from backend:', balance);
+    return Number(balance);
+  } catch (error: any) {
+    console.error('Error fetching balance:', error);
+    throw new Error(`Failed to fetch balance: ${error.message || 'Invalid principal or network error'}`);
+  }
 }
 
 const ViewBalances: React.FC = () => {
@@ -83,65 +65,115 @@ const ViewBalances: React.FC = () => {
   const [selectedBalance, setSelectedBalance] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [userBalances, setUserBalances] = useState<UserBalance[]>([]);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
     severity: 'success' | 'error' | 'warning' | 'info';
   }>({ open: false, message: '', severity: 'success' });
 
-  // Mock user balances data
-  const [userBalances] = useState<UserBalance[]>([
-    {
-      id: '1',
-      address: 'alice.icp',
-      name: 'Alice Johnson',
-      reputation: 1250,
-      rank: 1,
-      change: '+15',
-      lastActivity: '2024-01-15',
-      status: 'active'
-    },
-    {
-      id: '2',
-      address: 'bob.icp',
-      name: 'Bob Smith',
-      reputation: 980,
-      rank: 2,
-      change: '+12',
-      lastActivity: '2024-01-14',
-      status: 'active'
-    },
-    {
-      id: '3',
-      address: 'carol.icp',
-      name: 'Carol Davis',
-      reputation: 850,
-      rank: 3,
-      change: '-5',
-      lastActivity: '2024-01-12',
-      status: 'active'
-    },
-    {
-      id: '4',
-      address: 'david.icp',
-      name: 'David Wilson',
-      reputation: 720,
-      rank: 4,
-      change: '+8',
-      lastActivity: '2024-01-11',
-      status: 'inactive'
-    },
-    {
-      id: '5',
-      address: 'eve.icp',
-      name: 'Eve Brown',
-      reputation: 650,
-      rank: 5,
-      change: '+3',
-      lastActivity: '2024-01-10',
-      status: 'active'
+  // Load transaction data to build user list
+  useEffect(() => {
+    loadUserData();
+  }, []);
+
+  const loadUserData = async () => {
+    setRefreshing(true);
+    try {
+      console.log('Testing canister connection...');
+      
+      // First test the connection
+      try {
+        await reputationService.testConnection();
+        console.log('Connection test passed');
+      } catch (connectionError: any) {
+        console.error('Connection failed:', connectionError);
+        setSnackbar({
+          open: true,
+          message: `Connection failed: ${connectionError.message}`,
+          severity: 'error'
+        });
+        setUserBalances([]);
+        return;
+      }
+
+      console.log('Loading user data from blockchain...');
+      const transactions = await reputationService.getTransactionHistory();
+      console.log('Received transactions:', transactions);
+      
+      if (!transactions || transactions.length === 0) {
+        console.log('No transactions found');
+        setSnackbar({
+          open: true,
+          message: 'No transactions found on the blockchain',
+          severity: 'info'
+        });
+        setUserBalances([]);
+        return;
+      }
+
+      // Build user list from transaction history
+      const userMap = new Map<string, UserBalance>();
+      
+      transactions.forEach((tx, index) => {
+        const principalStr = tx.to.toString();
+        const existing = userMap.get(principalStr);
+        
+        if (existing) {
+          // Update existing user
+          if ('Award' in tx.transactionType) {
+            existing.reputation += Number(tx.amount);
+          } else if ('Revoke' in tx.transactionType) {
+            existing.reputation -= Number(tx.amount);
+          }
+          existing.lastActivity = new Date(Number(tx.timestamp) / 1000000).toISOString().split('T')[0];
+        } else {
+          // Create new user entry
+          const reputation = 'Award' in tx.transactionType ? Number(tx.amount) : 
+                           'Revoke' in tx.transactionType ? -Number(tx.amount) : 0;
+          userMap.set(principalStr, {
+            id: (index + 1).toString(),
+            address: principalStr,
+            name: `User ${principalStr.slice(0, 8)}...`,
+            reputation: reputation,
+            rank: 0, // Will be set after sorting
+            change: '+0',
+            lastActivity: new Date(Number(tx.timestamp) / 1000000).toISOString().split('T')[0],
+            status: 'active' as const
+          });
+        }
+      });
+
+      // Convert to array and sort by reputation
+      const users = Array.from(userMap.values())
+        .sort((a, b) => b.reputation - a.reputation)
+        .map((user, index) => ({
+          ...user,
+          rank: index + 1
+        }));
+
+      console.log('Processed users:', users);
+      setUserBalances(users);
+      
+      if (users.length > 0) {
+        setSnackbar({
+          open: true,
+          message: `Loaded ${users.length} users with ${transactions.length} transactions`,
+          severity: 'success'
+        });
+      }
+    } catch (error: any) {
+      console.error('Failed to load user data:', error);
+      setSnackbar({
+        open: true,
+        message: `Failed to load data from blockchain: ${error.message || 'Unknown error'}`,
+        severity: 'error'
+      });
+      setUserBalances([]);
+    } finally {
+      setRefreshing(false);
     }
-  ]);
+  };
 
   const handleSearch = async () => {
     if (!searchTerm.trim()) {
@@ -157,7 +189,10 @@ const ViewBalances: React.FC = () => {
     setSelectedBalance(null);
 
     try {
+      console.log('Searching for balance of:', searchTerm.trim());
       const balance = await fetchBalance(searchTerm.trim());
+      console.log('Found balance:', balance);
+      
       setSelectedBalance(balance);
       
       if (balance === 0) {
@@ -173,30 +208,35 @@ const ViewBalances: React.FC = () => {
           severity: 'success'
         });
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Search error:', error);
       setSnackbar({
         open: true,
-        message: 'Failed to fetch balance',
+        message: `Failed to fetch balance: ${error.message || 'Unknown error'}`,
         severity: 'error'
       });
     } finally {
       setIsLoading(false);
->>>>>>> advFrontend
     }
   };
 
   const handleRefresh = async () => {
     setRefreshing(true);
     
-    // Simulate refresh API call
-    setTimeout(() => {
-      setRefreshing(false);
+    try {
+      console.log('Refreshing data...');
+      await loadUserData();
+      // Note: loadUserData now shows its own success/error messages
+    } catch (error: any) {
+      console.error('Refresh error:', error);
       setSnackbar({
         open: true,
-        message: 'Balances refreshed successfully',
-        severity: 'success'
+        message: `Failed to refresh balances: ${error.message || 'Unknown error'}`,
+        severity: 'error'
       });
-    }, 2000);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleCloseSnackbar = () => {
@@ -486,59 +526,6 @@ const ViewBalances: React.FC = () => {
               variant="h6" 
               sx={{ 
                 color: 'hsl(var(--foreground))',
-<<<<<<< HEAD
-              },
-            }}
-            InputProps={{
-              sx: {
-                color: 'hsl(var(--foreground))',
-                backgroundColor: 'hsl(var(--muted))',
-                borderRadius: 2,
-                '& fieldset': {
-                  borderColor: 'hsl(var(--border))',
-                },
-                '&:hover fieldset': {
-                  borderColor: 'hsl(var(--primary))',
-                },
-                '&.Mui-focused fieldset': {
-                  borderColor: 'hsl(var(--primary))',
-                },
-              },
-            }}
-          />
-
-          <Button
-            type="button"
-            onClick={handleFetch}
-            disabled={loading || !principal.trim()}
-            fullWidth
-            sx={{
-              mt: 1,
-              py: 1.25,
-              fontWeight: 600,
-              borderRadius: 2,
-              fontSize: '0.95rem',
-              backgroundColor: 'hsl(var(--info))',
-              color: 'hsl(var(--primary-foreground))',
-              transition: 'all var(--transition-smooth)',
-              '&:hover': {
-                backgroundColor: 'hsl(var(--accent))',
-                color: 'hsl(var(--accent-foreground))',
-              },
-              '&.Mui-disabled': {
-                opacity: 0.6,
-                backgroundColor: 'hsl(var(--muted))',
-                color: 'hsl(var(--muted-foreground))',
-              },
-            }}
-          >
-            {loading ? 'Fetching...' : 'Get Balance'}
-          </Button>
-
-          {error && (
-            <Typography color="error" variant="body2">
-              {error}
-=======
                 fontWeight: 600,
                 display: 'flex',
                 alignItems: 'center',
@@ -547,7 +534,6 @@ const ViewBalances: React.FC = () => {
             >
               <History sx={{ color: 'hsl(var(--primary))' }} />
               Top Users ({filteredBalances.length})
->>>>>>> advFrontend
             </Typography>
             
             <Box sx={{ display: 'flex', gap: 1 }}>
@@ -564,15 +550,6 @@ const ViewBalances: React.FC = () => {
             </Box>
           </Box>
 
-<<<<<<< HEAD
-          {balance !== null && !error && (
-            <Typography variant="h6" sx={{ color: 'hsl(var(--foreground))' }}>
-              Reputation: <b>{balance.toString()}</b>
-            </Typography>
-          )}
-        </Stack>
-      </Paper>
-=======
           <TableContainer component={Paper} sx={{ 
             backgroundColor: 'hsl(var(--muted))',
             boxShadow: 'none',
@@ -722,7 +699,6 @@ const ViewBalances: React.FC = () => {
           {snackbar.message}
         </Alert>
       </Snackbar>
->>>>>>> advFrontend
     </Box>
   );
 };

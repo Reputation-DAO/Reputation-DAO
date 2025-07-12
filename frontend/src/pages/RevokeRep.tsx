@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Card,
@@ -29,11 +29,6 @@ import {
   DialogContentText,
   DialogTitle
 } from '@mui/material';
-<<<<<<< HEAD
-import RemoveCircleIcon from '@mui/icons-material/RemoveCircle';
-import { Principal } from '@dfinity/principal';
-import { getPlugActor } from '../components/canister/reputationDao';
-=======
 import {
   RemoveCircle,
   Person,
@@ -43,6 +38,8 @@ import {
   Info,
   Undo
 } from '@mui/icons-material';
+import { Principal } from '@dfinity/principal';
+import { reputationService } from '../components/canister/reputationDao';
 
 interface RevokeTransaction {
   id: string;
@@ -53,7 +50,6 @@ interface RevokeTransaction {
   status: 'pending' | 'completed' | 'failed';
   revokedBy: string;
 }
->>>>>>> advFrontend
 
 const RevokeRep: React.FC = () => {
   const [recipient, setRecipient] = useState('');
@@ -62,42 +58,42 @@ const RevokeRep: React.FC = () => {
   const [category, setCategory] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState(false);
+  const [recentRevocations, setRecentRevocations] = useState<RevokeTransaction[]>([]);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
     severity: 'success' | 'error' | 'warning' | 'info';
   }>({ open: false, message: '', severity: 'success' });
 
-  // Mock recent revocations data
-  const [recentRevocations] = useState<RevokeTransaction[]>([
-    {
-      id: '1',
-      recipient: 'alice.icp',
-      amount: 50,
-      reason: 'Violation of community guidelines',
-      date: '2024-01-15',
-      status: 'completed',
-      revokedBy: 'admin'
-    },
-    {
-      id: '2',
-      recipient: 'bob.icp',
-      amount: 25,
-      reason: 'Spam activity detected',
-      date: '2024-01-14',
-      status: 'completed',
-      revokedBy: 'moderator'
-    },
-    {
-      id: '3',
-      recipient: 'charlie.icp',
-      amount: 100,
-      reason: 'Fraudulent behavior',
-      date: '2024-01-13',
-      status: 'pending',
-      revokedBy: 'admin'
+  // Load recent revocation transactions on component mount
+  useEffect(() => {
+    loadRecentRevocations();
+  }, []);
+
+  const loadRecentRevocations = async () => {
+    try {
+      const transactions = await reputationService.getTransactionHistory();
+      // Convert backend transactions to UI format and get revocations
+      const revokeTxs = transactions
+        .filter(tx => 'Revoke' in tx.transactionType)
+        .slice(-5)
+        .map((tx) => ({
+          id: tx.id.toString(),
+          recipient: tx.to.toString(),
+          amount: Number(tx.amount),
+          reason: tx.reason[0] || 'No reason provided',
+          date: new Date(Number(tx.timestamp) / 1000000).toISOString().split('T')[0],
+          status: 'completed' as const,
+          revokedBy: tx.from.toString().slice(0, 8) + '...'
+        }))
+        .reverse();
+      
+      setRecentRevocations(revokeTxs);
+    } catch (error) {
+      console.error('Failed to load recent revocations:', error);
+      // Keep empty array on error
     }
-  ]);
+  };
 
   const handleRevokeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,36 +107,28 @@ const RevokeRep: React.FC = () => {
       return;
     }
 
-<<<<<<< HEAD
+    // Validate principal format
     try {
-      if (!userId || !points || isNaN(Number(points))) {
-        throw new Error('Please enter a valid User ID and numeric points.');
-      }
+      Principal.fromText(recipient);
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: 'Invalid principal format',
+        severity: 'error'
+      });
+      return;
+    }
 
-      const actor = await getPlugActor();
-      const principal = Principal.fromText(userId.trim());
-      const amount = BigInt(points.trim());
+    const amountNum = Number(amount);
+    if (amountNum <= 0) {
+      setSnackbar({
+        open: true,
+        message: 'Amount must be greater than 0',
+        severity: 'error'
+      });
+      return;
+    }
 
-      const result = await actor.revokeRep(
-        principal,
-        amount,
-        reason.trim() === '' ? [] : [reason.trim()]
-      );
-
-      if (result.startsWith('Success')) {
-        setSuccess(true);
-        setUserId('');
-        setPoints('');
-        setReason('');
-      } else {
-        setError(result);
-      }
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Failed to revoke reputation.');
-    } finally {
-      setLoading(false);
-=======
     setConfirmDialog(true);
   };
 
@@ -148,8 +136,16 @@ const RevokeRep: React.FC = () => {
     setConfirmDialog(false);
     setIsLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const recipientPrincipal = Principal.fromText(recipient);
+      const amountBigInt = BigInt(amount);
+      
+      await reputationService.revokeReputation(
+        recipientPrincipal,
+        amountBigInt,
+        reason
+      );
+
       setSnackbar({
         open: true,
         message: `Successfully revoked ${amount} reputation points from ${recipient}`,
@@ -161,8 +157,20 @@ const RevokeRep: React.FC = () => {
       setAmount('');
       setReason('');
       setCategory('');
+      
+      // Reload recent revocations
+      await loadRecentRevocations();
+      
+    } catch (error: any) {
+      console.error('Revoke error:', error);
+      setSnackbar({
+        open: true,
+        message: error.message || 'Failed to revoke reputation',
+        severity: 'error'
+      });
+    } finally {
       setIsLoading(false);
-    }, 2000);
+    }
   };
 
   const handleCloseSnackbar = () => {
@@ -175,7 +183,6 @@ const RevokeRep: React.FC = () => {
       case 'pending': return 'warning';
       case 'failed': return 'error';
       default: return 'default';
->>>>>>> advFrontend
     }
   };
 
@@ -200,125 +207,6 @@ const RevokeRep: React.FC = () => {
         Revoke Reputation
       </Typography>
 
-<<<<<<< HEAD
-          <Typography
-            variant="h5"
-            fontWeight={600}
-            sx={{ color: 'hsl(var(--foreground))' }}
-          >
-            Revoke Reputation
-          </Typography>
-
-          <form
-            style={{ width: '100%' }}
-            onSubmit={handleSubmit}
-            autoComplete="off"
-          >
-            <Stack spacing={2}>
-              <TextField
-                label="User Principal / ID"
-                variant="outlined"
-                fullWidth
-                value={userId}
-                onChange={(e) => setUserId(e.target.value)}
-                required
-                InputLabelProps={{
-                  sx: { color: 'hsl(var(--foreground))' },
-                }}
-                InputProps={{
-                  sx: {
-                    color: 'hsl(var(--foreground))',
-                    backgroundColor: 'hsl(var(--muted))',
-                    borderRadius: 2,
-                    '& fieldset': { borderColor: 'hsl(var(--border))' },
-                    '&:hover fieldset': { borderColor: 'hsl(var(--primary))' },
-                    '&.Mui-focused fieldset': { borderColor: 'hsl(var(--primary))' },
-                  },
-                }}
-              />
-
-              <TextField
-                label="Reputation Points"
-                variant="outlined"
-                fullWidth
-                value={points}
-                onChange={(e) => setPoints(e.target.value)}
-                required
-                type="number"
-                inputProps={{ min: 1 }}
-                InputLabelProps={{
-                  sx: { color: 'hsl(var(--foreground))' },
-                }}
-                InputProps={{
-                  sx: {
-                    color: 'hsl(var(--foreground))',
-                    backgroundColor: 'hsl(var(--muted))',
-                    borderRadius: 2,
-                    '& fieldset': { borderColor: 'hsl(var(--border))' },
-                    '&:hover fieldset': { borderColor: 'hsl(var(--primary))' },
-                    '&.Mui-focused fieldset': { borderColor: 'hsl(var(--primary))' },
-                  },
-                }}
-              />
-
-              <TextField
-                label="Reason (Optional)"
-                variant="outlined"
-                fullWidth
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                multiline
-                rows={3}
-                placeholder="Why are you revoking these points?"
-                InputLabelProps={{
-                  sx: {
-                    color: 'hsl(var(--foreground))',
-                  },
-                }}
-                InputProps={{
-                  sx: {
-                    color: 'hsl(var(--foreground))',
-                    backgroundColor: 'hsl(var(--muted))',
-                    borderRadius: 2,
-                    '& fieldset': {
-                      borderColor: 'hsl(var(--border))',
-                    },
-                    '&:hover fieldset': {
-                      borderColor: 'hsl(var(--primary))',
-                    },
-                    '&.Mui-focused fieldset': {
-                      borderColor: 'hsl(var(--primary))',
-                    },
-                  },
-                }}
-              />
-
-              {error && (
-                <Typography color="error" variant="body2">
-                  {error}
-                </Typography>
-              )}
-              {success && (
-                <Typography color="success.main" variant="body2">
-                  Reputation revoked successfully!
-                </Typography>
-              )}
-
-              <Button
-                type="submit"
-                variant="contained"
-                size="large"
-                disabled={loading}
-                sx={{
-                  mt: 1,
-                  borderRadius: 2,
-                  backgroundColor: 'hsl(var(--primary))',
-                  color: 'hsl(var(--primary-foreground))',
-                  '&:hover': {
-                    backgroundColor: 'hsl(var(--accent))',
-                    color: 'hsl(var(--accent-foreground))',
-                  },
-=======
       <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', lg: 'row' } }}>
         {/* Revoke Form */}
         <Box sx={{ flex: 1 }}>
@@ -338,7 +226,6 @@ const RevokeRep: React.FC = () => {
                   display: 'flex',
                   alignItems: 'center',
                   gap: 1
->>>>>>> advFrontend
                 }}
               >
                 <Warning sx={{ color: 'hsl(var(--destructive))' }} />

@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 import React, { useState, useEffect } from 'react';
-=======
-import React, { useState } from 'react';
->>>>>>> advFrontend
 import {
   Box,
   Card,
@@ -10,105 +6,6 @@ import {
   Typography,
   TextField,
   Button,
-<<<<<<< HEAD
-  List,
-  ListItem,
-  ListItemAvatar,
-  Avatar,
-  Divider,
-  TextField,
-} from '@mui/material';
-import GroupIcon from '@mui/icons-material/Group';
-import PersonAddIcon from '@mui/icons-material/PersonAdd';
-import PersonRemoveIcon from '@mui/icons-material/PersonRemove';
-import { getPlugActor } from '../components/canister/reputationDao';
-import { Principal } from '@dfinity/principal';
-
-// 🔧 Utility to shorten principal ID
-const formatPrincipalShort = (principal: string): string => {
-  if (principal.length <= 13) return principal;
-  return `${principal.slice(0, 6)}...${principal.slice(-6)}`;
-};
-
-const ManageAwarders: React.FC = () => {
-  const [awarders, setAwarders] = useState<{ id: string; name: string }[]>([]);
-  const [newAwarderId, setNewAwarderId] = useState('');
-  const [newAwarderName, setNewAwarderName] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
-
-  useEffect(() => {
-    const fetchAwarders = async () => {
-      try {
-        const actor = await getPlugActor();
-        const fetched = await actor.getTrustedAwarders();
-        setAwarders(
-          fetched.map((a: { id: Principal; name: string }) => ({
-            id: a.id.toText(),
-            name: a.name,
-          }))
-        );
-      } catch (e) {
-        console.error('Failed to fetch awarders:', e);
-      }
-    };
-
-    fetchAwarders();
-  }, []);
-
-  const handleAddAwarder = async () => {
-    try {
-      setError('');
-      setSuccessMsg('');
-      setLoading(true);
-
-      const principal = Principal.fromText(newAwarderId.trim());
-      const actor = await getPlugActor();
-      const result = await actor.addTrustedAwarder(principal, newAwarderName.trim() || 'Unnamed');
-
-      if (result.startsWith('Success')) {
-        setAwarders([
-          ...awarders,
-          { id: newAwarderId.trim(), name: newAwarderName.trim() || 'Unnamed' },
-        ]);
-        setNewAwarderId('');
-        setNewAwarderName('');
-        setSuccessMsg('Awarder added.');
-      } else {
-        setError(result);
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to add awarder');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRemoveAwarder = async (principalId: string) => {
-    try {
-      setError('');
-      setSuccessMsg('');
-      setLoading(true);
-
-      const principal = Principal.fromText(principalId);
-      const actor = await getPlugActor();
-      const result = await actor.removeTrustedAwarder(principal);
-
-      if (result.startsWith('Success')) {
-        setAwarders(awarders.filter((a) => a.id !== principalId));
-        setSuccessMsg('Awarder removed.');
-      } else {
-        setError(result);
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to remove awarder');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-=======
   Alert,
   Snackbar,
   InputAdornment,
@@ -139,8 +36,11 @@ import {
   Edit,
   Delete,
   Settings,
-  Search
+  Search,
+  Person
 } from '@mui/icons-material';
+import { Principal } from '@dfinity/principal';
+import { reputationService } from '../components/canister/reputationDao';
 
 interface Awarder {
   id: string;
@@ -156,8 +56,10 @@ interface Awarder {
 const ManageAwarders: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [newAwarderEmail, setNewAwarderEmail] = useState('');
+  const [newAwarderPrincipal, setNewAwarderPrincipal] = useState('');
   const [selectedRole, setSelectedRole] = useState<'admin' | 'moderator' | 'awarder'>('awarder');
   const [isLoading, setIsLoading] = useState(false);
+  const [awarders, setAwarders] = useState<Awarder[]>([]);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     action: 'remove' | 'activate' | 'deactivate' | null;
@@ -171,87 +73,92 @@ const ManageAwarders: React.FC = () => {
     severity: 'success' | 'error' | 'warning' | 'info';
   }>({ open: false, message: '', severity: 'success' });
 
-  // Mock awarders data
-  const [awarders, setAwarders] = useState<Awarder[]>([
-    {
-      id: '1',
-      name: 'Alice Johnson',
-      email: 'alice@example.com',
-      role: 'admin',
-      status: 'active',
-      joinDate: '2024-01-01',
-      totalAwarded: 1250,
-      lastActive: '2024-01-15'
-    },
-    {
-      id: '2',
-      name: 'Bob Smith',
-      email: 'bob@example.com',
-      role: 'moderator',
-      status: 'active',
-      joinDate: '2024-01-05',
-      totalAwarded: 850,
-      lastActive: '2024-01-14'
-    },
-    {
-      id: '3',
-      name: 'Carol Davis',
-      email: 'carol@example.com',
-      role: 'awarder',
-      status: 'inactive',
-      joinDate: '2024-01-10',
-      totalAwarded: 320,
-      lastActive: '2024-01-12'
-    },
-    {
-      id: '4',
-      name: 'David Wilson',
-      email: 'david@example.com',
-      role: 'awarder',
-      status: 'pending',
-      joinDate: '2024-01-14',
-      totalAwarded: 0,
-      lastActive: '2024-01-14'
+  // Load awarders on component mount
+  useEffect(() => {
+    loadAwarders();
+  }, []);
+
+  const loadAwarders = async () => {
+    try {
+      const backendAwarders = await reputationService.getTrustedAwarders();
+      
+      // Convert backend awarders to UI format
+      const uiAwarders: Awarder[] = backendAwarders.map((awarder) => ({
+        id: awarder.id.toString(),
+        name: awarder.name,
+        email: `${awarder.name.toLowerCase().replace(' ', '.')}@example.com`, // Generate email since backend doesn't store it
+        role: 'awarder' as const, // Backend doesn't distinguish roles yet
+        status: 'active' as const,
+        joinDate: '2024-01-01', // Backend doesn't store join date yet
+        totalAwarded: 0, // Would need to calculate from transactions
+        lastActive: '2024-01-15' // Backend doesn't store last active yet
+      }));
+      
+      setAwarders(uiAwarders);
+    } catch (error) {
+      console.error('Failed to load awarders:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to load awarders',
+        severity: 'error'
+      });
     }
-  ]);
+  };
 
   const handleAddAwarder = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!newAwarderEmail) {
+    if (!newAwarderEmail || !newAwarderPrincipal) {
       setSnackbar({
         open: true,
-        message: 'Please enter an email address',
+        message: 'Please enter both email and principal',
         severity: 'warning'
+      });
+      return;
+    }
+
+    // Validate principal format
+    let principal: Principal;
+    try {
+      principal = Principal.fromText(newAwarderPrincipal);
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: 'Invalid principal format',
+        severity: 'error'
       });
       return;
     }
 
     setIsLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
-      const newAwarder: Awarder = {
-        id: Date.now().toString(),
-        name: 'New User',
-        email: newAwarderEmail,
-        role: selectedRole,
-        status: 'pending',
-        joinDate: new Date().toISOString().split('T')[0],
-        totalAwarded: 0,
-        lastActive: new Date().toISOString().split('T')[0]
-      };
-
-      setAwarders(prev => [...prev, newAwarder]);
+    try {
+      // Use email as name for now since we only have one name field in backend
+      const name = newAwarderEmail.split('@')[0];
+      await reputationService.addTrustedAwarder(principal, name);
+      
       setSnackbar({
         open: true,
-        message: `Successfully invited ${newAwarderEmail} as ${selectedRole}`,
+        message: `Successfully added ${name} as trusted awarder`,
         severity: 'success'
       });
       
       setNewAwarderEmail('');
+      setNewAwarderPrincipal('');
+      
+      // Reload awarders list
+      await loadAwarders();
+      
+    } catch (error: any) {
+      console.error('Add awarder error:', error);
+      setSnackbar({
+        open: true,
+        message: error.message || 'Failed to add awarder',
+        severity: 'error'
+      });
+    } finally {
       setIsLoading(false);
-    }, 2000);
+    }
   };
 
   const handleMenuClick = (event: React.MouseEvent<HTMLElement>, awarder: Awarder) => {
@@ -264,31 +171,39 @@ const ManageAwarders: React.FC = () => {
     setSelectedAwarder(null);
   };
 
-  const handleConfirmAction = () => {
+  const handleConfirmAction = async () => {
     if (!confirmDialog.awarder) return;
 
-    const updatedAwarders = awarders.map(awarder => {
-      if (awarder.id === confirmDialog.awarder!.id) {
-        switch (confirmDialog.action) {
-          case 'remove':
-            return null; // Will be filtered out
-          case 'activate':
-            return { ...awarder, status: 'active' as const };
-          case 'deactivate':
-            return { ...awarder, status: 'inactive' as const };
-          default:
-            return awarder;
-        }
+    try {
+      if (confirmDialog.action === 'remove') {
+        const principal = Principal.fromText(confirmDialog.awarder.id);
+        await reputationService.removeTrustedAwarder(principal);
+        
+        setSnackbar({
+          open: true,
+          message: 'Awarder removed successfully',
+          severity: 'success'
+        });
+        
+        // Reload awarders list
+        await loadAwarders();
+      } else {
+        // For activate/deactivate, we'd need backend support
+        // For now, just show a message
+        setSnackbar({
+          open: true,
+          message: `${confirmDialog.action} functionality not yet implemented in backend`,
+          severity: 'info'
+        });
       }
-      return awarder;
-    }).filter(Boolean) as Awarder[];
-
-    setAwarders(updatedAwarders);
-    setSnackbar({
-      open: true,
-      message: `Awarder ${confirmDialog.action === 'remove' ? 'removed' : confirmDialog.action + 'd'} successfully`,
-      severity: 'success'
-    });
+    } catch (error: any) {
+      console.error('Action error:', error);
+      setSnackbar({
+        open: true,
+        message: error.message || `Failed to ${confirmDialog.action} awarder`,
+        severity: 'error'
+      });
+    }
     
     setConfirmDialog({ open: false, action: null, awarder: null });
     handleMenuClose();
@@ -321,7 +236,6 @@ const ManageAwarders: React.FC = () => {
     awarder.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
->>>>>>> advFrontend
   return (
     <Box sx={{ 
       p: 3, 
@@ -373,7 +287,7 @@ const ManageAwarders: React.FC = () => {
                 <Box
                   sx={{
                     display: 'grid',
-                    gridTemplateColumns: { xs: '1fr', md: '2fr 1fr' },
+                    gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
                     gap: 2,
                     mb: 3,
                   }}
@@ -414,6 +328,43 @@ const ManageAwarders: React.FC = () => {
                     }}
                   />
 
+                  <TextField
+                    fullWidth
+                    label="Principal ID"
+                    value={newAwarderPrincipal}
+                    onChange={(e) => setNewAwarderPrincipal(e.target.value)}
+                    placeholder="Enter principal ID"
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Person sx={{ color: 'hsl(var(--muted-foreground))' }} />
+                        </InputAdornment>
+                      ),
+                    }}
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        backgroundColor: 'hsl(var(--background))',
+                        '& fieldset': {
+                          borderColor: 'hsl(var(--border))',
+                        },
+                        '&:hover fieldset': {
+                          borderColor: 'hsl(var(--primary))',
+                        },
+                        '&.Mui-focused fieldset': {
+                          borderColor: 'hsl(var(--primary))',
+                        },
+                      },
+                      '& .MuiInputLabel-root': {
+                        color: 'hsl(var(--muted-foreground))',
+                      },
+                      '& .MuiInputBase-input': {
+                        color: 'hsl(var(--foreground))',
+                      },
+                    }}
+                  />
+                </Box>
+
+                <Box sx={{ mb: 3 }}>
                   <TextField
                     select
                     fullWidth
@@ -630,61 +581,6 @@ const ManageAwarders: React.FC = () => {
               gap: 1
             }}
           >
-<<<<<<< HEAD
-            <GroupIcon fontSize="large" />
-          </Avatar>
-
-          <Typography variant="h5" fontWeight={600}>
-            Manage Awarders
-          </Typography>
-
-          <TextField
-            label="Awarder Nickname"
-            variant="outlined"
-            fullWidth
-            value={newAwarderName}
-            onChange={(e) => setNewAwarderName(e.target.value)}
-            InputLabelProps={{ sx: { color: 'hsl(var(--foreground))' } }}
-            InputProps={{
-              sx: {
-                color: 'hsl(var(--foreground))',
-                backgroundColor: 'hsl(var(--muted))',
-                borderRadius: 2,
-              },
-            }}
-          />
-
-          <TextField
-            label="Principal ID"
-            variant="outlined"
-            fullWidth
-            value={newAwarderId}
-            onChange={(e) => setNewAwarderId(e.target.value)}
-            InputLabelProps={{ sx: { color: 'hsl(var(--foreground))' } }}
-            InputProps={{
-              sx: {
-                color: 'hsl(var(--foreground))',
-                backgroundColor: 'hsl(var(--muted))',
-                borderRadius: 2,
-              },
-            }}
-          />
-
-          <Button
-            variant="contained"
-            startIcon={<PersonAddIcon />}
-            onClick={handleAddAwarder}
-            disabled={loading || !newAwarderId.trim()}
-            sx={{
-              borderRadius: 2,
-              backgroundColor: 'hsl(var(--primary))',
-              color: 'hsl(var(--primary-foreground))',
-              '&:hover': {
-                backgroundColor: 'hsl(var(--accent))',
-                color: 'hsl(var(--accent-foreground))',
-              },
-            }}
-=======
             <Group sx={{ color: 'hsl(var(--primary))' }} />
             Awarders ({filteredAwarders.length})
           </Typography>
@@ -882,104 +778,9 @@ const ManageAwarders: React.FC = () => {
           <Button 
             onClick={() => setConfirmDialog({ open: false, action: null, awarder: null })} 
             sx={{ color: 'hsl(var(--muted-foreground))' }}
->>>>>>> advFrontend
           >
             Cancel
           </Button>
-<<<<<<< HEAD
-
-          <List sx={{ width: '100%' }}>
-            {awarders.map((awarder) => (
-              <React.Fragment key={awarder.id}>
-                <ListItem
-                  disableGutters
-                  sx={{
-                    px: 2,
-                    py: 1.5,
-                    borderRadius: 2,
-                    backgroundColor: 'hsla(var(--muted), 0.2)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
-                  }}
-                >
-                  <Box
-                    sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1, minWidth: 0 }}
-                  >
-                    <ListItemAvatar>
-                      <Avatar
-                        sx={{
-                          bgcolor: 'hsl(var(--muted))',
-                          color: 'hsl(var(--foreground))',
-                          width: 48,
-                          height: 48,
-                        }}
-                      >
-                        <PersonAddIcon />
-                      </Avatar>
-                    </ListItemAvatar>
-                    <Box sx={{ overflow: 'hidden' }}>
-                      <Typography
-                        fontWeight={600}
-                        color="hsl(var(--foreground))"
-                        sx={{ fontSize: '1rem', overflowWrap: 'break-word' }}
-                      >
-                        {awarder.name}
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        color="hsl(var(--muted-foreground))"
-                        title={awarder.id}
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          wordBreak: 'break-word',
-                        }}
-                      >
-                        {formatPrincipalShort(awarder.id)}
-                      </Typography>
-                    </Box>
-                  </Box>
-
-                  <Button
-                    startIcon={<PersonRemoveIcon />}
-                    onClick={() => handleRemoveAwarder(awarder.id)}
-                    disabled={loading}
-                    sx={{
-                      color: 'hsl(var(--destructive))',
-                      ml: 2,
-                      mt: { xs: 1.5, sm: 0 },
-                      whiteSpace: 'nowrap',
-                      alignSelf: 'flex-start',
-                      '&:hover': {
-                        color: 'hsl(var(--destructive-foreground))',
-                        backgroundColor: 'transparent',
-                      },
-                    }}
-                  >
-                    Remove
-                  </Button>
-                </ListItem>
-
-                <Divider sx={{ backgroundColor: 'hsl(var(--border))', my: 0.5 }} />
-              </React.Fragment>
-            ))}
-          </List>
-
-          {error && (
-            <Typography color="error" variant="body2">
-              {error}
-            </Typography>
-          )}
-          {successMsg && (
-            <Typography color="success.main" variant="body2">
-              {successMsg}
-            </Typography>
-          )}
-        </Stack>
-      </Paper>
-=======
           <Button 
             onClick={handleConfirmAction} 
             sx={{ 
@@ -1006,7 +807,6 @@ const ManageAwarders: React.FC = () => {
           {snackbar.message}
         </Alert>
       </Snackbar>
->>>>>>> advFrontend
     </Box>
   );
 };

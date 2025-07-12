@@ -24,20 +24,17 @@ import {
   IconButton,
   Tooltip
 } from '@mui/material';
-<<<<<<< HEAD
-import AccountCircleIcon from '@mui/icons-material/AccountCircle';
-import { getPlugActor } from '../components/canister/reputationDao';
-import { Principal } from '@dfinity/principal';
-=======
 import {
-  Star,
-  Person,
+  EmojiEvents,
   Send,
-  History,
+  Person,
+  Star,
   TrendingUp,
-  Info,
-  EmojiEvents
+  History,
+  Info
 } from '@mui/icons-material';
+import { Principal } from '@dfinity/principal';
+import { reputationService } from '../components/canister/reputationDao';
 
 interface AwardTransaction {
   id: string;
@@ -45,9 +42,8 @@ interface AwardTransaction {
   amount: number;
   reason: string;
   date: string;
-  status: 'pending' | 'completed' | 'failed';
+  status: string;
 }
->>>>>>> advFrontend
 
 const AwardRep: React.FC = () => {
   const [recipient, setRecipient] = useState('');
@@ -55,39 +51,79 @@ const AwardRep: React.FC = () => {
   const [reason, setReason] = useState('');
   const [category, setCategory] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [recentAwards, setRecentAwards] = useState<AwardTransaction[]>([]);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
     severity: 'success' | 'error' | 'warning' | 'info';
   }>({ open: false, message: '', severity: 'success' });
 
-  // Mock recent awards data
-  const [recentAwards] = useState<AwardTransaction[]>([
-    {
-      id: '1',
-      recipient: 'alice.icp',
-      amount: 100,
-      reason: 'Excellent community contribution',
-      date: '2024-01-15',
-      status: 'completed'
-    },
-    {
-      id: '2',
-      recipient: 'bob.icp',
-      amount: 75,
-      reason: 'Bug fix and testing',
-      date: '2024-01-14',
-      status: 'completed'
-    },
-    {
-      id: '3',
-      recipient: 'charlie.icp',
-      amount: 50,
-      reason: 'Documentation improvements',
-      date: '2024-01-13',
-      status: 'pending'
+  // Load recent transactions on component mount
+  React.useEffect(() => {
+    loadRecentTransactions();
+  }, []);
+
+  // Test function to debug the service
+  const testService = async () => {
+    try {
+      console.log('Testing reputation service...');
+      await reputationService.testConnection();
+      console.log('Service test passed');
+      
+      const count = await reputationService.getTransactionCount();
+      console.log('Transaction count:', count);
+      
+      const transactions = await reputationService.getTransactionHistory();
+      console.log('All transactions:', transactions);
+      
+      setSnackbar({
+        open: true,
+        message: `Service test passed. Found ${transactions.length} transactions.`,
+        severity: 'success'
+      });
+    } catch (error: any) {
+      console.error('Service test failed:', error);
+      setSnackbar({
+        open: true,
+        message: `Service test failed: ${error.message}`,
+        severity: 'error'
+      });
     }
-  ]);
+  };
+
+  const loadRecentTransactions = async () => {
+    try {
+      console.log('Loading recent transactions from reputationService...');
+      const transactions = await reputationService.getTransactionHistory();
+      console.log('Raw transactions from service:', transactions);
+      
+      // Convert backend transactions to UI format and get last 5
+      const recentTxs = transactions
+        .filter(tx => {
+          console.log('Checking transaction type:', tx.transactionType);
+          return 'Award' in tx.transactionType;
+        })
+        .slice(-5)
+        .map((tx) => {
+          console.log('Processing transaction:', tx);
+          return {
+            id: tx.id.toString(),
+            recipient: tx.to.toString(),
+            amount: Number(tx.amount),
+            reason: tx.reason.length > 0 ? tx.reason[0]! : 'No reason provided',
+            date: new Date(Number(tx.timestamp) / 1000000).toISOString().split('T')[0],
+            status: 'completed'
+          };
+        })
+        .reverse();
+      
+      console.log('Processed recent transactions:', recentTxs);
+      setRecentAwards(recentTxs);
+    } catch (error) {
+      console.error('Failed to load recent transactions:', error);
+      // Keep empty array on error
+    }
+  };
 
   const handleAwardSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,40 +137,46 @@ const AwardRep: React.FC = () => {
       return;
     }
 
-<<<<<<< HEAD
+    // Validate principal format
+    let recipientPrincipal: Principal;
     try {
-      if (!userId || !points || isNaN(Number(points))) {
-        throw new Error('Please enter a valid user ID and numeric points.');
-      }
+      recipientPrincipal = Principal.fromText(recipient);
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: 'Invalid principal format',
+        severity: 'error'
+      });
+      return;
+    }
 
-      const principal = Principal.fromText(userId.trim());
-      const amount = BigInt(points.trim());
+    const amountBigInt = BigInt(amount);
+    if (amountBigInt <= 0) {
+      setSnackbar({
+        open: true,
+        message: 'Amount must be greater than 0',
+        severity: 'error'
+      });
+      return;
+    }
 
-      const actor = await getPlugActor();
-      const result = await actor.awardRep(
-        principal,
-        amount,
-        reason.trim() === '' ? [] : [reason.trim()]
-      );
-
-      if (result.startsWith('Success')) {
-        setSuccess(true);
-        setUserId('');
-        setPoints('');
-        setReason('');
-      } else {
-        setError(result);
-      }
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Failed to award reputation.');
-    } finally {
-      setLoading(false);
-=======
     setIsLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      console.log('About to award reputation with params:', {
+        recipient: recipientPrincipal.toString(),
+        amount: amountBigInt.toString(),
+        reason
+      });
+      
+      const result = await reputationService.awardReputation(
+        recipientPrincipal,
+        amountBigInt,
+        reason
+      );
+      
+      console.log('Award result:', result);
+
       setSnackbar({
         open: true,
         message: `Successfully awarded ${amount} reputation points to ${recipient}`,
@@ -146,8 +188,20 @@ const AwardRep: React.FC = () => {
       setAmount('');
       setReason('');
       setCategory('');
+      
+      // Reload recent transactions
+      await loadRecentTransactions();
+      
+    } catch (error: any) {
+      console.error('Award error:', error);
+      setSnackbar({
+        open: true,
+        message: error.message || 'Failed to award reputation',
+        severity: 'error'
+      });
+    } finally {
       setIsLoading(false);
-    }, 2000);
+    }
   };
 
   const handleCloseSnackbar = () => {
@@ -160,7 +214,6 @@ const AwardRep: React.FC = () => {
       case 'pending': return 'warning';
       case 'failed': return 'error';
       default: return 'default';
->>>>>>> advFrontend
     }
   };
 
@@ -181,127 +234,6 @@ const AwardRep: React.FC = () => {
           gap: 2
         }}
       >
-<<<<<<< HEAD
-        <Stack spacing={3} alignItems="center">
-          <Avatar
-            sx={{
-              bgcolor: 'hsl(var(--primary))',
-              color: 'hsl(var(--primary-foreground))',
-              width: 64,
-              height: 64,
-            }}
-          >
-            <AccountCircleIcon fontSize="large" />
-          </Avatar>
-
-          <Typography
-            variant="h5"
-            fontWeight={600}
-            sx={{ color: 'hsl(var(--foreground))' }}
-          >
-            Award Reputation
-          </Typography>
-
-          <form style={{ width: '100%' }} onSubmit={handleSubmit} autoComplete="off">
-            <Stack spacing={2}>
-              <TextField
-                label="User Principal / ID"
-                variant="outlined"
-                fullWidth
-                value={userId}
-                onChange={(e) => setUserId(e.target.value)}
-                required
-                InputLabelProps={{ sx: { color: 'hsl(var(--foreground))' } }}
-                InputProps={{
-                  sx: {
-                    color: 'hsl(var(--foreground))',
-                    backgroundColor: 'hsl(var(--muted))',
-                    borderRadius: 2,
-                    '& fieldset': { borderColor: 'hsl(var(--border))' },
-                    '&:hover fieldset': { borderColor: 'hsl(var(--primary))' },
-                    '&.Mui-focused fieldset': { borderColor: 'hsl(var(--primary))' },
-                  },
-                }}
-              />
-
-              <TextField
-                label="Reputation Points"
-                variant="outlined"
-                fullWidth
-                value={points}
-                onChange={(e) => setPoints(e.target.value)}
-                required
-                type="number"
-                inputProps={{ min: 1 }}
-                InputLabelProps={{ sx: { color: 'hsl(var(--foreground))' } }}
-                InputProps={{
-                  sx: {
-                    color: 'hsl(var(--foreground))',
-                    backgroundColor: 'hsl(var(--muted))',
-                    borderRadius: 2,
-                    '& fieldset': { borderColor: 'hsl(var(--border))' },
-                    '&:hover fieldset': { borderColor: 'hsl(var(--primary))' },
-                    '&.Mui-focused fieldset': { borderColor: 'hsl(var(--primary))' },
-                  },
-                }}
-              />
-
-              <TextField
-                label="Reason (Optional)"
-                variant="outlined"
-                fullWidth
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                multiline
-                rows={3}
-                placeholder="Why are you awarding these points?"
-                InputLabelProps={{ sx: { color: 'hsl(var(--foreground))' } }}
-                InputProps={{
-                  sx: {
-                    color: 'hsl(var(--foreground))',
-                    backgroundColor: 'hsl(var(--muted))',
-                    borderRadius: 2,
-                    '& fieldset': { borderColor: 'hsl(var(--border))' },
-                    '&:hover fieldset': { borderColor: 'hsl(var(--primary))' },
-                    '&.Mui-focused fieldset': { borderColor: 'hsl(var(--primary))' },
-                  },
-                }}
-              />
-
-              {error && (
-                <Typography color="error" variant="body2">
-                  {error}
-                </Typography>
-              )}
-              {success && (
-                <Typography color="success.main" variant="body2">
-                  Reputation awarded successfully!
-                </Typography>
-              )}
-
-              <Button
-                type="submit"
-                variant="contained"
-                size="large"
-                disabled={loading}
-                sx={{
-                  mt: 1,
-                  borderRadius: 2,
-                  backgroundColor: 'hsl(var(--primary))',
-                  color: 'hsl(var(--primary-foreground))',
-                  '&:hover': {
-                    backgroundColor: 'hsl(var(--accent))',
-                    color: 'hsl(var(--accent-foreground))',
-                  },
-                }}
-              >
-                {loading ? 'Submitting...' : 'Submit'}
-              </Button>
-            </Stack>
-          </form>
-        </Stack>
-      </Paper>
-=======
         <EmojiEvents sx={{ color: 'hsl(var(--primary))' }} />
         Award Reputation
       </Typography>
@@ -488,6 +420,7 @@ const AwardRep: React.FC = () => {
                     textTransform: 'none',
                     fontWeight: 600,
                     fontSize: '1rem',
+                    mr: 2,
                     '&:hover': {
                       backgroundColor: 'hsl(var(--primary))/90',
                     },
@@ -497,6 +430,27 @@ const AwardRep: React.FC = () => {
                   }}
                 >
                   {isLoading ? 'Awarding...' : 'Award Reputation'}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outlined"
+                  onClick={testService}
+                  sx={{
+                    borderColor: 'hsl(var(--border))',
+                    color: 'hsl(var(--foreground))',
+                    px: 3,
+                    py: 1.5,
+                    borderRadius: 2,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    '&:hover': {
+                      borderColor: 'hsl(var(--primary))',
+                      backgroundColor: 'hsl(var(--muted))',
+                    },
+                  }}
+                >
+                  Test Service
                 </Button>
               </Box>
             </CardContent>
@@ -762,7 +716,6 @@ const AwardRep: React.FC = () => {
           {snackbar.message}
         </Alert>
       </Snackbar>
->>>>>>> advFrontend
     </Box>
   );
 };
