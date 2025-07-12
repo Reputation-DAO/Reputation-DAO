@@ -1,202 +1,539 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
-  Paper,
+  Card,
+  CardContent,
   Avatar,
   Button,
+  Chip,
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
+  IconButton,
+  Menu,
+  MenuItem,
+  Divider,
 } from '@mui/material';
-import { Star, Gavel, Wallet } from 'lucide-react';
+import {
+  TrendingUp,
+  People as Users,
+  MoreVert,
+  Visibility,
+  Edit,
+  Settings,
+  NorthEast as ArrowUpRight,
+} from '@mui/icons-material';
 
 const Dashboard: React.FC = () => {
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+
+  // Mock data for recent notifications
+  const recentNotifications = [
+    {
+      id: 1,
+      user: 'Alice Johnson',
+      avatar: '/api/placeholder/32/32',
+      action: 'earned 50 reputation points',
+      time: '2 minutes ago',
+      recentActivity: 'Completed advanced Python course',
+    },
+    {
+      id: 2,
+      user: 'Bob Smith',
+      avatar: '/api/placeholder/32/32',
+      action: 'joined the community',
+      time: '15 minutes ago',
+      recentActivity: 'Updated their profile',
+    },
+    {
+      id: 3,
+      user: 'Carol Davis',
+      avatar: '/api/placeholder/32/32',
+      action: 'earned 30 reputation points',
+      time: '1 hour ago',
+      recentActivity: 'Submitted final project',
+    },
+  ];
+
+  // Mock data for top members
+  const topMembers = [
+    {
+      id: 1,
+      name: 'Sarah Wilson',
+      avatar: '/api/placeholder/40/40',
+      reputation: 1250,
+      level: 'Expert',
+      change: '+15',
+      recentActivity: 'Mentored 5 students this week',
+    },
+    {
+      id: 2,
+      name: 'Mike Chen',
+      avatar: '/api/placeholder/40/40',
+      reputation: 980,
+      level: 'Advanced',
+      change: '+12',
+      recentActivity: 'Led study group session',
+    },
+    {
+      id: 3,
+      name: 'Emma Brown',
+      avatar: '/api/placeholder/40/40',
+      reputation: 850,
+      level: 'Intermediate',
+      change: '+8',
+      recentActivity: 'Shared helpful resources',
+    },
+  ];
+
+  // Mock data for community growth
+  const communityData = [
+    {
+      id: 1,
+      user: 'David Lee',
+      avatar: '/api/placeholder/32/32',
+      action: 'earned 25 reputation points',
+      time: '30 minutes ago',
+      recentActivity: 'Participated in code review',
+    },
+    {
+      id: 2,
+      user: 'Lisa Wang',
+      avatar: '/api/placeholder/32/32',
+      action: 'earned 40 reputation points',
+      time: '45 minutes ago',
+      recentActivity: 'Completed certification exam',
+    },
+    {
+      id: 3,
+      user: 'James Miller',
+      avatar: '/api/placeholder/32/32',
+      action: 'updated their profile',
+      time: '1 hour ago',
+      recentActivity: 'Added new skills to profile',
+    },
+  ];
+
+  const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
+    setMenuAnchor(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setMenuAnchor(null);
+  };
+
   return (
     <Box
       sx={{
-        width: '100%',
         minHeight: '100vh',
         backgroundColor: 'hsl(var(--background))',
-        color: 'hsl(var(--foreground))',
-        px: { xs: 2, sm: 4, md: 8 },
-        py: { xs: 6, sm: 8, md: 8 },
-        transition: 'background-color var(--transition-smooth), color var(--transition-smooth)',
+        px: { xs: 2, md: 3 },
+        py: { xs: 2, md: 3 },
+        transition: 'background-color var(--transition-smooth)',
       }}
     >
-      {/* Header Card */}
-      <Paper
-        elevation={4}
-        sx={{
-          maxWidth: 800,
-          mx: 'auto',
-          mt: { xs: 4, md: 6 },
-          p: { xs: 3, sm: 5, md: 6 },
-          mb: { xs: 5, md: 8 },
-          borderRadius: 3,
-          background: 'linear-gradient(135deg, hsla(var(--primary), 0.2), hsla(var(--muted), 0.9))',
-          color: 'hsl(var(--foreground))',
-          border: 'var(--glass-border)',
-          backdropFilter: 'var(--glass-blur)',
-          boxShadow: 'var(--shadow-md)',
-        }}
-      >
-        <Box
-          display="flex"
-          flexDirection={{ xs: 'column', sm: 'row' }}
-          alignItems="center"
-          gap={{ xs: 3, sm: 4 }}
-        >
-          <Avatar
-            sx={{
-              bgcolor: 'hsl(var(--primary))',
-              color: 'hsl(var(--primary-foreground))',
-              width: { xs: 64, sm: 72 },
-              height: { xs: 64, sm: 72 },
-              fontSize: 30,
-            }}
-          >
-            R
-          </Avatar>
-          <Box textAlign={{ xs: 'center', sm: 'left' }}>
-            <Typography
-              variant="h4"
-              fontWeight={700}
-              sx={{ fontSize: { xs: '1.75rem', sm: '2rem', md: '2.25rem' }, mb: 1 }}
-            >
-              Welcome to Reputation DAO
-            </Typography>
-            <Typography
-              variant="body1"
-              sx={{ fontSize: { xs: '0.95rem', sm: '1.05rem' }, opacity: 0.85 }}
-            >
-              Manage, award, and track community reputation.
-            </Typography>
-          </Box>
-        </Box>
-      </Paper>
-
-      {/* Action Cards Without Grid */}
-      <Box
-        sx={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 4,
-          justifyContent: 'center',
-          maxWidth: 1100,
-          mx: 'auto',
-        }}
-      >
-        <ActionCard
-          icon={<Star size={35} />}
-          title="Award Reputation"
-          description="Grant positive reputation to contributors."
-          href="/award"
-          color="--primary"
-        />
-        <ActionCard
-          icon={<Gavel size={35} />}
-          title="Revoke Reputation"
-          description="Remove reputation from violators."
-          href="/revoke"
-          color="--primary"
-        />
-        <ActionCard
-          icon={<Wallet size={35} />}
-          title="View Balances"
-          description="Check current reputation of members."
-          href="/balances"
-          color="--primary"
-        />
-      </Box>
-    </Box>
-  );
-};
-
-const ActionCard = ({
-  icon,
-  title,
-  description,
-  href,
-  color,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  href: string;
-  color: string;
-}) => {
-  return (
-    <Box
-      sx={{
-        width: { xs: '100%', sm: '45%', md: '30%' },
-        minWidth: 260,
-      }}
-    >
-      <Paper
-        elevation={2}
-        sx={{
-          p: 2,
-          borderRadius: 2,
-          backgroundColor: 'hsl(var(--muted))',
-          color: 'hsl(var(--foreground))',
-          border: 'var(--glass-border)',
-          backdropFilter: 'var(--glass-blur)',
-          textAlign: 'center',
-          height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          transition: 'all var(--transition-smooth)',
-          '&:hover': {
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-            transform: 'translateY(-2px)',
-          },
-        }}
-      >
-        <Avatar
+      {/* Header */}
+      <Box sx={{ mb: 4 }}>
+        <Typography
+          variant="h4"
           sx={{
-            bgcolor: `hsl(var(${color}))`,
-            color: 'hsl(var(--primary-foreground))',
-            width: 48,
-            height: 48,
-            mx: 'auto',
+            color: 'hsl(var(--foreground))',
+            fontWeight: 600,
+            fontSize: { xs: '1.5rem', md: '2rem' },
             mb: 1,
           }}
         >
-          {icon}
-        </Avatar>
-        <Typography variant="subtitle1" fontWeight={600} gutterBottom noWrap>
-          {title}
+          Overview
         </Typography>
         <Typography
-          variant="caption"
+          variant="body1"
           sx={{
             color: 'hsl(var(--muted-foreground))',
-            mb: 1.5,
-            display: 'block',
-            minHeight: '32px',
-            fontSize: '0.75rem',
+            fontSize: '0.875rem',
           }}
         >
-          {description}
+          Track your community's reputation and activity
         </Typography>
-        <Button
-          variant="contained"
-          href={href}
-          size="small"
-          sx={{
-            mt: 0.5,
-            borderRadius: 2,
-            px: 2,
-            backgroundColor: `hsl(var(${color}))`,
-            color: 'hsl(var(--primary-foreground))',
-            '&:hover': {
-              backgroundColor: 'hsl(var(--accent))',
-              color: 'hsl(var(--accent-foreground))',
-            },
-          }}
-        >
-          Go
-        </Button>
-      </Paper>
+      </Box>
+
+      <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', lg: 'row' } }}>
+        {/* Main Content */}
+        <Box sx={{ flex: 1 }}>
+          {/* Stats Cards */}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+              gap: 2,
+              mb: 4,
+            }}
+          >
+            {/* Trust Score Card */}
+            <Card
+              sx={{
+                backgroundColor: 'hsl(var(--muted))',
+                border: '1px solid hsl(var(--border))',
+                borderRadius: 2,
+              }}
+            >
+              <CardContent sx={{ p: 3 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                  <Typography variant="h6" sx={{ color: 'hsl(var(--foreground) / 0.8)', fontSize: '0.875rem', fontWeight: 500 }}>
+                    Trust Score
+                  </Typography>
+                  <TrendingUp sx={{ color: 'hsl(var(--info))', fontSize: '20px' }} />
+                </Box>
+                <Typography variant="h4" sx={{ color: 'hsl(var(--foreground))', fontWeight: 600, mb: 1 }}>
+                  85%
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <ArrowUpRight sx={{ color: 'hsl(var(--info))', fontSize: '16px' }} />
+                  <Typography variant="body2" sx={{ color: 'hsl(var(--info))', fontSize: '0.75rem' }}>
+                    +5% from last month
+                  </Typography>
+                </Box>
+              </CardContent>
+            </Card>
+
+            {/* Members Card */}
+            <Card
+              sx={{
+                backgroundColor: 'hsl(var(--muted))',
+                border: '1px solid hsl(var(--border))',
+                borderRadius: 2,
+              }}
+            >
+              <CardContent sx={{ p: 3 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                  <Typography variant="h6" sx={{ color: 'hsl(var(--foreground) / 0.8)', fontSize: '0.875rem', fontWeight: 500 }}>
+                    Members
+                  </Typography>
+                  <Users sx={{ color: 'hsl(var(--primary))', fontSize: '20px' }} />
+                </Box>
+                <Typography variant="h4" sx={{ color: 'hsl(var(--foreground))', fontWeight: 600, mb: 1 }}>
+                  1,234
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <ArrowUpRight sx={{ color: 'hsl(var(--info))', fontSize: '16px' }} />
+                  <Typography variant="body2" sx={{ color: 'hsl(var(--info))', fontSize: '0.75rem' }}>
+                    +12% from last month
+                  </Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          </Box>
+
+          {/* Welcome New Members */}
+          <Card
+            sx={{
+              backgroundColor: '#1e293b',
+              border: '1px solid #334155',
+              borderRadius: 2,
+              mb: 4,
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Typography variant="h6" sx={{ color: '#f1f5f9', fontSize: '1rem', fontWeight: 600 }}>
+                  Welcome New Members
+                </Typography>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  sx={{
+                    color: '#3b82f6',
+                    borderColor: '#334155',
+                    fontSize: '0.75rem',
+                    '&:hover': {
+                      borderColor: '#3b82f6',
+                      backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    },
+                  }}
+                >
+                  View all
+                </Button>
+              </Box>
+              <List sx={{ p: 0 }}>
+                {recentNotifications.slice(0, 3).map((notification, index) => (
+                  <React.Fragment key={notification.id}>
+                    <ListItem sx={{ px: 0, py: 1.5 }}>
+                      <ListItemAvatar>
+                        <Avatar
+                          sx={{
+                            width: 32,
+                            height: 32,
+                            backgroundColor: '#334155',
+                            color: '#e2e8f0',
+                            fontSize: '0.875rem',
+                          }}
+                        >
+                          {notification.user.charAt(0)}
+                        </Avatar>
+                      </ListItemAvatar>
+                      <ListItemText
+                        primary={
+                          <Typography variant="body2" sx={{ color: '#f1f5f9', fontSize: '0.875rem' }}>
+                            {notification.user}
+                          </Typography>
+                        }
+                        secondary={
+                          <Typography variant="body2" sx={{ color: '#94a3b8', fontSize: '0.75rem' }}>
+                            {notification.action} • {notification.time}
+                          </Typography>
+                        }
+                      />
+                    </ListItem>
+                    {index < recentNotifications.slice(0, 3).length - 1 && (
+                      <Divider sx={{ borderColor: '#334155' }} />
+                    )}
+                  </React.Fragment>
+                ))}
+              </List>
+            </CardContent>
+          </Card>
+
+          {/* Chart Placeholder */}
+          <Card
+            sx={{
+              backgroundColor: '#1e293b',
+              border: '1px solid #334155',
+              borderRadius: 2,
+              mb: 4,
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="h6" sx={{ color: '#f1f5f9', fontSize: '1rem', fontWeight: 600, mb: 3 }}>
+                Activity Chart
+              </Typography>
+              <Box
+                sx={{
+                  height: 200,
+                  backgroundColor: 'hsl(var(--muted))',
+                  borderRadius: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: '1px solid hsl(var(--border))',
+                }}
+              >
+                <Typography variant="body2" sx={{ color: '#64748b' }}>
+                  Chart visualization will be implemented here
+                </Typography>
+              </Box>
+            </CardContent>
+          </Card>
+
+          {/* Community Growth */}
+          <Card
+            sx={{
+              backgroundColor: '#1e293b',
+              border: '1px solid #334155',
+              borderRadius: 2,
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="h6" sx={{ color: '#f1f5f9', fontSize: '1rem', fontWeight: 600, mb: 3 }}>
+                Community Growth
+              </Typography>
+              <List sx={{ p: 0 }}>
+                {communityData.map((item, index) => (
+                  <React.Fragment key={item.id}>
+                    <ListItem sx={{ px: 0, py: 1.5 }}>
+                      <ListItemAvatar>
+                        <Avatar
+                          sx={{
+                            width: 32,
+                            height: 32,
+                            backgroundColor: '#334155',
+                            color: '#e2e8f0',
+                            fontSize: '0.875rem',
+                          }}
+                        >
+                          {item.user.charAt(0)}
+                        </Avatar>
+                      </ListItemAvatar>
+                      <ListItemText
+                        primary={
+                          <Typography variant="body2" sx={{ color: '#f1f5f9', fontSize: '0.875rem' }}>
+                            {item.user}
+                          </Typography>
+                        }
+                        secondary={
+                          <Typography variant="body2" sx={{ color: '#94a3b8', fontSize: '0.75rem' }}>
+                            {item.action} • {item.time}
+                          </Typography>
+                        }
+                      />
+                    </ListItem>
+                    {index < communityData.length - 1 && <Divider sx={{ borderColor: '#334155' }} />}
+                  </React.Fragment>
+                ))}
+              </List>
+            </CardContent>
+          </Card>
+        </Box>
+
+        {/* Right Sidebar */}
+        <Box sx={{ width: { lg: 300 }, flexShrink: 0 }}>
+          {/* Recent Notifications */}
+          <Card
+            sx={{
+              backgroundColor: '#1e293b',
+              border: '1px solid #334155',
+              borderRadius: 2,
+              mb: 3,
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Typography variant="h6" sx={{ color: '#f1f5f9', fontSize: '0.875rem', fontWeight: 600 }}>
+                  Recent Notifications
+                </Typography>
+                <IconButton
+                  onClick={handleMenuClick}
+                  sx={{
+                    color: '#94a3b8',
+                    '&:hover': { color: '#f1f5f9' },
+                    p: 0.5,
+                  }}
+                >
+                  <MoreVert sx={{ fontSize: '18px' }} />
+                </IconButton>
+              </Box>
+              <List sx={{ p: 0 }}>
+                {recentNotifications.map((notification, index) => (
+                  <React.Fragment key={notification.id}>
+                    <ListItem sx={{ px: 0, py: 1.5 }}>
+                      <ListItemAvatar>
+                        <Avatar
+                          sx={{
+                            width: 28,
+                            height: 28,
+                            backgroundColor: '#334155',
+                            color: '#e2e8f0',
+                            fontSize: '0.75rem',
+                          }}
+                        >
+                          {notification.user.charAt(0)}
+                        </Avatar>
+                      </ListItemAvatar>
+                      <ListItemText
+                        primary={
+                          <Typography variant="body2" sx={{ color: '#f1f5f9', fontSize: '0.75rem', lineHeight: 1.4 }}>
+                            {notification.user}
+                          </Typography>
+                        }
+                        secondary={
+                          <Box>
+                            <Typography variant="body2" sx={{ color: '#94a3b8', fontSize: '0.7rem' }}>
+                              {notification.action}
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: '#64748b', fontSize: '0.65rem' }}>
+                              {notification.time}
+                            </Typography>
+                          </Box>
+                        }
+                      />
+                    </ListItem>
+                    {index < recentNotifications.length - 1 && <Divider sx={{ borderColor: '#334155' }} />}
+                  </React.Fragment>
+                ))}
+              </List>
+            </CardContent>
+          </Card>
+
+          {/* Top Members */}
+          <Card
+            sx={{
+              backgroundColor: '#1e293b',
+              border: '1px solid #334155',
+              borderRadius: 2,
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="h6" sx={{ color: '#f1f5f9', fontSize: '0.875rem', fontWeight: 600, mb: 3 }}>
+                Top Members
+              </Typography>
+              <List sx={{ p: 0 }}>
+                {topMembers.map((member, index) => (
+                  <React.Fragment key={member.id}>
+                    <ListItem sx={{ px: 0, py: 1.5 }}>
+                      <ListItemAvatar>
+                        <Avatar
+                          sx={{
+                            width: 32,
+                            height: 32,
+                            backgroundColor: '#334155',
+                            color: '#e2e8f0',
+                            fontSize: '0.75rem',
+                          }}
+                        >
+                          {member.name.charAt(0)}
+                        </Avatar>
+                      </ListItemAvatar>
+                      <ListItemText
+                        primary={
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" sx={{ color: '#f1f5f9', fontSize: '0.75rem' }}>
+                              {member.name}
+                            </Typography>
+                            <Chip
+                              label={member.change}
+                              size="small"
+                              sx={{
+                                backgroundColor: '#10b981',
+                                color: '#ffffff',
+                                fontSize: '0.65rem',
+                                height: 18,
+                                '& .MuiChip-label': { px: 1 }
+                              }}
+                            />
+                          </Box>
+                        }
+                        secondary={
+                          <Typography variant="body2" sx={{ color: '#94a3b8', fontSize: '0.7rem' }}>
+                            {member.reputation} pts
+                          </Typography>
+                        }
+                      />
+                    </ListItem>
+                    {index < topMembers.length - 1 && <Divider sx={{ borderColor: '#334155' }} />}
+                  </React.Fragment>
+                ))}
+              </List>
+            </CardContent>
+          </Card>
+        </Box>
+      </Box>
+
+      {/* Menu */}
+      <Menu
+        anchorEl={menuAnchor}
+        open={Boolean(menuAnchor)}
+        onClose={handleMenuClose}
+        PaperProps={{
+          sx: { 
+            backgroundColor: 'hsl(var(--muted))', 
+            border: '1px solid hsl(var(--border))',
+            color: 'hsl(var(--foreground))',
+          }
+        }}
+      >
+        <MenuItem onClick={handleMenuClose} sx={{ fontSize: '0.875rem', color: 'hsl(var(--foreground))' }}>
+          <Visibility sx={{ mr: 1, fontSize: '16px' }} />
+          View
+        </MenuItem>
+        <MenuItem onClick={handleMenuClose} sx={{ fontSize: '0.875rem', color: 'hsl(var(--foreground))' }}>
+          <Edit sx={{ mr: 1, fontSize: '16px' }} />
+          Edit
+        </MenuItem>
+        <MenuItem onClick={handleMenuClose} sx={{ fontSize: '0.875rem', color: 'hsl(var(--foreground))' }}>
+          <Settings sx={{ mr: 1, fontSize: '16px' }} />
+          Settings
+        </MenuItem>
+      </Menu>
     </Box>
   );
 };

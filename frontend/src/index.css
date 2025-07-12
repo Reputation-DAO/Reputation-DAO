@@ -7,11 +7,20 @@
     --background: 0 0% 98%;            /* Soft light bg */
     --foreground: 220 15% 15%;         /* Almost-black text */
 
+    --card: 0 0% 100%;                 /* Pure white cards */
+    --card-foreground: 220 15% 15%;    /* Same as foreground */
+
     --primary: 208 91% 52%;            /* Slightly softened #0A80ED */
     --primary-foreground: 220 15% 15%; /* soft black */
 
+    --secondary: 220 15% 96%;          /* Very light gray */
+    --secondary-foreground: 220 15% 15%;
+
     --accent: 208 91% 85%;             /* Softer hover blue */
     --accent-foreground: 220 20% 10%;
+
+    --destructive: 0 84% 60%;          /* Red for destructive actions */
+    --destructive-foreground: 0 0% 100%;
 
     --info: 200 100% 48%;              /* Vibrant blue for info elements */
     --info-foreground: 0 0% 100%;      /* Pure white for contrast */
@@ -34,11 +43,20 @@
     --background: 222 30% 7%;           /* Not pitch black */
     --foreground: 0 0% 90%;             /* Slightly off-white */
 
+    --card: 222 30% 9%;                 /* Slightly lighter than background */
+    --card-foreground: 0 0% 90%;        /* Same as foreground */
+
     --primary: 208 91% 60%;             /* A touch more glow */
     --primary-foreground: 0 0% 100%;
 
+    --secondary: 222 20% 15%;           /* Dark gray */
+    --secondary-foreground: 0 0% 90%;
+
     --accent: 208 91% 70%;              /* Softer hover */
     --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;           /* Red for destructive actions */
+    --destructive-foreground: 0 0% 100%;
 
     --info: 200 100% 58%;               /* Slightly brighter in dark mode */
     --info-foreground: 0 0% 100%;
