@@ -9,17 +9,12 @@ import {
   Button,
 } from '@mui/material';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
-
-// TODO: Replace this with your actual canister call
-async function fetchBalance(principal: string): Promise<number> {
-  if (principal === 'aaaa-bbbb-cccc') return 120;
-  if (principal === 'dddd-eeee-ffff') return 80;
-  return 0;
-}
+import { Principal } from '@dfinity/principal';
+import { getPlugActor } from '../components/canister/reputationDao';
 
 const ViewBalances: React.FC = () => {
   const [principal, setPrincipal] = useState('');
-  const [balance, setBalance] = useState<number | null>(null);
+  const [balance, setBalance] = useState<bigint | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,12 +23,15 @@ const ViewBalances: React.FC = () => {
     setError(null);
     setBalance(null);
     try {
-      const result = await fetchBalance(principal.trim());
+      const actor = await getPlugActor();
+      const result = await actor.getBalance(Principal.fromText(principal.trim()));
       setBalance(result);
-    } catch (e) {
+    } catch (e: any) {
+      console.error(e);
       setError('Failed to fetch balance.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -112,7 +110,7 @@ const ViewBalances: React.FC = () => {
             }}
           />
 
-         <Button
+          <Button
             type="button"
             onClick={handleFetch}
             disabled={loading || !principal.trim()}
@@ -140,7 +138,6 @@ const ViewBalances: React.FC = () => {
             {loading ? 'Fetching...' : 'Get Balance'}
           </Button>
 
-
           {error && (
             <Typography color="error" variant="body2">
               {error}
@@ -149,7 +146,7 @@ const ViewBalances: React.FC = () => {
 
           {balance !== null && !error && (
             <Typography variant="h6" sx={{ color: 'hsl(var(--foreground))' }}>
-              Reputation: <b>{balance}</b>
+              Reputation: <b>{balance.toString()}</b>
             </Typography>
           )}
         </Stack>

@@ -9,6 +9,8 @@ import {
   Paper,
 } from '@mui/material';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import { getPlugActor } from '../components/canister/reputationDao';
+import { Principal } from '@dfinity/principal';
 
 const AwardRep: React.FC = () => {
   const [userId, setUserId] = useState('');
@@ -24,18 +26,35 @@ const AwardRep: React.FC = () => {
     setSuccess(false);
     setError('');
 
-    // TODO: Integrate with backend/ICP canister call here
-    setTimeout(() => {
-      setLoading(false);
-      if (userId && points && !isNaN(Number(points))) {
+    try {
+      if (!userId || !points || isNaN(Number(points))) {
+        throw new Error('Please enter a valid user ID and numeric points.');
+      }
+
+      const principal = Principal.fromText(userId.trim());
+      const amount = BigInt(points.trim());
+
+      const actor = await getPlugActor();
+      const result = await actor.awardRep(
+        principal,
+        amount,
+        reason.trim() === '' ? [] : [reason.trim()]
+      );
+
+      if (result.startsWith('Success')) {
         setSuccess(true);
         setUserId('');
         setPoints('');
         setReason('');
       } else {
-        setError('Please enter a valid User ID and numeric points.');
+        setError(result);
       }
-    }, 1200);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Failed to award reputation.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -85,138 +104,103 @@ const AwardRep: React.FC = () => {
             Award Reputation
           </Typography>
 
-          <form
-  style={{ width: '100%' }}
-  onSubmit={handleSubmit}
-  autoComplete="off"
->
-  <Stack spacing={2}>
-    <TextField
-      label="User Principal / ID"
-      variant="outlined"
-      fullWidth
-      value={userId}
-      onChange={(e) => setUserId(e.target.value)}
-      required
-      InputLabelProps={{
-        sx: {
-          color: 'hsl(var(--foreground))',
-        },
-      }}
-      InputProps={{
-        sx: {
-          color: 'hsl(var(--foreground))',
-          backgroundColor: 'hsl(var(--muted))',
-          borderRadius: 2,
-          '& fieldset': {
-            borderColor: 'hsl(var(--border))',
-          },
-          '&:hover fieldset': {
-            borderColor: 'hsl(var(--primary))',
-          },
-          '&.Mui-focused fieldset': {
-            borderColor: 'hsl(var(--primary))',
-          },
-        },
-      }}
-    />
+          <form style={{ width: '100%' }} onSubmit={handleSubmit} autoComplete="off">
+            <Stack spacing={2}>
+              <TextField
+                label="User Principal / ID"
+                variant="outlined"
+                fullWidth
+                value={userId}
+                onChange={(e) => setUserId(e.target.value)}
+                required
+                InputLabelProps={{ sx: { color: 'hsl(var(--foreground))' } }}
+                InputProps={{
+                  sx: {
+                    color: 'hsl(var(--foreground))',
+                    backgroundColor: 'hsl(var(--muted))',
+                    borderRadius: 2,
+                    '& fieldset': { borderColor: 'hsl(var(--border))' },
+                    '&:hover fieldset': { borderColor: 'hsl(var(--primary))' },
+                    '&.Mui-focused fieldset': { borderColor: 'hsl(var(--primary))' },
+                  },
+                }}
+              />
 
-    <TextField
-      label="Reputation Points"
-      variant="outlined"
-      fullWidth
-      value={points}
-      onChange={(e) => setPoints(e.target.value)}
-      required
-      type="number"
-      inputProps={{ min: 1 }}
-      InputLabelProps={{
-        sx: {
-          color: 'hsl(var(--foreground))',
-        },
-      }}
-      InputProps={{
-        sx: {
-          color: 'hsl(var(--foreground))',
-          backgroundColor: 'hsl(var(--muted))',
-          borderRadius: 2,
-          '& fieldset': {
-            borderColor: 'hsl(var(--border))',
-          },
-          '&:hover fieldset': {
-            borderColor: 'hsl(var(--primary))',
-          },
-          '&.Mui-focused fieldset': {
-            borderColor: 'hsl(var(--primary))',
-          },
-        },
-      }}
-    />
+              <TextField
+                label="Reputation Points"
+                variant="outlined"
+                fullWidth
+                value={points}
+                onChange={(e) => setPoints(e.target.value)}
+                required
+                type="number"
+                inputProps={{ min: 1 }}
+                InputLabelProps={{ sx: { color: 'hsl(var(--foreground))' } }}
+                InputProps={{
+                  sx: {
+                    color: 'hsl(var(--foreground))',
+                    backgroundColor: 'hsl(var(--muted))',
+                    borderRadius: 2,
+                    '& fieldset': { borderColor: 'hsl(var(--border))' },
+                    '&:hover fieldset': { borderColor: 'hsl(var(--primary))' },
+                    '&.Mui-focused fieldset': { borderColor: 'hsl(var(--primary))' },
+                  },
+                }}
+              />
 
-    <TextField
-      label="Reason (Optional)"
-      variant="outlined"
-      fullWidth
-      value={reason}
-      onChange={(e) => setReason(e.target.value)}
-      multiline
-      rows={3}
-      placeholder="Why are you awarding these points?"
-      InputLabelProps={{
-        sx: {
-          color: 'hsl(var(--foreground))',
-        },
-      }}
-      InputProps={{
-        sx: {
-          color: 'hsl(var(--foreground))',
-          backgroundColor: 'hsl(var(--muted))',
-          borderRadius: 2,
-          '& fieldset': {
-            borderColor: 'hsl(var(--border))',
-          },
-          '&:hover fieldset': {
-            borderColor: 'hsl(var(--primary))',
-          },
-          '&.Mui-focused fieldset': {
-            borderColor: 'hsl(var(--primary))',
-          },
-        },
-      }}
-    />
+              <TextField
+                label="Reason (Optional)"
+                variant="outlined"
+                fullWidth
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                multiline
+                rows={3}
+                placeholder="Why are you awarding these points?"
+                InputLabelProps={{ sx: { color: 'hsl(var(--foreground))' } }}
+                InputProps={{
+                  sx: {
+                    color: 'hsl(var(--foreground))',
+                    backgroundColor: 'hsl(var(--muted))',
+                    borderRadius: 2,
+                    '& fieldset': { borderColor: 'hsl(var(--border))' },
+                    '&:hover fieldset': { borderColor: 'hsl(var(--primary))' },
+                    '&.Mui-focused fieldset': { borderColor: 'hsl(var(--primary))' },
+                  },
+                }}
+              />
 
-    {error && (
-      <Typography color="error" variant="body2">
-        {error}
-      </Typography>
-    )}
-    {success && (
-      <Typography color="success.main" variant="body2">
-        Reputation awarded successfully!
-      </Typography>
-    )}
+              {error && (
+                <Typography color="error" variant="body2">
+                  {error}
+                </Typography>
+              )}
+              {success && (
+                <Typography color="success.main" variant="body2">
+                  Reputation awarded successfully!
+                </Typography>
+              )}
 
-    <Button
-      type="submit"
-      variant="contained"
-      size="large"
-      disabled={loading}
-      sx={{
-        mt: 1,
-        borderRadius: 2,
-        backgroundColor: 'hsl(var(--primary))',
-        color: 'hsl(var(--primary-foreground))',
-        '&:hover': {
-          backgroundColor: 'hsl(var(--accent))',
-          color: 'hsl(var(--accent-foreground))',
-        },
-      }}
-    >
-      {loading ? 'Submitting...' : 'Submit'}
-    </Button>
-  </Stack>
-</form>
-
+              <Button
+                type="submit"
+                variant="contained"
+                size="large"
+                disabled={loading}
+                sx={{
+                  mt: 1,
+                  borderRadius: 2,
+                  backgroundColor: 'hsl(var(--primary))',
+                  color: 'hsl(var(--primary-foreground))',
+                  '&:hover': {
+                    backgroundColor: 'hsl(var(--accent))',
+                    color: 'hsl(var(--accent-foreground))',
+                  },
+                }}
+              >
+                {loading ? 'Submitting...' : 'Submit'}
+              </Button>
+            </Stack>
+          </form>
         </Stack>
       </Paper>
     </Box>
