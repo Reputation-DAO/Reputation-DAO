@@ -1,41 +1,47 @@
-import { Actor, HttpAgent } from '@dfinity/agent';
-import { Principal } from '@dfinity/principal';
+import { Actor } from '@dfinity/agent';
 import { idlFactory } from '../../../../src/declarations/reputation_dao/reputation_dao.did.js';
-import type { _SERVICE, Awarder, Transaction } from '../../../../src/declarations/reputation_dao/reputation_dao.did.d.ts';
+import type { _SERVICE } from '../../../../src/declarations/reputation_dao/reputation_dao.did.d.ts';
 
-// Canister ID for playground deployment
-const canisterId = 'mnu3f-wyaaa-aaaab-qabsa-cai';
+//modify this canisterID based on where the dfx playground hosts your backend
+const canisterId = '2iql3-oiaaa-aaaab-qacja-cai';
 
-// Playground host
-const PLAYGROUND_HOST = 'https://icp-api.io';
-
-// Create agent for playground
-const createAgent = () => {
-  return new HttpAgent({
-    host: PLAYGROUND_HOST,
-  });
-};
-
-// Get actor using Plug wallet
-export const getPlugActor = async (): Promise<_SERVICE> => {
+export const getPlugActor = async () => {
   if (!window.ic?.plug) {
     throw new Error('Plug extension not found');
   }
 
   try {
-    // 1. Connect Plug with whitelist
-    const connected = await window.ic.plug.requestConnect({
-      whitelist: [canisterId],
-    });
+    console.log('🔌 Checking Plug connection status...');
+    
+    // 1. Check if already connected before requesting new connection
+    const isConnected = await window.ic.plug.isConnected();
+    console.log('🔍 Plug connected status:', isConnected);
+    
+    if (!isConnected) {
+      console.log('🔌 Not connected, requesting new connection...');
+      const connected = await window.ic.plug.requestConnect({
+        whitelist: [canisterId],
+      });
 
-    if (!connected) {
-      throw new Error('User rejected the Plug connection');
+      if (!connected) {
+        throw new Error('User rejected the Plug connection');
+      }
+      console.log('✅ New Plug connection established');
+    } else {
+      console.log('✅ Using existing Plug connection');
     }
 
-    // 2. Create agent with playground host
-    await window.ic.plug.createAgent({
-      host: PLAYGROUND_HOST,
-    });
+    // 2. Create agent with playground network host (only if needed)
+    const agent = window.ic.plug.agent;
+    if (!agent) {
+      console.log('🌐 Creating new agent...');
+      await window.ic.plug.createAgent({
+        host: 'https://ic0.app', // Playground network uses IC mainnet infrastructure
+      });
+      console.log('🌐 Agent created with playground host');
+    } else {
+      console.log('🌐 Using existing agent');
+    }
 
     // 3. Return the actor
     const actor = (await window.ic.plug.createActor({
@@ -43,140 +49,48 @@ export const getPlugActor = async (): Promise<_SERVICE> => {
       interfaceFactory: idlFactory,
     })) as _SERVICE;
 
+    console.log('🎭 Actor created successfully');
+    
+    // Test the connection by calling a simple query
+    try {
+      const transactionCount = await actor.getTransactionCount();
+      console.log('🔄 Connection test successful. Transaction count:', transactionCount);
+    } catch (testError) {
+      console.warn('⚠️ Connection test failed:', testError);
+      // Don't throw here, let the caller handle it
+    }
+    
     return actor;
   } catch (error: any) {
-    console.error('Error creating Plug actor:', error);
+    console.error('❌ Error creating Plug actor:', error);
     throw new Error(`Failed to connect to canister: ${error.message || 'Unknown error'}`);
   }
 };
 
-// Get actor without wallet (for read-only operations)
-export const getActor = (): _SERVICE => {
-  const agent = createAgent();
-  return Actor.createActor(idlFactory, {
-    agent,
-    canisterId,
-  });
+// Utility function to check if Plug is connected
+export const isPlugConnected = async (): Promise<boolean> => {
+  if (!window.ic?.plug) {
+    return false;
+  }
+  
+  try {
+    return await window.ic.plug.isConnected();
+  } catch (error) {
+    console.error('Error checking Plug connection:', error);
+    return false;
+  }
 };
 
-// Backend integration functions
-export const reputationService = {
-  // Test connection to the canister
-  async testConnection(): Promise<boolean> {
-    try {
-      console.log('Testing canister connection...');
-      const actor = getActor();
-      const count = await actor.getTransactionCount();
-      console.log('Connection successful, transaction count:', count);
-      return true;
-    } catch (error: any) {
-      console.error('Connection test failed:', error);
-      throw new Error(`Cannot connect to canister: ${error.message || 'Network error'}`);
-    }
-  },
-
-  // Award reputation to a user
-  async awardReputation(principal: Principal, amount: bigint, reason?: string): Promise<string> {
-    try {
-      const actor = await getPlugActor();
-      return await actor.awardRep(principal, amount, reason ? [reason] : []);
-    } catch (error) {
-      console.error('Error awarding reputation:', error);
-      throw error;
-    }
-  },
-
-  // Revoke reputation from a user
-  async revokeReputation(principal: Principal, amount: bigint, reason?: string): Promise<string> {
-    try {
-      const actor = await getPlugActor();
-      return await actor.revokeRep(principal, amount, reason ? [reason] : []);
-    } catch (error) {
-      console.error('Error revoking reputation:', error);
-      throw error;
-    }
-  },
-
-  // Get user balance
-  async getBalance(principal: Principal): Promise<bigint> {
-    try {
-      console.log('Getting balance for principal:', principal.toString());
-      const actor = getActor();
-      const balance = await actor.getBalance(principal);
-      console.log('Balance received:', balance);
-      return balance;
-    } catch (error: any) {
-      console.error('Error getting balance:', error);
-      throw new Error(`Failed to get balance: ${error.message || 'Network error'}`);
-    }
-  },
-
-  // Get all transactions
-  async getTransactionHistory(): Promise<Transaction[]> {
-    try {
-      console.log('Getting transaction history...');
-      const actor = getActor();
-      const transactions = await actor.getTransactionHistory();
-      console.log('Transactions received:', transactions);
-      return transactions;
-    } catch (error: any) {
-      console.error('Error getting transaction history:', error);
-      throw new Error(`Failed to get transaction history: ${error.message || 'Network error'}`);
-    }
-  },
-
-  // Get transactions for a specific user
-  async getTransactionsByUser(principal: Principal): Promise<Transaction[]> {
-    try {
-      const actor = getActor();
-      return await actor.getTransactionsByUser(principal);
-    } catch (error) {
-      console.error('Error getting user transactions:', error);
-      throw error;
-    }
-  },
-
-  // Get transaction count
-  async getTransactionCount(): Promise<bigint> {
-    try {
-      const actor = getActor();
-      return await actor.getTransactionCount();
-    } catch (error) {
-      console.error('Error getting transaction count:', error);
-      throw error;
-    }
-  },
-
-  // Get trusted awarders
-  async getTrustedAwarders(): Promise<Awarder[]> {
-    try {
-      const actor = getActor();
-      return await actor.getTrustedAwarders();
-    } catch (error) {
-      console.error('Error getting trusted awarders:', error);
-      throw error;
-    }
-  },
-
-  // Add trusted awarder
-  async addTrustedAwarder(principal: Principal, name: string): Promise<string> {
-    try {
-      const actor = await getPlugActor();
-      return await actor.addTrustedAwarder(principal, name);
-    } catch (error) {
-      console.error('Error adding trusted awarder:', error);
-      throw error;
-    }
-  },
-
-  // Remove trusted awarder
-  async removeTrustedAwarder(principal: Principal): Promise<string> {
-    try {
-      const actor = await getPlugActor();
-      return await actor.removeTrustedAwarder(principal);
-    } catch (error) {
-      console.error('Error removing trusted awarder:', error);
-      throw error;
-    }
+// Utility function to get current principal
+export const getCurrentPrincipal = async () => {
+  if (!window.ic?.plug) {
+    throw new Error('Plug extension not found');
   }
+  
+  const isConnected = await isPlugConnected();
+  if (!isConnected) {
+    throw new Error('Plug is not connected');
+  }
+  
+  return await window.ic.plug.agent.getPrincipal();
 };

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Card,
@@ -22,7 +22,8 @@ import {
   TableRow,
   Paper,
   IconButton,
-  Tooltip
+  Tooltip,
+  CircularProgress
 } from '@mui/material';
 import {
   EmojiEvents,
@@ -34,7 +35,18 @@ import {
   Info
 } from '@mui/icons-material';
 import { Principal } from '@dfinity/principal';
-import { reputationService } from '../components/canister/reputationDao';
+import { getPlugActor } from '../components/canister/reputationDao';
+
+// Backend transaction interface
+interface BackendTransaction {
+  id: bigint;
+  transactionType: { Award: null } | { Revoke: null };
+  from: Principal;
+  to: Principal;
+  amount: bigint;
+  timestamp: bigint;
+  reason: [] | [string];
+}
 
 interface AwardTransaction {
   id: string;
@@ -51,7 +63,10 @@ const AwardRep: React.FC = () => {
   const [reason, setReason] = useState('');
   const [category, setCategory] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [totalAwards, setTotalAwards] = useState(0);
+  const [totalRepAwarded , setTotalRepAwarded] = useState(0);
   const [recentAwards, setRecentAwards] = useState<AwardTransaction[]>([]);
+  const [loadingAwards, setLoadingAwards] = useState(false);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
@@ -59,69 +74,90 @@ const AwardRep: React.FC = () => {
   }>({ open: false, message: '', severity: 'success' });
 
   // Load recent transactions on component mount
-  React.useEffect(() => {
-    loadRecentTransactions();
+  useEffect(() => {
+    loadRecentAwards();
   }, []);
 
-  // Test function to debug the service
-  const testService = async () => {
+  const loadRecentAwards = async () => {
+    setLoadingAwards(true);
     try {
-      console.log('Testing reputation service...');
-      await reputationService.testConnection();
-      console.log('Service test passed');
+      console.log('🔄 Loading recent award transactions...');
+      console.log('🔗 Getting Plug actor connection...');
+      const actor = await getPlugActor();
+      console.log('✅ Actor connected:', !!actor);
       
-      const count = await reputationService.getTransactionCount();
-      console.log('Transaction count:', count);
+      console.log('📞 Calling getTransactionHistory()...');
+      const transactions = await actor.getTransactionHistory() as BackendTransaction[];
+      console.log('📊 Raw transactions received:', transactions);
+      console.log('📊 Total transactions count:', transactions.length);
       
-      const transactions = await reputationService.getTransactionHistory();
-      console.log('All transactions:', transactions);
-      
-      setSnackbar({
-        open: true,
-        message: `Service test passed. Found ${transactions.length} transactions.`,
-        severity: 'success'
-      });
-    } catch (error: any) {
-      console.error('Service test failed:', error);
-      setSnackbar({
-        open: true,
-        message: `Service test failed: ${error.message}`,
-        severity: 'error'
-      });
-    }
-  };
+      // Check if transactions is an array
+      if (!Array.isArray(transactions)) {
+        console.warn('⚠️ Transactions is not an array:', transactions);
+        setRecentAwards([]);
+        return;
+      }
 
-  const loadRecentTransactions = async () => {
-    try {
-      console.log('Loading recent transactions from reputationService...');
-      const transactions = await reputationService.getTransactionHistory();
-      console.log('Raw transactions from service:', transactions);
-      
-      // Convert backend transactions to UI format and get last 5
-      const recentTxs = transactions
+      // Calcuate total REP awarded
+      const totalRepAwarded = transactions.reduce((sum, tx) => {
+        if (tx.transactionType && 'Award' in tx.transactionType) {
+          return sum + Number(tx.amount);
+        }
+        return sum;
+      }, 0);
+
+      setTotalRepAwarded(totalRepAwarded);
+
+      // Calculate total awards
+      const totalAwards = transactions.filter(tx =>{
+        return tx.transactionType && 'Award' in tx.transactionType;
+      }).length;
+
+      setTotalAwards(totalAwards);
+
+      // Filter for award transactions and convert to frontend format
+      const awardTransactions = transactions
         .filter(tx => {
-          console.log('Checking transaction type:', tx.transactionType);
-          return 'Award' in tx.transactionType;
+          console.log('🔍 Checking transaction:', tx);
+          return tx.transactionType && 'Award' in tx.transactionType;
         })
-        .slice(-5)
-        .map((tx) => {
-          console.log('Processing transaction:', tx);
+        .slice(-5) // Get last 5 awards
+        .map(tx => {
+          const timestamp = Number(tx.timestamp);
+          const date = timestamp > 0 
+            ? new Date(timestamp * 1000).toISOString().split('T')[0] // Convert from seconds to milliseconds
+            : new Date().toISOString().split('T')[0];
+            
           return {
             id: tx.id.toString(),
             recipient: tx.to.toString(),
             amount: Number(tx.amount),
-            reason: tx.reason.length > 0 ? tx.reason[0]! : 'No reason provided',
-            date: new Date(Number(tx.timestamp) / 1000000).toISOString().split('T')[0],
+            reason: (tx.reason && tx.reason.length > 0) ? tx.reason[0]! : 'No reason provided',
+            date,
             status: 'completed'
           };
         })
-        .reverse();
+        .reverse(); // Show newest first
       
-      console.log('Processed recent transactions:', recentTxs);
-      setRecentAwards(recentTxs);
+      console.log('🎯 Filtered award transactions:', awardTransactions);
+      console.log('🎯 Award transactions count:', awardTransactions.length);
+      setRecentAwards(awardTransactions);
+      
     } catch (error) {
-      console.error('Failed to load recent transactions:', error);
-      // Keep empty array on error
+      console.error('❌ Failed to load recent awards:', error);
+      console.error('❌ Error details:', error);
+      
+      // Set empty array on error to prevent infinite loading
+      setRecentAwards([]);
+      
+      setSnackbar({
+        open: true,
+        message: 'Failed to load recent awards from blockchain. The canister may be empty or connection failed.',
+        severity: 'warning'
+      });
+    } finally {
+      setLoadingAwards(false);
+      console.log('🏁 loadRecentAwards completed');
     }
   };
 
@@ -144,7 +180,7 @@ const AwardRep: React.FC = () => {
     } catch (error) {
       setSnackbar({
         open: true,
-        message: 'Invalid principal format',
+        message: 'Invalid principal format. Please enter a valid ICP address.',
         severity: 'error'
       });
       return;
@@ -163,20 +199,37 @@ const AwardRep: React.FC = () => {
     setIsLoading(true);
 
     try {
-      console.log('About to award reputation with params:', {
+      console.log('🎯 Starting award submission...');
+      console.log('🎯 Award details:', {
         recipient: recipientPrincipal.toString(),
         amount: amountBigInt.toString(),
         reason
       });
-      
-      const result = await reputationService.awardReputation(
-        recipientPrincipal,
-        amountBigInt,
-        reason
-      );
-      
-      console.log('Award result:', result);
 
+      console.log('🔗 Getting Plug actor for award...');
+      const actor = await getPlugActor();
+      console.log('✅ Actor connected for award:', !!actor);
+      
+      // Get current user principal for logging
+      const currentPrincipal = await window.ic.plug.agent.getPrincipal();
+      console.log('� Current user principal:', currentPrincipal.toString());
+      
+      console.log('�📞 Calling awardRep()...');
+      const result = await actor.awardRep(recipientPrincipal, amountBigInt, [reason]);
+      console.log('✅ Award result:', result);
+      
+      // Check if the result indicates an error
+      if (typeof result === 'string' && result.startsWith('Error:')) {
+        console.error('❌ Backend returned error:', result);
+        setSnackbar({
+          open: true,
+          message: result,
+          severity: 'error'
+        });
+        return;
+      }
+      
+      console.log('✅ Award successful!');
       setSnackbar({
         open: true,
         message: `Successfully awarded ${amount} reputation points to ${recipient}`,
@@ -189,18 +242,39 @@ const AwardRep: React.FC = () => {
       setReason('');
       setCategory('');
       
-      // Reload recent transactions
-      await loadRecentTransactions();
+      // Reload recent awards
+      console.log('🔄 Reloading recent awards after successful award...');
+      await loadRecentAwards();
       
     } catch (error: any) {
-      console.error('Award error:', error);
+      console.error('❌ Award error:', error);
+      console.error('❌ Error type:', typeof error);
+      console.error('❌ Error message:', error.message);
+      console.error('❌ Full error object:', error);
+      
+      let errorMessage = 'Failed to award reputation. Please try again.';
+      
+      // Handle specific error types
+      if (error.message) {
+        if (error.message.includes('Not a trusted awarder')) {
+          errorMessage = 'You are not authorized to award reputation points. Only trusted awarders can perform this action.';
+        } else if (error.message.includes('Daily mint cap exceeded')) {
+          errorMessage = 'Daily minting limit exceeded. Please try again tomorrow.';
+        } else if (error.message.includes('Cannot award rep to yourself')) {
+          errorMessage = 'You cannot award reputation points to yourself.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       setSnackbar({
         open: true,
-        message: error.message || 'Failed to award reputation',
+        message: errorMessage,
         severity: 'error'
       });
     } finally {
       setIsLoading(false);
+      console.log('🏁 Award submission completed');
     }
   };
 
@@ -277,7 +351,7 @@ const AwardRep: React.FC = () => {
                     label="Recipient Address"
                     value={recipient}
                     onChange={(e) => setRecipient(e.target.value)}
-                    placeholder="Enter ICP address or username"
+                    placeholder="Enter ICP address"
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
@@ -420,7 +494,6 @@ const AwardRep: React.FC = () => {
                     textTransform: 'none',
                     fontWeight: 600,
                     fontSize: '1rem',
-                    mr: 2,
                     '&:hover': {
                       backgroundColor: 'hsl(var(--primary))/90',
                     },
@@ -430,27 +503,6 @@ const AwardRep: React.FC = () => {
                   }}
                 >
                   {isLoading ? 'Awarding...' : 'Award Reputation'}
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="outlined"
-                  onClick={testService}
-                  sx={{
-                    borderColor: 'hsl(var(--border))',
-                    color: 'hsl(var(--foreground))',
-                    px: 3,
-                    py: 1.5,
-                    borderRadius: 2,
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    '&:hover': {
-                      borderColor: 'hsl(var(--primary))',
-                      backgroundColor: 'hsl(var(--muted))',
-                    },
-                  }}
-                >
-                  Test Service
                 </Button>
               </Box>
             </CardContent>
@@ -483,6 +535,8 @@ const AwardRep: React.FC = () => {
               </Typography>
 
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                
+
                 <Box sx={{ 
                   display: 'flex', 
                   justifyContent: 'space-between',
@@ -492,13 +546,13 @@ const AwardRep: React.FC = () => {
                   border: '1px solid hsl(var(--border))'
                 }}>
                   <Typography sx={{ color: 'hsl(var(--muted-foreground))' }}>
-                    Available Balance
+                    Total Awards
                   </Typography>
                   <Typography sx={{ 
-                    color: 'hsl(var(--primary))', 
+                    color: 'hsl(var(--foreground))', 
                     fontWeight: 600 
                   }}>
-                    1,250 REP
+                    {totalAwards}
                   </Typography>
                 </Box>
 
@@ -511,32 +565,13 @@ const AwardRep: React.FC = () => {
                   border: '1px solid hsl(var(--border))'
                 }}>
                   <Typography sx={{ color: 'hsl(var(--muted-foreground))' }}>
-                    Awards This Month
+                    Total REP Awarded
                   </Typography>
                   <Typography sx={{ 
                     color: 'hsl(var(--foreground))', 
                     fontWeight: 600 
                   }}>
-                    15
-                  </Typography>
-                </Box>
-
-                <Box sx={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  p: 2,
-                  backgroundColor: 'hsl(var(--muted))',
-                  borderRadius: 1,
-                  border: '1px solid hsl(var(--border))'
-                }}>
-                  <Typography sx={{ color: 'hsl(var(--muted-foreground))' }}>
-                    Total Awarded
-                  </Typography>
-                  <Typography sx={{ 
-                    color: 'hsl(var(--foreground))', 
-                    fontWeight: 600 
-                  }}>
-                    3,450 REP
+                    {totalRepAwarded} REP
                   </Typography>
                 </Box>
               </Box>
@@ -638,64 +673,83 @@ const AwardRep: React.FC = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {recentAwards.map((award) => (
-                    <TableRow 
-                      key={award.id}
-                      sx={{ 
-                        '&:hover': { 
-                          backgroundColor: 'hsl(var(--card))' 
-                        } 
-                      }}
-                    >
-                      <TableCell sx={{ 
-                        color: 'hsl(var(--foreground))',
-                        borderBottom: '1px solid hsl(var(--border))'
-                      }}>
-                        {award.recipient}
-                      </TableCell>
-                      <TableCell sx={{ 
-                        color: 'hsl(var(--primary))', 
-                        fontWeight: 600,
-                        borderBottom: '1px solid hsl(var(--border))'
-                      }}>
-                        {award.amount} REP
-                      </TableCell>
-                      <TableCell sx={{ 
-                        color: 'hsl(var(--muted-foreground))',
-                        borderBottom: '1px solid hsl(var(--border))',
-                        maxWidth: 200,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap'
-                      }}>
-                        {award.reason}
-                      </TableCell>
-                      <TableCell sx={{ 
-                        color: 'hsl(var(--muted-foreground))',
-                        borderBottom: '1px solid hsl(var(--border))'
-                      }}>
-                        {award.date}
-                      </TableCell>
-                      <TableCell sx={{ borderBottom: '1px solid hsl(var(--border))' }}>
-                        <Chip
-                          label={award.status}
-                          color={getStatusColor(award.status) as any}
-                          size="small"
-                          sx={{ textTransform: 'capitalize' }}
-                        />
-                      </TableCell>
-                      <TableCell sx={{ borderBottom: '1px solid hsl(var(--border))' }}>
-                        <Tooltip title="View Details">
-                          <IconButton 
-                            size="small"
-                            sx={{ color: 'hsl(var(--muted-foreground))' }}
-                          >
-                            <Info />
-                          </IconButton>
-                        </Tooltip>
+                  {loadingAwards ? (
+                    <TableRow>
+                      <TableCell colSpan={6} sx={{ textAlign: 'center', py: 4 }}>
+                        <CircularProgress size={24} />
+                        <Typography sx={{ mt: 1, color: 'hsl(var(--muted-foreground))' }}>
+                          Loading recent awards...
+                        </Typography>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : recentAwards.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} sx={{ textAlign: 'center', py: 4 }}>
+                        <Typography sx={{ color: 'hsl(var(--muted-foreground))' }}>
+                          No recent awards found
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    recentAwards.map((award) => (
+                      <TableRow 
+                        key={award.id}
+                        sx={{ 
+                          '&:hover': { 
+                            backgroundColor: 'hsl(var(--card))' 
+                          } 
+                        }}
+                      >
+                        <TableCell sx={{ 
+                          color: 'hsl(var(--foreground))',
+                          borderBottom: '1px solid hsl(var(--border))'
+                        }}>
+                          {award.recipient}
+                        </TableCell>
+                        <TableCell sx={{ 
+                          color: 'hsl(var(--primary))', 
+                          fontWeight: 600,
+                          borderBottom: '1px solid hsl(var(--border))'
+                        }}>
+                          {award.amount} REP
+                        </TableCell>
+                        <TableCell sx={{ 
+                          color: 'hsl(var(--muted-foreground))',
+                          borderBottom: '1px solid hsl(var(--border))',
+                          maxWidth: 200,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}>
+                          {award.reason}
+                        </TableCell>
+                        <TableCell sx={{ 
+                          color: 'hsl(var(--muted-foreground))',
+                          borderBottom: '1px solid hsl(var(--border))'
+                        }}>
+                          {award.date}
+                        </TableCell>
+                        <TableCell sx={{ borderBottom: '1px solid hsl(var(--border))' }}>
+                          <Chip
+                            label={award.status}
+                            color={getStatusColor(award.status) as any}
+                            size="small"
+                            sx={{ textTransform: 'capitalize' }}
+                          />
+                        </TableCell>
+                        <TableCell sx={{ borderBottom: '1px solid hsl(var(--border))' }}>
+                          <Tooltip title="View Details">
+                            <IconButton 
+                              size="small"
+                              sx={{ color: 'hsl(var(--muted-foreground))' }}
+                            >
+                              <Info />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Principal } from '@dfinity/principal';
 import {
   Box,
   Card,
@@ -32,8 +33,7 @@ import {
   Download,
   FilterList
 } from '@mui/icons-material';
-import { Principal } from '@dfinity/principal';
-import { reputationService } from '../components/canister/reputationDao';
+import { getPlugActor } from '../components/canister/reputationDao';
 
 interface UserBalance {
   id: string;
@@ -46,18 +46,14 @@ interface UserBalance {
   status: 'active' | 'inactive';
 }
 
-// Real backend function to fetch balance
-async function fetchBalance(principal: string): Promise<number> {
-  try {
-    console.log('Fetching balance for principal:', principal);
-    const principalObj = Principal.fromText(principal);
-    const balance = await reputationService.getBalance(principalObj);
-    console.log('Raw balance from backend:', balance);
-    return Number(balance);
-  } catch (error: any) {
-    console.error('Error fetching balance:', error);
-    throw new Error(`Failed to fetch balance: ${error.message || 'Invalid principal or network error'}`);
-  }
+interface BackendTransaction {
+  id: bigint;
+  transactionType: { Award: null } | { Revoke: null };
+  from: Principal;
+  to: Principal;
+  amount: bigint;
+  timestamp: bigint;
+  reason: [] | [string];
 }
 
 const ViewBalances: React.FC = () => {
@@ -72,114 +68,119 @@ const ViewBalances: React.FC = () => {
     severity: 'success' | 'error' | 'warning' | 'info';
   }>({ open: false, message: '', severity: 'success' });
 
-  // Load transaction data to build user list
-  useEffect(() => {
-    loadUserData();
-  }, []);
-
-  const loadUserData = async () => {
-    setRefreshing(true);
+  // Real function to fetch balance from blockchain
+  const fetchBalance = async (principalString: string): Promise<number> => {
     try {
-      console.log('Testing canister connection...');
-      
-      // First test the connection
-      try {
-        await reputationService.testConnection();
-        console.log('Connection test passed');
-      } catch (connectionError: any) {
-        console.error('Connection failed:', connectionError);
-        setSnackbar({
-          open: true,
-          message: `Connection failed: ${connectionError.message}`,
-          severity: 'error'
-        });
-        setUserBalances([]);
+      // Validate Principal format
+      const principal = Principal.fromText(principalString);
+
+      // Use getPlugActor to get actor instance
+      const plugActor = await getPlugActor();
+      if (!plugActor) {
+        throw new Error('Failed to connect to blockchain');
+      }
+
+      const balance = await plugActor.getBalance(principal);
+      return Number(balance);
+    } catch (error) {
+      console.error('Error fetching balance:', error);
+      if (error instanceof Error && error.message.includes('Invalid principal')) {
+        throw new Error('Invalid Principal ID format');
+      }
+      throw new Error('Failed to fetch balance from blockchain');
+    }
+  };
+
+  // Load all balances from transaction history
+  const loadAllBalances = async () => {
+    try {
+      setRefreshing(true);
+
+      const plugActor = await getPlugActor();
+      if (!plugActor) {
+        console.log('No actor available');
         return;
       }
 
-      console.log('Loading user data from blockchain...');
-      const transactions = await reputationService.getTransactionHistory();
-      console.log('Received transactions:', transactions);
-      
-      if (!transactions || transactions.length === 0) {
-        console.log('No transactions found');
-        setSnackbar({
-          open: true,
-          message: 'No transactions found on the blockchain',
-          severity: 'info'
-        });
-        setUserBalances([]);
-        return;
-      }
+      console.log('Loading transaction history to calculate balances...');
+      const transactions = await plugActor.getTransactionHistory() as BackendTransaction[];
+      console.log('Raw transactions for balance calculation:', transactions);
 
-      // Build user list from transaction history
-      const userMap = new Map<string, UserBalance>();
-      
-      transactions.forEach((tx, index) => {
-        const principalStr = tx.to.toString();
-        const existing = userMap.get(principalStr);
-        
-        if (existing) {
-          // Update existing user
-          if ('Award' in tx.transactionType) {
-            existing.reputation += Number(tx.amount);
-          } else if ('Revoke' in tx.transactionType) {
-            existing.reputation -= Number(tx.amount);
-          }
-          existing.lastActivity = new Date(Number(tx.timestamp) / 1000000).toISOString().split('T')[0];
+      // Calculate balances from transaction history
+      const balanceMap = new Map<string, number>();
+      const activityMap = new Map<string, number>();
+
+      transactions.forEach(tx => {
+        const fromStr = tx.from.toString();
+        const toStr = tx.to.toString();
+        const amount = Number(tx.amount);
+        const timestamp = Number(tx.timestamp) / 1000000; // Convert to milliseconds
+
+        // Track latest activity
+        if (!activityMap.has(fromStr) || activityMap.get(fromStr)! < timestamp) {
+          activityMap.set(fromStr, timestamp);
+        }
+        if (!activityMap.has(toStr) || activityMap.get(toStr)! < timestamp) {
+          activityMap.set(toStr, timestamp);
+        }
+
+        // Calculate balances
+        if ('Award' in tx.transactionType) {
+          // Award: to user gets reputation
+          const currentBalance = balanceMap.get(toStr) || 0;
+          balanceMap.set(toStr, currentBalance + amount);
         } else {
-          // Create new user entry
-          const reputation = 'Award' in tx.transactionType ? Number(tx.amount) : 
-                           'Revoke' in tx.transactionType ? -Number(tx.amount) : 0;
-          userMap.set(principalStr, {
-            id: (index + 1).toString(),
-            address: principalStr,
-            name: `User ${principalStr.slice(0, 8)}...`,
-            reputation: reputation,
-            rank: 0, // Will be set after sorting
-            change: '+0',
-            lastActivity: new Date(Number(tx.timestamp) / 1000000).toISOString().split('T')[0],
-            status: 'active' as const
-          });
+          // Revoke: from user loses reputation
+          const currentBalance = balanceMap.get(fromStr) || 0;
+          balanceMap.set(fromStr, Math.max(0, currentBalance - amount));
         }
       });
 
-      // Convert to array and sort by reputation
-      const users = Array.from(userMap.values())
-        .sort((a, b) => b.reputation - a.reputation)
-        .map((user, index) => ({
-          ...user,
-          rank: index + 1
-        }));
+      // Convert to UserBalance array
+      const userBalancesList: UserBalance[] = Array.from(balanceMap.entries())
+        .map(([address, reputation], index) => ({
+          id: (index + 1).toString(),
+          address,
+          name: `User ${address.slice(0, 8)}`,
+          reputation,
+          rank: 0, // Will be set after sorting
+          change: '+0', // Could calculate from recent transactions
+          lastActivity: activityMap.has(address) 
+            ? new Date(activityMap.get(address)!).toLocaleDateString()
+            : 'Never',
+          status: (activityMap.has(address) && 
+                   Date.now() - activityMap.get(address)! < 7 * 24 * 60 * 60 * 1000) 
+                   ? 'active' as const 
+                   : 'inactive' as const
+        }))
+        .sort((a, b) => b.reputation - a.reputation) // Sort by reputation descending
+        .map((user, index) => ({ ...user, rank: index + 1 })); // Set ranks
 
-      console.log('Processed users:', users);
-      setUserBalances(users);
-      
-      if (users.length > 0) {
-        setSnackbar({
-          open: true,
-          message: `Loaded ${users.length} users with ${transactions.length} transactions`,
-          severity: 'success'
-        });
-      }
-    } catch (error: any) {
-      console.error('Failed to load user data:', error);
+      console.log('Processed user balances:', userBalancesList);
+      setUserBalances(userBalancesList);
+
+    } catch (error) {
+      console.error('Error loading balances:', error);
       setSnackbar({
         open: true,
-        message: `Failed to load data from blockchain: ${error.message || 'Unknown error'}`,
+        message: 'Failed to load balances: ' + (error as Error).message,
         severity: 'error'
       });
-      setUserBalances([]);
     } finally {
       setRefreshing(false);
     }
   };
 
+  // Load balances on component mount
+  useEffect(() => {
+    loadAllBalances();
+  }, []);
+
   const handleSearch = async () => {
     if (!searchTerm.trim()) {
       setSnackbar({
         open: true,
-        message: 'Please enter an address to search',
+        message: 'Please enter a Principal ID to search',
         severity: 'warning'
       });
       return;
@@ -189,30 +190,21 @@ const ViewBalances: React.FC = () => {
     setSelectedBalance(null);
 
     try {
-      console.log('Searching for balance of:', searchTerm.trim());
       const balance = await fetchBalance(searchTerm.trim());
-      console.log('Found balance:', balance);
-      
       setSelectedBalance(balance);
       
-      if (balance === 0) {
-        setSnackbar({
-          open: true,
-          message: 'No reputation found for this address',
-          severity: 'info'
-        });
-      } else {
-        setSnackbar({
-          open: true,
-          message: `Found ${balance} reputation points`,
-          severity: 'success'
-        });
-      }
-    } catch (error: any) {
+      setSnackbar({
+        open: true,
+        message: balance > 0 
+          ? `Found ${balance} reputation points`
+          : 'No reputation found for this Principal ID',
+        severity: balance > 0 ? 'success' : 'info'
+      });
+    } catch (error) {
       console.error('Search error:', error);
       setSnackbar({
         open: true,
-        message: `Failed to fetch balance: ${error.message || 'Unknown error'}`,
+        message: (error as Error).message,
         severity: 'error'
       });
     } finally {
@@ -220,23 +212,8 @@ const ViewBalances: React.FC = () => {
     }
   };
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    
-    try {
-      console.log('Refreshing data...');
-      await loadUserData();
-      // Note: loadUserData now shows its own success/error messages
-    } catch (error: any) {
-      console.error('Refresh error:', error);
-      setSnackbar({
-        open: true,
-        message: `Failed to refresh balances: ${error.message || 'Unknown error'}`,
-        severity: 'error'
-      });
-    } finally {
-      setRefreshing(false);
-    }
+  const handleRefresh = () => {
+    loadAllBalances();
   };
 
   const handleCloseSnackbar = () => {
@@ -314,7 +291,7 @@ const ViewBalances: React.FC = () => {
                   label="Enter Address or Username"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="e.g. alice.icp or aaaa-bbbb-cccc"
+                  placeholder="e.g. rdmx6-jaaaa-aaaah-qcaiq-cai"
                   onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
                   InputProps={{
                     startAdornment: (

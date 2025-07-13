@@ -99,10 +99,11 @@ public shared({caller}) func awardRep(to: Principal, amount: Nat, reason: ?Text)
     let callerKey = { key = caller; hash = Principal.hash(caller) };
     let toKey = { key = to; hash = Principal.hash(to) };
 
-    // Check: caller is trusted awarder
-    switch (Trie.get<Principal, Text>(trustedAwarders, callerKey, Principal.equal)) {
-        case null { return "Error: Not a trusted awarder. Caller: " # Principal.toText(caller); };
-        case _ {};
+    // Check: caller is trusted awarder or owner
+    let isOwner = Principal.equal(caller, owner);
+    let isAwarder = switch (Trie.get<Principal, Text>(trustedAwarders, callerKey, Principal.equal)) { case null false; case _ true; };
+    if (not isOwner and not isAwarder) {
+        return "Error: Not a trusted awarder or owner. Caller: " # Principal.toText(caller);
     };
 
     // Check: cannot mint to self

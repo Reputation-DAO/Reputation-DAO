@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Principal } from '@dfinity/principal';
 import {
   Box,
   Card,
@@ -38,8 +39,7 @@ import {
   Info,
   Undo
 } from '@mui/icons-material';
-import { Principal } from '@dfinity/principal';
-import { reputationService } from '../components/canister/reputationDao';
+import { getPlugActor } from '../components/canister/reputationDao';
 
 interface RevokeTransaction {
   id: string;
@@ -51,6 +51,16 @@ interface RevokeTransaction {
   revokedBy: string;
 }
 
+interface BackendTransaction {
+  id: bigint;
+  transactionType: { Award: null } | { Revoke: null };
+  from: Principal;
+  to: Principal;
+  amount: bigint;
+  timestamp: bigint;
+  reason: [] | [string];
+}
+
 const RevokeRep: React.FC = () => {
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
@@ -58,46 +68,76 @@ const RevokeRep: React.FC = () => {
   const [category, setCategory] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState(false);
-  const [recentRevocations, setRecentRevocations] = useState<RevokeTransaction[]>([]);
+  const [totalPointsRevoked , setTotalPointsRevoked] = useState(0);
+  const [totalRevocations, setTotalRevocations] = useState(0);
+  const [recentRevocations, setRecentRevocations] = useState<RevokeTransaction[]>([
+    
+  ]);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
     severity: 'success' | 'error' | 'warning' | 'info';
   }>({ open: false, message: '', severity: 'success' });
 
-  // Load recent revocation transactions on component mount
+  // Load recent revocations from blockchain
+  const loadRecentRevocations = async () => {
+    try {
+      console.log('🔗 Getting Plug actor connection...');
+      const actor = await getPlugActor();
+      console.log('✅ Actor connected:', !!actor);
+
+      console.log('📞 Calling getTransactionHistory()...');
+      const transactions = await actor.getTransactionHistory() as BackendTransaction[];
+      console.log('📊 Raw transactions for revocations:', transactions);
+
+      if (!transactions || transactions.length === 0) {
+        console.log('No transactions found from blockchain');
+        return;
+      }
+
+      // Filter and convert revoke transactions
+      const revokeTransactions = transactions
+        .filter(tx => 'Revoke' in tx.transactionType)
+        .slice(0, 10) // Get latest 10 revocations
+        .map((tx, index) => ({
+          id: index.toString(),
+          recipient: tx.to.toString(),
+          amount: Number(tx.amount),
+          reason: tx.reason.length > 0 ? tx.reason[0]! : 'No reason provided',
+          date: new Date(Number(tx.timestamp) / 1000000).toLocaleDateString(),
+          status: 'completed' as const,
+          revokedBy: tx.from.toString().slice(0, 8) + '...'
+        }));
+
+      console.log('Processed revoke transactions:', revokeTransactions);
+
+      if (revokeTransactions.length > 0) {
+        setRecentRevocations(revokeTransactions);
+      }
+
+      // Calculate total points revoked
+      const totalPointsRevoked = revokeTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+      console.log('Total points revoked:', totalPointsRevoked);
+
+      // Update state or perform actions based on totalPointsRevoked
+      setTotalPointsRevoked(totalPointsRevoked);
+
+      const totalRevocations = revokeTransactions.length;
+      setTotalRevocations(totalRevocations);
+
+    } catch (error) {
+      console.error('Error loading recent revocations:', error);
+    }
+  };
+
+  // Load recent revocations on component mount
   useEffect(() => {
     loadRecentRevocations();
   }, []);
 
-  const loadRecentRevocations = async () => {
-    try {
-      const transactions = await reputationService.getTransactionHistory();
-      // Convert backend transactions to UI format and get revocations
-      const revokeTxs = transactions
-        .filter(tx => 'Revoke' in tx.transactionType)
-        .slice(-5)
-        .map((tx) => ({
-          id: tx.id.toString(),
-          recipient: tx.to.toString(),
-          amount: Number(tx.amount),
-          reason: tx.reason[0] || 'No reason provided',
-          date: new Date(Number(tx.timestamp) / 1000000).toISOString().split('T')[0],
-          status: 'completed' as const,
-          revokedBy: tx.from.toString().slice(0, 8) + '...'
-        }))
-        .reverse();
-      
-      setRecentRevocations(revokeTxs);
-    } catch (error) {
-      console.error('Failed to load recent revocations:', error);
-      // Keep empty array on error
-    }
-  };
-
   const handleRevokeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!recipient || !amount || !reason) {
       setSnackbar({
         open: true,
@@ -107,23 +147,24 @@ const RevokeRep: React.FC = () => {
       return;
     }
 
-    // Validate principal format
+    // Validate Principal ID format
     try {
       Principal.fromText(recipient);
     } catch (error) {
       setSnackbar({
         open: true,
-        message: 'Invalid principal format',
+        message: 'Invalid Principal ID format',
         severity: 'error'
       });
       return;
     }
 
-    const amountNum = Number(amount);
-    if (amountNum <= 0) {
+    // Validate amount
+    const numAmount = parseInt(amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
       setSnackbar({
         open: true,
-        message: 'Amount must be greater than 0',
+        message: 'Amount must be a positive number',
         severity: 'error'
       });
       return;
@@ -137,35 +178,45 @@ const RevokeRep: React.FC = () => {
     setIsLoading(true);
 
     try {
+      const actor = await getPlugActor();
+      if (!actor) {
+        throw new Error('Failed to connect to blockchain. Please ensure you are logged in.');
+      }
+
       const recipientPrincipal = Principal.fromText(recipient);
-      const amountBigInt = BigInt(amount);
-      
-      await reputationService.revokeReputation(
-        recipientPrincipal,
-        amountBigInt,
-        reason
-      );
+      const numAmount = parseInt(amount);
+
+      console.log('Revoking reputation:', {
+        to: recipientPrincipal.toString(),
+        amount: numAmount,
+        reason: reason
+      });
+
+      // Call the revoke function on the blockchain
+      await actor.revokeRep(recipientPrincipal, BigInt(numAmount), [reason]);
 
       setSnackbar({
         open: true,
         message: `Successfully revoked ${amount} reputation points from ${recipient}`,
         severity: 'success'
       });
-      
+
       // Reset form
       setRecipient('');
       setAmount('');
       setReason('');
       setCategory('');
-      
+
       // Reload recent revocations
-      await loadRecentRevocations();
-      
-    } catch (error: any) {
-      console.error('Revoke error:', error);
+      setTimeout(() => {
+        loadRecentRevocations();
+      }, 1000);
+
+    } catch (error) {
+      console.error('Error revoking reputation:', error);
       setSnackbar({
         open: true,
-        message: error.message || 'Failed to revoke reputation',
+        message: 'Failed to revoke reputation: ' + (error as Error).message,
         severity: 'error'
       });
     } finally {
@@ -263,7 +314,7 @@ const RevokeRep: React.FC = () => {
                     label="Recipient Address"
                     value={recipient}
                     onChange={(e) => setRecipient(e.target.value)}
-                    placeholder="Enter ICP address or username"
+                    placeholder="Enter Principal ID (e.g. rdmx6-jaaaa-aaaah-qcaiq-cai)"
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
@@ -457,13 +508,13 @@ const RevokeRep: React.FC = () => {
                   border: '1px solid hsl(var(--border))'
                 }}>
                   <Typography sx={{ color: 'hsl(var(--muted-foreground))' }}>
-                    Revocations This Month
+                    Revocations
                   </Typography>
                   <Typography sx={{ 
                     color: 'hsl(var(--destructive))', 
                     fontWeight: 600 
                   }}>
-                    8
+                    {totalRevocations}
                   </Typography>
                 </Box>
 
@@ -482,28 +533,11 @@ const RevokeRep: React.FC = () => {
                     color: 'hsl(var(--foreground))', 
                     fontWeight: 600 
                   }}>
-                    425 REP
+                      {totalPointsRevoked} REP
                   </Typography>
                 </Box>
 
-                <Box sx={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  p: 2,
-                  backgroundColor: 'hsl(var(--muted))',
-                  borderRadius: 1,
-                  border: '1px solid hsl(var(--border))'
-                }}>
-                  <Typography sx={{ color: 'hsl(var(--muted-foreground))' }}>
-                    Pending Reviews
-                  </Typography>
-                  <Typography sx={{ 
-                    color: 'hsl(var(--foreground))', 
-                    fontWeight: 600 
-                  }}>
-                    2
-                  </Typography>
-                </Box>
+                
               </Box>
 
               <Alert 
