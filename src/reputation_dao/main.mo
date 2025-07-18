@@ -62,7 +62,7 @@ actor ReputationDAO {
 
 
     // TODO: Set your admin principal aka your plug id here 
-    stable var owner : Principal = Principal.fromText("ofkbl-m6bgx-xlgm3-ko4y6-mh7i4-kp6b4-sojbh-wyy2r-aznnp-gmqtb-xqe"); 
+    stable var owner : Principal = Principal.fromText("3d34m-ksxgd-46a66-2ibf7-kutsn-jg3vv-2yfjf-anbwh-u4lpl-tqu7d-yae"); 
 
     // --- Utility functions and core logic ---
 
@@ -99,10 +99,11 @@ public shared({caller}) func awardRep(to: Principal, amount: Nat, reason: ?Text)
     let callerKey = { key = caller; hash = Principal.hash(caller) };
     let toKey = { key = to; hash = Principal.hash(to) };
 
-    // Check: caller is trusted awarder
-    switch (Trie.get<Principal, Text>(trustedAwarders, callerKey, Principal.equal)) {
-        case null { return "Error: Not a trusted awarder. Caller: " # Principal.toText(caller); };
-        case _ {};
+    // Check: caller is trusted awarder or owner
+    let isOwner = Principal.equal(caller, owner);
+    let isAwarder = switch (Trie.get<Principal, Text>(trustedAwarders, callerKey, Principal.equal)) { case null false; case _ true; };
+    if (not isOwner and not isAwarder) {
+        return "Error: Not a trusted awarder or owner. Caller: " # Principal.toText(caller);
     };
 
     // Check: cannot mint to self

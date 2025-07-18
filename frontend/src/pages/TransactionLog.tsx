@@ -22,6 +22,17 @@ import {
   Alert
 } from '@mui/material';
 import { useCanister } from '@connect2ic/react';
+import { Principal } from '@dfinity/principal';
+
+interface BackendTransaction {
+  id: bigint;
+  transactionType: { Award: null } | { Revoke: null };
+  from: Principal;
+  to: Principal;
+  amount: bigint;
+  timestamp: bigint;
+  reason: [] | [string];
+}
 
 interface Transaction {
   id: number;
@@ -30,7 +41,7 @@ interface Transaction {
   to: string;
   amount: number;
   timestamp: number;
-  reason: string[] | [];
+  reason: string;
 }
 
 type SortField = 'id' | 'timestamp' | 'amount';
@@ -65,10 +76,35 @@ const TransactionLog: React.FC = () => {
       
       try {
         setLoading(true);
-        console.log('Fetching transaction history...'); // Debug log
-        const result = await actor.getTransactionHistory() as Transaction[];
-        console.log('Transaction result:', result); // Debug log
-        setTransactions(result || []);
+        console.log('Fetching transaction history from actor...'); // Debug log
+        const result = await actor.getTransactionHistory() as BackendTransaction[];
+        console.log('Raw transaction result from actor:', result); // Debug log
+        console.log('Number of transactions received:', result?.length || 0);
+        
+        if (!result || result.length === 0) {
+          console.log('No transactions found in result');
+          setTransactions([]);
+          setError(null);
+          setLoading(false);
+          return;
+        }
+        
+        // Convert backend data to frontend format
+        const processedTransactions: Transaction[] = result.map((tx, index) => {
+          console.log(`Processing transaction ${index}:`, tx);
+          return {
+            id: Number(tx.id),
+            transactionType: tx.transactionType,
+            from: tx.from.toString(),
+            to: tx.to.toString(),
+            amount: Number(tx.amount),
+            timestamp: Number(tx.timestamp) / 1000000, // Convert nanoseconds to milliseconds
+            reason: tx.reason.length > 0 ? tx.reason[0]! : ''
+          };
+        });
+        
+        console.log('Processed transactions:', processedTransactions);
+        setTransactions(processedTransactions);
         setError(null);
       } catch (err) {
         console.error('Error fetching transactions:', err);
@@ -91,7 +127,7 @@ const TransactionLog: React.FC = () => {
         tx.from.toLowerCase().includes(searchTerm.toLowerCase()) ||
         tx.to.toLowerCase().includes(searchTerm.toLowerCase()) ||
         tx.id.toString().includes(searchTerm) ||
-        (tx.reason.length > 0 && tx.reason[0].toLowerCase().includes(searchTerm.toLowerCase()))
+        (tx.reason && tx.reason.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
 
@@ -139,7 +175,7 @@ const TransactionLog: React.FC = () => {
 
   // Helper functions
   const formatTimestamp = (timestamp: number): string => {
-    return new Date(timestamp * 1000).toLocaleString();
+    return new Date(timestamp).toLocaleString(); // timestamp is already in milliseconds
   };
 
   const formatPrincipal = (principal: string): string => {
@@ -315,7 +351,7 @@ const TransactionLog: React.FC = () => {
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2">
-                    {transaction.reason.length > 0 ? transaction.reason[0] : '-'}
+                    {transaction.reason || '-'}
                   </Typography>
                 </TableCell>
               </TableRow>

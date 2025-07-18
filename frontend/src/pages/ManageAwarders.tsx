@@ -1,291 +1,765 @@
 import React, { useState, useEffect } from 'react';
+import { Principal } from '@dfinity/principal';
 import {
   Box,
-  Paper,
-  Stack,
+  Card,
+  CardContent,
   Typography,
-  Button,
-  List,
-  ListItem,
-  ListItemAvatar,
-  Avatar,
-  Divider,
   TextField,
+  Button,
+  Alert,
+  Snackbar,
+  InputAdornment,
+  Avatar,
+  IconButton,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Menu,
+  MenuItem,
+  CircularProgress
 } from '@mui/material';
-import GroupIcon from '@mui/icons-material/Group';
-import PersonAddIcon from '@mui/icons-material/PersonAdd';
-import PersonRemoveIcon from '@mui/icons-material/PersonRemove';
+import {
+  Group,
+  PersonAdd,
+  AdminPanelSettings,
+  MoreVert,
+  Delete,
+  Search,
+  Refresh
+} from '@mui/icons-material';
 import { getPlugActor } from '../components/canister/reputationDao';
-import { Principal } from '@dfinity/principal';
 
-// 🔧 Utility to shorten principal ID
-const formatPrincipalShort = (principal: string): string => {
-  if (principal.length <= 13) return principal;
-  return `${principal.slice(0, 6)}...${principal.slice(-6)}`;
-};
+interface Awarder {
+  id: string;
+  name: string;
+  principal: string;
+  status: 'active' | 'inactive';
+  joinDate: string;
+  totalAwarded: number;
+  lastActive: string;
+}
 
 const ManageAwarders: React.FC = () => {
-  const [awarders, setAwarders] = useState<{ id: string; name: string }[]>([]);
-  const [newAwarderId, setNewAwarderId] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [newAwarderPrincipal, setNewAwarderPrincipal] = useState('');
   const [newAwarderName, setNewAwarderName] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    action: 'remove' | null;
+    awarder: Awarder | null;
+  }>({ open: false, action: null, awarder: null });
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [selectedAwarder, setSelectedAwarder] = useState<Awarder | null>(null);
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error' | 'warning' | 'info';
+  }>({ open: false, message: '', severity: 'success' });
 
-  useEffect(() => {
-    const fetchAwarders = async () => {
-      try {
-        const actor = await getPlugActor();
-        const fetched = await actor.getTrustedAwarders();
-        setAwarders(
-          fetched.map((a: { id: Principal; name: string }) => ({
-            id: a.id.toText(),
-            name: a.name,
-          }))
-        );
-      } catch (e) {
-        console.error('Failed to fetch awarders:', e);
+  const [awarders, setAwarders] = useState<Awarder[]>([]);
+
+  // Load trusted awarders from backend
+  const loadTrustedAwarders = async () => {
+    try {
+      setRefreshing(true);
+      
+      const plugActor = await getPlugActor();
+      if (!plugActor) {
+        throw new Error('Failed to connect to blockchain');
       }
-    };
 
-    fetchAwarders();
+      console.log('Loading trusted awarders...');
+      const backendAwarders = await plugActor.getTrustedAwarders();
+      console.log('Backend awarders:', backendAwarders);
+
+      // Transform backend data to frontend format
+      const transformedAwarders: Awarder[] = backendAwarders.map((awarder: any, index: number) => ({
+        id: (index + 1).toString(),
+        name: awarder.name,
+        principal: awarder.id.toString(),
+        status: 'active' as const,
+        joinDate: new Date().toLocaleDateString(), // Could be enhanced with actual join dates
+        totalAwarded: 0, // Could be calculated from transaction history
+        lastActive: new Date().toLocaleDateString()
+      }));
+
+      setAwarders(transformedAwarders);
+      console.log('Transformed awarders:', transformedAwarders);
+      
+    } catch (error) {
+      console.error('Error loading awarders:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to load awarders: ' + (error as Error).message,
+        severity: 'error'
+      });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Load awarders on component mount
+  useEffect(() => {
+    loadTrustedAwarders();
   }, []);
 
-  const handleAddAwarder = async () => {
+  const handleAddAwarder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!newAwarderPrincipal.trim() || !newAwarderName.trim()) {
+      setSnackbar({
+        open: true,
+        message: 'Please enter both Principal ID and name',
+        severity: 'warning'
+      });
+      return;
+    }
+
     try {
-      setError('');
-      setSuccessMsg('');
-      setLoading(true);
+      setIsLoading(true);
 
-      const principal = Principal.fromText(newAwarderId.trim());
-      const actor = await getPlugActor();
-      const result = await actor.addTrustedAwarder(principal, newAwarderName.trim() || 'Unnamed');
+      // Validate Principal format
+      const principal = Principal.fromText(newAwarderPrincipal.trim());
+      
+      const plugActor = await getPlugActor();
+      if (!plugActor) {
+        throw new Error('Failed to connect to blockchain');
+      }
 
-      if (result.startsWith('Success')) {
-        setAwarders([
-          ...awarders,
-          { id: newAwarderId.trim(), name: newAwarderName.trim() || 'Unnamed' },
-        ]);
-        setNewAwarderId('');
+      console.log('Adding trusted awarder:', { principal: principal.toString(), name: newAwarderName.trim() });
+      const result = await plugActor.addTrustedAwarder(principal, newAwarderName.trim());
+      console.log('Add awarder result:', result);
+
+      if (result.includes('Success')) {
+        setSnackbar({
+          open: true,
+          message: `Successfully added ${newAwarderName} as a trusted awarder`,
+          severity: 'success'
+        });
+        
+        setNewAwarderPrincipal('');
         setNewAwarderName('');
-        setSuccessMsg('Awarder added.');
+        
+        // Reload the list
+        await loadTrustedAwarders();
       } else {
-        setError(result);
+        throw new Error(result);
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to add awarder');
+      
+    } catch (error) {
+      console.error('Error adding awarder:', error);
+      setSnackbar({
+        open: true,
+        message: (error as Error).message.includes('Invalid principal') 
+          ? 'Invalid Principal ID format' 
+          : 'Failed to add awarder: ' + (error as Error).message,
+        severity: 'error'
+      });
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const handleRemoveAwarder = async (principalId: string) => {
+  const handleRemoveAwarder = async (awarder: Awarder) => {
     try {
-      setError('');
-      setSuccessMsg('');
-      setLoading(true);
-
-      const principal = Principal.fromText(principalId);
-      const actor = await getPlugActor();
-      const result = await actor.removeTrustedAwarder(principal);
-
-      if (result.startsWith('Success')) {
-        setAwarders(awarders.filter((a) => a.id !== principalId));
-        setSuccessMsg('Awarder removed.');
-      } else {
-        setError(result);
+      const plugActor = await getPlugActor();
+      if (!plugActor) {
+        throw new Error('Failed to connect to blockchain');
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to remove awarder');
-    } finally {
-      setLoading(false);
+
+      const principal = Principal.fromText(awarder.principal);
+      console.log('Removing trusted awarder:', principal.toString());
+      const result = await plugActor.removeTrustedAwarder(principal);
+      console.log('Remove awarder result:', result);
+
+      if (result.includes('Success')) {
+        setSnackbar({
+          open: true,
+          message: `Successfully removed ${awarder.name}`,
+          severity: 'success'
+        });
+        
+        // Reload the list
+        await loadTrustedAwarders();
+      } else {
+        throw new Error(result);
+      }
+
+    } catch (error) {
+      console.error('Error removing awarder:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to remove awarder: ' + (error as Error).message,
+        severity: 'error'
+      });
     }
   };
+
+  const handleMenuClick = (event: React.MouseEvent<HTMLElement>, awarder: Awarder) => {
+    setAnchorEl(event.currentTarget);
+    setSelectedAwarder(awarder);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+    setSelectedAwarder(null);
+  };
+
+  const handleConfirmAction = async () => {
+    if (!confirmDialog.awarder) return;
+
+    if (confirmDialog.action === 'remove') {
+      await handleRemoveAwarder(confirmDialog.awarder);
+    }
+    
+    setConfirmDialog({ open: false, action: null, awarder: null });
+    handleMenuClose();
+  };
+
+  const handleRefresh = () => {
+    loadTrustedAwarders();
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar(prev => ({ ...prev, open: false }));
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'success';
+      case 'inactive': return 'default';
+      default: return 'default';
+    }
+  };
+
+  const filteredAwarders = awarders.filter(awarder =>
+    awarder.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    awarder.principal.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
-    <Box
-      sx={{
-        width: '100%',
-        minHeight: '100vh',
-        backgroundColor: 'hsl(var(--background))',
-        color: 'hsl(var(--foreground))',
-        px: { xs: 2, sm: 4, md: 8 },
-        py: { xs: 6, sm: 8 },
-        transition: 'background-color var(--transition-smooth), color var(--transition-smooth)',
-      }}
-    >
-      <Paper
-        elevation={4}
-        sx={{
-          maxWidth: 500,
-          mx: 'auto',
-          mt: { xs: 4, md: 6 },
-          p: { xs: 3, sm: 5 },
-          borderRadius: 3,
-          background: 'linear-gradient(135deg, hsla(var(--primary), 0.2), hsla(var(--muted), 0.9))',
+    <Box sx={{ 
+      p: 3, 
+      backgroundColor: 'hsl(var(--background))',
+      minHeight: '100vh'
+    }}>
+      <Typography 
+        variant="h4" 
+        sx={{ 
+          mb: 3, 
           color: 'hsl(var(--foreground))',
-          border: 'var(--glass-border)',
-          backdropFilter: 'var(--glass-blur)',
-          boxShadow: 'var(--shadow-md)',
+          fontWeight: 600,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2
         }}
       >
-        <Stack spacing={3} alignItems="center">
-          <Avatar
-            sx={{
-              bgcolor: 'hsl(var(--primary))',
-              color: 'hsl(var(--primary-foreground))',
-              width: 64,
-              height: 64,
-            }}
-          >
-            <GroupIcon fontSize="large" />
-          </Avatar>
+        <Group sx={{ color: 'hsl(var(--primary))' }} />
+        Manage Awarders
+      </Typography>
 
-          <Typography variant="h5" fontWeight={600}>
-            Manage Awarders
-          </Typography>
+      <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', lg: 'row' } }}>
+        {/* Add Awarder Form */}
+        <Box sx={{ flex: 1 }}>
+          <Card sx={{ 
+            backgroundColor: 'hsl(var(--muted))',
+            border: '1px solid hsl(var(--border))',
+            borderRadius: 2,
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+            mb: 3
+          }}>
+            <CardContent sx={{ p: 3 }}>
+              <Typography 
+                variant="h6" 
+                sx={{ 
+                  mb: 3, 
+                  color: 'hsl(var(--foreground))',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1
+                }}
+              >
+                <PersonAdd sx={{ color: 'hsl(var(--primary))' }} />
+                Invite New Awarder
+              </Typography>
 
-          <TextField
-            label="Awarder Nickname"
-            variant="outlined"
-            fullWidth
-            value={newAwarderName}
-            onChange={(e) => setNewAwarderName(e.target.value)}
-            InputLabelProps={{ sx: { color: 'hsl(var(--foreground))' } }}
-            InputProps={{
-              sx: {
-                color: 'hsl(var(--foreground))',
-                backgroundColor: 'hsl(var(--muted))',
-                borderRadius: 2,
-              },
-            }}
-          />
-
-          <TextField
-            label="Principal ID"
-            variant="outlined"
-            fullWidth
-            value={newAwarderId}
-            onChange={(e) => setNewAwarderId(e.target.value)}
-            InputLabelProps={{ sx: { color: 'hsl(var(--foreground))' } }}
-            InputProps={{
-              sx: {
-                color: 'hsl(var(--foreground))',
-                backgroundColor: 'hsl(var(--muted))',
-                borderRadius: 2,
-              },
-            }}
-          />
-
-          <Button
-            variant="contained"
-            startIcon={<PersonAddIcon />}
-            onClick={handleAddAwarder}
-            disabled={loading || !newAwarderId.trim()}
-            sx={{
-              borderRadius: 2,
-              backgroundColor: 'hsl(var(--primary))',
-              color: 'hsl(var(--primary-foreground))',
-              '&:hover': {
-                backgroundColor: 'hsl(var(--accent))',
-                color: 'hsl(var(--accent-foreground))',
-              },
-            }}
-          >
-            Add Awarder
-          </Button>
-
-          <List sx={{ width: '100%' }}>
-            {awarders.map((awarder) => (
-              <React.Fragment key={awarder.id}>
-                <ListItem
-                  disableGutters
+              <Box component="form" onSubmit={handleAddAwarder}>
+                <Box
                   sx={{
-                    px: 2,
-                    py: 1.5,
-                    borderRadius: 2,
-                    backgroundColor: 'hsla(var(--muted), 0.2)',
                     display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
+                    flexDirection: 'column',
+                    gap: 2,
+                    mb: 3,
                   }}
                 >
-                  <Box
-                    sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1, minWidth: 0 }}
-                  >
-                    <ListItemAvatar>
-                      <Avatar
-                        sx={{
-                          bgcolor: 'hsl(var(--muted))',
-                          color: 'hsl(var(--foreground))',
-                          width: 48,
-                          height: 48,
-                        }}
-                      >
-                        <PersonAddIcon />
-                      </Avatar>
-                    </ListItemAvatar>
-                    <Box sx={{ overflow: 'hidden' }}>
-                      <Typography
-                        fontWeight={600}
-                        color="hsl(var(--foreground))"
-                        sx={{ fontSize: '1rem', overflowWrap: 'break-word' }}
-                      >
-                        {awarder.name}
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        color="hsl(var(--muted-foreground))"
-                        title={awarder.id}
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          wordBreak: 'break-word',
-                        }}
-                      >
-                        {formatPrincipalShort(awarder.id)}
-                      </Typography>
-                    </Box>
-                  </Box>
-
-                  <Button
-                    startIcon={<PersonRemoveIcon />}
-                    onClick={() => handleRemoveAwarder(awarder.id)}
-                    disabled={loading}
+                  <TextField
+                    fullWidth
+                    label="Principal ID"
+                    value={newAwarderPrincipal}
+                    onChange={(e) => setNewAwarderPrincipal(e.target.value)}
+                    placeholder="e.g. rdmx6-jaaaa-aaaah-qcaiq-cai"
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <AdminPanelSettings sx={{ color: 'hsl(var(--muted-foreground))' }} />
+                        </InputAdornment>
+                      ),
+                    }}
                     sx={{
-                      color: 'hsl(var(--destructive))',
-                      ml: 2,
-                      mt: { xs: 1.5, sm: 0 },
-                      whiteSpace: 'nowrap',
-                      alignSelf: 'flex-start',
-                      '&:hover': {
-                        color: 'hsl(var(--destructive-foreground))',
-                        backgroundColor: 'transparent',
+                      '& .MuiOutlinedInput-root': {
+                        backgroundColor: 'hsl(var(--background))',
+                        '& fieldset': {
+                          borderColor: 'hsl(var(--border))',
+                        },
+                        '&:hover fieldset': {
+                          borderColor: 'hsl(var(--primary))',
+                        },
+                        '&.Mui-focused fieldset': {
+                          borderColor: 'hsl(var(--primary))',
+                        },
+                      },
+                      '& .MuiInputLabel-root': {
+                        color: 'hsl(var(--muted-foreground))',
+                      },
+                      '& .MuiInputBase-input': {
+                        color: 'hsl(var(--foreground))',
                       },
                     }}
+                  />
+
+                  <TextField
+                    fullWidth
+                    label="Awarder Name"
+                    value={newAwarderName}
+                    onChange={(e) => setNewAwarderName(e.target.value)}
+                    placeholder="Enter display name"
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <PersonAdd sx={{ color: 'hsl(var(--muted-foreground))' }} />
+                        </InputAdornment>
+                      ),
+                    }}
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        backgroundColor: 'hsl(var(--background))',
+                        '& fieldset': {
+                          borderColor: 'hsl(var(--border))',
+                        },
+                        '&:hover fieldset': {
+                          borderColor: 'hsl(var(--primary))',
+                        },
+                        '&.Mui-focused fieldset': {
+                          borderColor: 'hsl(var(--primary))',
+                        },
+                      },
+                      '& .MuiInputLabel-root': {
+                        color: 'hsl(var(--muted-foreground))',
+                      },
+                      '& .MuiInputBase-input': {
+                        color: 'hsl(var(--foreground))',
+                      },
+                    }}
+                  />
+                </Box>
+
+                <Button
+                  type="submit"
+                  variant="contained"
+                  disabled={isLoading}
+                  startIcon={<PersonAdd />}
+                  sx={{
+                    backgroundColor: 'hsl(var(--primary))',
+                    color: 'hsl(var(--primary-foreground))',
+                    px: 4,
+                    py: 1.5,
+                    borderRadius: 2,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    fontSize: '1rem',
+                    '&:hover': {
+                      backgroundColor: 'hsl(var(--accent))',
+                    },
+                    '&:disabled': {
+                      backgroundColor: 'hsl(var(--muted))',
+                      color: 'hsl(var(--muted-foreground))',
+                    },
+                  }}
+                >
+                  {isLoading ? 'Adding...' : 'Add Trusted Awarder'}
+                </Button>
+              </Box>
+            </CardContent>
+          </Card>
+
+          {/* Search and Filters */}
+          <Card sx={{ 
+            backgroundColor: 'hsl(var(--muted))',
+            border: '1px solid hsl(var(--border))',
+            borderRadius: 2,
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+            mb: 3
+          }}>
+            <CardContent sx={{ p: 3 }}>
+              <TextField
+                fullWidth
+                label="Search Awarders"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search by name or principal ID"
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search sx={{ color: 'hsl(var(--muted-foreground))' }} />
+                    </InputAdornment>
+                  ),
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    backgroundColor: 'hsl(var(--background))',
+                    '& fieldset': {
+                      borderColor: 'hsl(var(--border))',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: 'hsl(var(--primary))',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: 'hsl(var(--primary))',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: 'hsl(var(--muted-foreground))',
+                  },
+                  '& .MuiInputBase-input': {
+                    color: 'hsl(var(--foreground))',
+                  },
+                }}
+              />
+            </CardContent>
+          </Card>
+        </Box>
+
+        {/* Statistics */}
+        <Box sx={{ width: { xs: '100%', lg: '300px' } }}>
+          <Card sx={{ 
+            backgroundColor: 'hsl(var(--muted))',
+            border: '1px solid hsl(var(--border))',
+            borderRadius: 2,
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+            mb: 3
+          }}>
+            <CardContent sx={{ p: 3 }}>
+              <Typography 
+                variant="h6" 
+                sx={{ 
+                  mb: 3, 
+                  color: 'hsl(var(--foreground))',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1
+                }}
+              >
+                <AdminPanelSettings sx={{ color: 'hsl(var(--primary))' }} />
+                Statistics
+                <IconButton 
+                  size="small" 
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                  sx={{ color: 'hsl(var(--muted-foreground))', ml: 'auto' }}
+                >
+                  {refreshing ? <CircularProgress size={16} /> : <Refresh />}
+                </IconButton>
+              </Typography>
+
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Box sx={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between',
+                  p: 2,
+                  backgroundColor: 'hsl(var(--background))',
+                  borderRadius: 1,
+                  border: '1px solid hsl(var(--border))'
+                }}>
+                  <Typography sx={{ color: 'hsl(var(--muted-foreground))' }}>
+                    Total Awarders
+                  </Typography>
+                  <Typography sx={{ 
+                    color: 'hsl(var(--primary))', 
+                    fontWeight: 600 
+                  }}>
+                    {awarders.length}
+                  </Typography>
+                </Box>
+
+                <Box sx={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between',
+                  p: 2,
+                  backgroundColor: 'hsl(var(--background))',
+                  borderRadius: 1,
+                  border: '1px solid hsl(var(--border))'
+                }}>
+                  <Typography sx={{ color: 'hsl(var(--muted-foreground))' }}>
+                    Active
+                  </Typography>
+                  <Typography sx={{ 
+                    color: 'hsl(var(--foreground))', 
+                    fontWeight: 600 
+                  }}>
+                    {awarders.filter(a => a.status === 'active').length}
+                  </Typography>
+                </Box>
+
+                <Box sx={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between',
+                  p: 2,
+                  backgroundColor: 'hsl(var(--background))',
+                  borderRadius: 1,
+                  border: '1px solid hsl(var(--border))'
+                }}>
+                  <Typography sx={{ color: 'hsl(var(--muted-foreground))' }}>
+                    Inactive
+                  </Typography>
+                  <Typography sx={{ 
+                    color: 'hsl(var(--foreground))', 
+                    fontWeight: 600 
+                  }}>
+                    {awarders.filter(a => a.status === 'inactive').length}
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Box>
+      </Box>
+
+      {/* Awarders List */}
+      <Card sx={{ 
+        backgroundColor: 'hsl(var(--muted))',
+        border: '1px solid hsl(var(--border))',
+        borderRadius: 2,
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+      }}>
+        <CardContent sx={{ p: 3 }}>
+          <Typography 
+            variant="h6" 
+            sx={{ 
+              mb: 3, 
+              color: 'hsl(var(--foreground))',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1
+            }}
+          >
+            <Group sx={{ color: 'hsl(var(--primary))' }} />
+            Awarders ({filteredAwarders.length})
+          </Typography>
+
+          <TableContainer component={Paper} sx={{ 
+            backgroundColor: 'hsl(var(--background))',
+            boxShadow: 'none',
+            border: '1px solid hsl(var(--border))'
+          }}>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ backgroundColor: 'hsl(var(--muted))' }}>
+                  <TableCell sx={{ 
+                    color: 'hsl(var(--foreground))', 
+                    fontWeight: 600,
+                    borderBottom: '1px solid hsl(var(--border))'
+                  }}>
+                    Awarder
+                  </TableCell>
+                  <TableCell sx={{ 
+                    color: 'hsl(var(--foreground))', 
+                    fontWeight: 600,
+                    borderBottom: '1px solid hsl(var(--border))'
+                  }}>
+                    Principal ID
+                  </TableCell>
+                  <TableCell sx={{ 
+                    color: 'hsl(var(--foreground))', 
+                    fontWeight: 600,
+                    borderBottom: '1px solid hsl(var(--border))'
+                  }}>
+                    Status
+                  </TableCell>
+                  <TableCell sx={{ 
+                    color: 'hsl(var(--foreground))', 
+                    fontWeight: 600,
+                    borderBottom: '1px solid hsl(var(--border))'
+                  }}>
+                    Total Awarded
+                  </TableCell>
+                  <TableCell sx={{ 
+                    color: 'hsl(var(--foreground))', 
+                    fontWeight: 600,
+                    borderBottom: '1px solid hsl(var(--border))'
+                  }}>
+                    Actions
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filteredAwarders.map((awarder) => (
+                  <TableRow 
+                    key={awarder.id}
+                    sx={{ 
+                      '&:hover': { 
+                        backgroundColor: 'hsl(var(--muted))' 
+                      } 
+                    }}
                   >
-                    Remove
-                  </Button>
-                </ListItem>
+                    <TableCell sx={{ 
+                      borderBottom: '1px solid hsl(var(--border))'
+                    }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Avatar sx={{ 
+                          backgroundColor: 'hsl(var(--primary))',
+                          color: 'hsl(var(--primary-foreground))',
+                          width: 32,
+                          height: 32
+                        }}>
+                          {awarder.name.charAt(0)}
+                        </Avatar>
+                        <Typography sx={{ 
+                          color: 'hsl(var(--foreground))',
+                          fontWeight: 600
+                        }}>
+                          {awarder.name}
+                        </Typography>
+                      </Box>
+                    </TableCell>
+                    <TableCell sx={{ 
+                      borderBottom: '1px solid hsl(var(--border))'
+                    }}>
+                      <Typography sx={{ 
+                        color: 'hsl(var(--muted-foreground))',
+                        fontSize: '0.875rem',
+                        fontFamily: 'monospace'
+                      }}>
+                        {awarder.principal}
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ borderBottom: '1px solid hsl(var(--border))' }}>
+                      <Chip
+                        label={awarder.status}
+                        color={getStatusColor(awarder.status) as any}
+                        size="small"
+                        sx={{ textTransform: 'capitalize' }}
+                      />
+                    </TableCell>
+                    <TableCell sx={{ 
+                      color: 'hsl(var(--primary))', 
+                      fontWeight: 600,
+                      borderBottom: '1px solid hsl(var(--border))'
+                    }}>
+                      {awarder.totalAwarded} REP
+                    </TableCell>
+                    <TableCell sx={{ borderBottom: '1px solid hsl(var(--border))' }}>
+                      <IconButton 
+                        size="small"
+                        onClick={(e) => handleMenuClick(e, awarder)}
+                        sx={{ color: 'hsl(var(--muted-foreground))' }}
+                      >
+                        <MoreVert />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
 
-                <Divider sx={{ backgroundColor: 'hsl(var(--border))', my: 0.5 }} />
-              </React.Fragment>
-            ))}
-          </List>
+      {/* Actions Menu */}
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleMenuClose}
+      >
+        <MenuItem 
+          onClick={() => {
+            setConfirmDialog({
+              open: true,
+              action: 'remove',
+              awarder: selectedAwarder
+            });
+          }}
+          sx={{ color: 'hsl(var(--destructive))' }}
+        >
+          <Delete sx={{ mr: 1 }} />
+          Remove
+        </MenuItem>
+      </Menu>
 
-          {error && (
-            <Typography color="error" variant="body2">
-              {error}
-            </Typography>
-          )}
-          {successMsg && (
-            <Typography color="success.main" variant="body2">
-              {successMsg}
-            </Typography>
-          )}
-        </Stack>
-      </Paper>
+      {/* Confirmation Dialog */}
+      <Dialog
+        open={confirmDialog.open}
+        onClose={() => setConfirmDialog({ open: false, action: null, awarder: null })}
+        aria-labelledby="confirm-dialog-title"
+        aria-describedby="confirm-dialog-description"
+      >
+        <DialogTitle id="confirm-dialog-title" sx={{ color: 'hsl(var(--foreground))' }}>
+          Confirm Action
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="confirm-dialog-description" sx={{ color: 'hsl(var(--muted-foreground))' }}>
+            Are you sure you want to {confirmDialog.action} <strong>{confirmDialog.awarder?.name}</strong>?
+            {confirmDialog.action === 'remove' && ' This action cannot be undone.'}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setConfirmDialog({ open: false, action: null, awarder: null })} 
+            sx={{ color: 'hsl(var(--muted-foreground))' }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleConfirmAction} 
+            sx={{ 
+              color: confirmDialog.action === 'remove' ? 'hsl(var(--destructive))' : 'hsl(var(--primary))',
+              fontWeight: 600
+            }}
+            autoFocus
+          >
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+      >
+        <Alert 
+          onClose={handleCloseSnackbar} 
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
