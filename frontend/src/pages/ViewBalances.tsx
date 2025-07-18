@@ -130,9 +130,9 @@ const ViewBalances: React.FC = () => {
           const currentBalance = balanceMap.get(toStr) || 0;
           balanceMap.set(toStr, currentBalance + amount);
         } else {
-          // Revoke: from user loses reputation
-          const currentBalance = balanceMap.get(fromStr) || 0;
-          balanceMap.set(fromStr, Math.max(0, currentBalance - amount));
+          // Revoke: to user loses reputation (from is the admin/awarder doing the revoke)
+          const currentBalance = balanceMap.get(toStr) || 0;
+          balanceMap.set(toStr, Math.max(0, currentBalance - amount));
         }
       });
 

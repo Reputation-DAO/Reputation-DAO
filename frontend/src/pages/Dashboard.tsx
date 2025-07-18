@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Principal } from '@dfinity/principal';
 import {
   Box,
   Typography,
@@ -11,118 +12,203 @@ import {
   ListItem,
   ListItemAvatar,
   ListItemText,
-  IconButton,
-  Menu,
-  MenuItem,
   Divider,
+  CircularProgress,
+  Alert,
+  IconButton,
 } from '@mui/material';
 import {
-  TrendingUp,
   People as Users,
-  MoreVert,
-  Visibility,
-  Edit,
-  Settings,
+  AdminPanelSettings,
+  Star,
   NorthEast as ArrowUpRight,
+  Refresh,
+  History,
+  TrendingUp,
 } from '@mui/icons-material';
+import { getPlugActor, getCurrentPrincipal } from '../components/canister/reputationDao';
+
+interface Transaction {
+  id: number;
+  transactionType: { Award: null } | { Revoke: null };
+  from: Principal;
+  to: Principal;
+  amount: number | bigint;
+  timestamp: number | bigint;
+  reason: string | null;
+}
+
+interface Balance {
+  principal: Principal;
+  balance: number;
+}
+
+interface Awarder {
+  id: Principal;
+  name: string;
+}
+
+interface DashboardData {
+  transactions: Transaction[];
+  balances: Balance[];
+  awarders: Awarder[];
+  transactionCount: number;
+  currentUser: Principal | null;
+  userRole: 'Admin' | string | 'User';
+}
 
 const Dashboard: React.FC = () => {
-  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const [data, setData] = useState<DashboardData>({
+    transactions: [],
+    balances: [],
+    awarders: [],
+    transactionCount: 0,
+    currentUser: null,
+    userRole: 'User',
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Mock data for recent notifications
-  const recentNotifications = [
-    {
-      id: 1,
-      user: 'Alice Johnson',
-      avatar: '/api/placeholder/32/32',
-      action: 'earned 50 reputation points',
-      time: '2 minutes ago',
-      recentActivity: 'Completed advanced Python course',
-    },
-    {
-      id: 2,
-      user: 'Bob Smith',
-      avatar: '/api/placeholder/32/32',
-      action: 'joined the community',
-      time: '15 minutes ago',
-      recentActivity: 'Updated their profile',
-    },
-    {
-      id: 3,
-      user: 'Carol Davis',
-      avatar: '/api/placeholder/32/32',
-      action: 'earned 30 reputation points',
-      time: '1 hour ago',
-      recentActivity: 'Submitted final project',
-    },
-  ];
-
-  // Mock data for top members
-  const topMembers = [
-    {
-      id: 1,
-      name: 'Sarah Wilson',
-      avatar: '/api/placeholder/40/40',
-      reputation: 1250,
-      level: 'Expert',
-      change: '+15',
-      recentActivity: 'Mentored 5 students this week',
-    },
-    {
-      id: 2,
-      name: 'Mike Chen',
-      avatar: '/api/placeholder/40/40',
-      reputation: 980,
-      level: 'Advanced',
-      change: '+12',
-      recentActivity: 'Led study group session',
-    },
-    {
-      id: 3,
-      name: 'Emma Brown',
-      avatar: '/api/placeholder/40/40',
-      reputation: 850,
-      level: 'Intermediate',
-      change: '+8',
-      recentActivity: 'Shared helpful resources',
-    },
-  ];
-
-  // Mock data for community growth
-  const communityData = [
-    {
-      id: 1,
-      user: 'David Lee',
-      avatar: '/api/placeholder/32/32',
-      action: 'earned 25 reputation points',
-      time: '30 minutes ago',
-      recentActivity: 'Participated in code review',
-    },
-    {
-      id: 2,
-      user: 'Lisa Wang',
-      avatar: '/api/placeholder/32/32',
-      action: 'earned 40 reputation points',
-      time: '45 minutes ago',
-      recentActivity: 'Completed certification exam',
-    },
-    {
-      id: 3,
-      user: 'James Miller',
-      avatar: '/api/placeholder/32/32',
-      action: 'updated their profile',
-      time: '1 hour ago',
-      recentActivity: 'Added new skills to profile',
-    },
-  ];
-
-  const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
-    setMenuAnchor(event.currentTarget);
+  // Format timestamp to relative time
+  const formatTime = (timestamp: number | bigint): string => {
+    const now = Date.now() / 1000; // Convert to seconds
+    const timestampSeconds = typeof timestamp === 'bigint' ? Number(timestamp) : timestamp;
+    const diff = now - timestampSeconds;
+    
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
   };
 
-  const handleMenuClose = () => {
-    setMenuAnchor(null);
+  // Get user display name
+  const getUserDisplayName = (principal: Principal): string => {
+    const principalText = principal.toString();
+    
+    // Check if it's an awarder
+    const awarder = data.awarders.find(a => a.id.toString() === principalText);
+    if (awarder) return awarder.name;
+    
+    // Check if it's the admin/owner (you'll need to replace this with actual owner principal)
+    if (principalText === '3d34m-ksxgd-46a66-2ibf7-kutsn-jg3vv-2yfjf-anbwh-u4lpl-tqu7d-yae') {
+      return 'Admin';
+    }
+    
+    // Return shortened principal for regular users
+    return `${principalText.slice(0, 5)}...${principalText.slice(-3)}`;
   };
+
+  // Load all dashboard data
+  const loadDashboardData = async () => {
+    try {
+      setError(null);
+      
+      const actor = await getPlugActor();
+      if (!actor) {
+        throw new Error('Failed to connect to blockchain');
+      }
+
+      // Get current user
+      const currentUser = await getCurrentPrincipal();
+      
+      // Fetch all data in parallel
+      const [
+        transactions,
+        transactionCount,
+        awarders,
+      ] = await Promise.all([
+        actor.getTransactionHistory(),
+        actor.getTransactionCount(),
+        actor.getTrustedAwarders(),
+      ]);
+
+      // Get balances by fetching transaction history and calculating
+      const balanceMap = new Map<string, number>();
+      
+      // Calculate balances from transaction history
+      transactions.forEach((tx: any) => {
+        const toKey = tx.to.toString();
+        const amount = typeof tx.amount === 'bigint' ? Number(tx.amount) : Number(tx.amount);
+        
+        if ('Award' in tx.transactionType) {
+          // Award transaction - add to recipient
+          balanceMap.set(toKey, (balanceMap.get(toKey) || 0) + amount);
+        } else {
+          // Revoke transaction - subtract from recipient (to field is the user losing reputation)
+          balanceMap.set(toKey, (balanceMap.get(toKey) || 0) - amount);
+        }
+      });
+
+      // Convert to balance array and sort
+      const balances = Array.from(balanceMap.entries())
+        .map(([principal, balance]) => ({
+          principal: Principal.fromText(principal),
+          balance: balance,
+        }))
+        .filter(b => b.balance > 0)
+        .sort((a, b) => b.balance - a.balance)
+        .slice(0, 10);
+
+      // Determine user role
+      let userRole = 'User';
+      const currentUserText = currentUser.toString();
+      
+      // Check if owner (replace with actual owner principal)
+      if (currentUserText === '3d34m-ksxgd-46a66-2ibf7-kutsn-jg3vv-2yfjf-anbwh-u4lpl-tqu7d-yae') {
+        userRole = 'Admin';
+      } else {
+        // Check if awarder
+        const awarder = awarders.find((a: any) => a.id.toString() === currentUserText);
+        if (awarder) {
+          userRole = awarder.name;
+        }
+      }
+
+      setData({
+        transactions: transactions.slice(0, 10), // Get latest 10 transactions
+        balances: balances, // Already sorted and limited
+        awarders,
+        transactionCount: Number(transactionCount),
+        currentUser,
+        userRole,
+      });
+
+    } catch (err) {
+      console.error('Error loading dashboard data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  // Load data on component mount
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
+  // Refresh data
+  const handleRefresh = () => {
+    setRefreshing(true);
+    loadDashboardData();
+  };
+
+  if (loading) {
+    return (
+      <Box
+        sx={{
+          minHeight: '100vh',
+          backgroundColor: 'hsl(var(--background))',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <CircularProgress sx={{ color: 'hsl(var(--primary))' }} />
+      </Box>
+    );
+  }
 
   return (
     <Box
@@ -136,17 +222,30 @@ const Dashboard: React.FC = () => {
     >
       {/* Header */}
       <Box sx={{ mb: 4 }}>
-        <Typography
-          variant="h4"
-          sx={{
-            color: 'hsl(var(--foreground))',
-            fontWeight: 600,
-            fontSize: { xs: '1.5rem', md: '2rem' },
-            mb: 1,
-          }}
-        >
-          Overview
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+          <Typography
+            variant="h4"
+            sx={{
+              color: 'hsl(var(--foreground))',
+              fontWeight: 600,
+              fontSize: { xs: '1.5rem', md: '2rem' },
+            }}
+          >
+            Welcome, {data.userRole}
+          </Typography>
+          <IconButton
+            onClick={handleRefresh}
+            disabled={refreshing}
+            sx={{
+              color: 'hsl(var(--primary))',
+              '&:hover': {
+                backgroundColor: 'hsl(var(--muted))',
+              },
+            }}
+          >
+            {refreshing ? <CircularProgress size={20} /> : <Refresh />}
+          </IconButton>
+        </Box>
         <Typography
           variant="body1"
           sx={{
@@ -157,6 +256,12 @@ const Dashboard: React.FC = () => {
           Track your community's reputation and activity
         </Typography>
       </Box>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error}
+        </Alert>
+      )}
 
       <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', lg: 'row' } }}>
         {/* Main Content */}
@@ -170,7 +275,7 @@ const Dashboard: React.FC = () => {
               mb: 4,
             }}
           >
-            {/* Trust Score Card */}
+            {/* Total Transactions Card */}
             <Card
               sx={{
                 backgroundColor: 'hsl(var(--muted))',
@@ -181,23 +286,23 @@ const Dashboard: React.FC = () => {
               <CardContent sx={{ p: 3 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
                   <Typography variant="h6" sx={{ color: 'hsl(var(--foreground) / 0.8)', fontSize: '0.875rem', fontWeight: 500 }}>
-                    Trust Score
+                    Total Transactions
                   </Typography>
-                  <TrendingUp sx={{ color: 'hsl(var(--info))', fontSize: '20px' }} />
+                  <History sx={{ color: 'hsl(var(--primary))', fontSize: '20px' }} />
                 </Box>
                 <Typography variant="h4" sx={{ color: 'hsl(var(--foreground))', fontWeight: 600, mb: 1 }}>
-                  85%
+                  {data.transactionCount}
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <ArrowUpRight sx={{ color: 'hsl(var(--info))', fontSize: '16px' }} />
-                  <Typography variant="body2" sx={{ color: 'hsl(var(--info))', fontSize: '0.75rem' }}>
-                    +5% from last month
+                  <TrendingUp sx={{ color: 'hsl(var(--success))', fontSize: '16px' }} />
+                  <Typography variant="body2" sx={{ color: 'hsl(var(--success))', fontSize: '0.75rem' }}>
+                    All time activity
                   </Typography>
                 </Box>
               </CardContent>
             </Card>
 
-            {/* Members Card */}
+            {/* Active Members Card */}
             <Card
               sx={{
                 backgroundColor: 'hsl(var(--muted))',
@@ -208,47 +313,47 @@ const Dashboard: React.FC = () => {
               <CardContent sx={{ p: 3 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
                   <Typography variant="h6" sx={{ color: 'hsl(var(--foreground) / 0.8)', fontSize: '0.875rem', fontWeight: 500 }}>
-                    Members
+                    Active Members
                   </Typography>
                   <Users sx={{ color: 'hsl(var(--primary))', fontSize: '20px' }} />
                 </Box>
                 <Typography variant="h4" sx={{ color: 'hsl(var(--foreground))', fontWeight: 600, mb: 1 }}>
-                  1,234
+                  {data.balances.length}
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <ArrowUpRight sx={{ color: 'hsl(var(--info))', fontSize: '16px' }} />
-                  <Typography variant="body2" sx={{ color: 'hsl(var(--info))', fontSize: '0.75rem' }}>
-                    +12% from last month
+                  <ArrowUpRight sx={{ color: 'hsl(var(--success))', fontSize: '16px' }} />
+                  <Typography variant="body2" sx={{ color: 'hsl(var(--success))', fontSize: '0.75rem' }}>
+                    With reputation
                   </Typography>
                 </Box>
               </CardContent>
             </Card>
           </Box>
 
-          {/* Welcome New Members */}
+          {/* Recent Activity */}
           <Card
             sx={{
-              backgroundColor: '#1e293b',
-              border: '1px solid #334155',
+              backgroundColor: 'hsl(var(--muted))',
+              border: '1px solid hsl(var(--border))',
               borderRadius: 2,
               mb: 4,
             }}
           >
             <CardContent sx={{ p: 3 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Typography variant="h6" sx={{ color: '#f1f5f9', fontSize: '1rem', fontWeight: 600 }}>
-                  Welcome New Members
+                <Typography variant="h6" sx={{ color: 'hsl(var(--foreground))', fontSize: '1rem', fontWeight: 600 }}>
+                  Recent Activity
                 </Typography>
                 <Button
                   variant="outlined"
                   size="small"
                   sx={{
-                    color: '#3b82f6',
-                    borderColor: '#334155',
+                    color: 'hsl(var(--primary))',
+                    borderColor: 'hsl(var(--border))',
                     fontSize: '0.75rem',
                     '&:hover': {
-                      borderColor: '#3b82f6',
-                      backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                      borderColor: 'hsl(var(--primary))',
+                      backgroundColor: 'hsl(var(--muted))',
                     },
                   }}
                 >
@@ -256,61 +361,87 @@ const Dashboard: React.FC = () => {
                 </Button>
               </Box>
               <List sx={{ p: 0 }}>
-                {recentNotifications.slice(0, 3).map((notification, index) => (
-                  <React.Fragment key={notification.id}>
+                {data.transactions.slice(0, 5).map((transaction, index) => (
+                  <React.Fragment key={transaction.id}>
                     <ListItem sx={{ px: 0, py: 1.5 }}>
                       <ListItemAvatar>
                         <Avatar
                           sx={{
                             width: 32,
                             height: 32,
-                            backgroundColor: '#334155',
-                            color: '#e2e8f0',
+                            backgroundColor: 'hsl(var(--primary))',
+                            color: 'hsl(var(--primary-foreground))',
                             fontSize: '0.875rem',
                           }}
                         >
-                          {notification.user.charAt(0)}
+                          {getUserDisplayName(transaction.to).charAt(0)}
                         </Avatar>
                       </ListItemAvatar>
                       <ListItemText
                         primary={
-                          <Typography variant="body2" sx={{ color: '#f1f5f9', fontSize: '0.875rem' }}>
-                            {notification.user}
-                          </Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Box
+                              sx={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: 1,
+                                backgroundColor: 'Award' in transaction.transactionType ? '#22c55e' : '#ef4444',
+                                flexShrink: 0,
+                              }}
+                            />
+                            <Typography variant="body2" sx={{ color: 'hsl(var(--foreground))', fontSize: '0.875rem' }}>
+                              {getUserDisplayName(transaction.to)} {'Award' in transaction.transactionType ? 'earned' : 'lost'} {typeof transaction.amount === 'bigint' ? Number(transaction.amount) : transaction.amount} REP
+                            </Typography>
+                          </Box>
                         }
                         secondary={
-                          <Typography variant="body2" sx={{ color: '#94a3b8', fontSize: '0.75rem' }}>
-                            {notification.action} • {notification.time}
+                          <Typography variant="body2" sx={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.75rem', ml: 2.125 }}>
+                            from {getUserDisplayName(transaction.from)} • {formatTime(transaction.timestamp)}
                           </Typography>
                         }
                       />
+                      <Chip
+                        label={'Award' in transaction.transactionType ? '+' + (typeof transaction.amount === 'bigint' ? Number(transaction.amount) : transaction.amount) : '-' + (typeof transaction.amount === 'bigint' ? Number(transaction.amount) : transaction.amount)}
+                        size="small"
+                        sx={{
+                          backgroundColor: 'Award' in transaction.transactionType ? '#22c55e' : '#ef4444',
+                          color: 'white',
+                          fontSize: '0.65rem',
+                          minWidth: 60,
+                          fontWeight: 600,
+                        }}
+                      />
                     </ListItem>
-                    {index < recentNotifications.slice(0, 3).length - 1 && (
-                      <Divider sx={{ borderColor: '#334155' }} />
+                    {index < Math.min(data.transactions.length, 5) - 1 && (
+                      <Divider sx={{ borderColor: 'hsl(var(--border))' }} />
                     )}
                   </React.Fragment>
                 ))}
+                {data.transactions.length === 0 && (
+                  <Typography sx={{ color: 'hsl(var(--muted-foreground))', textAlign: 'center', py: 2 }}>
+                    No recent activity
+                  </Typography>
+                )}
               </List>
             </CardContent>
           </Card>
 
-          {/* Chart Placeholder */}
+          {/* Activity Chart Placeholder */}
           <Card
             sx={{
-              backgroundColor: '#1e293b',
-              border: '1px solid #334155',
+              backgroundColor: 'hsl(var(--muted))',
+              border: '1px solid hsl(var(--border))',
               borderRadius: 2,
-              mb: 4,
             }}
           >
             <CardContent sx={{ p: 3 }}>
-              <Typography variant="h6" sx={{ color: '#f1f5f9', fontSize: '1rem', fontWeight: 600, mb: 3 }}>
+              <Typography variant="h6" sx={{ color: 'hsl(var(--foreground))', fontSize: '1rem', fontWeight: 600, mb: 3 }}>
                 Activity Chart
               </Typography>
               <Box
                 sx={{
                   height: 200,
-                  backgroundColor: 'hsl(var(--muted))',
+                  backgroundColor: 'hsl(var(--background))',
                   borderRadius: 1,
                   display: 'flex',
                   alignItems: 'center',
@@ -318,173 +449,58 @@ const Dashboard: React.FC = () => {
                   border: '1px solid hsl(var(--border))',
                 }}
               >
-                <Typography variant="body2" sx={{ color: '#64748b' }}>
+                <Typography variant="body2" sx={{ color: 'hsl(var(--muted-foreground))' }}>
                   Chart visualization will be implemented here
                 </Typography>
               </Box>
-            </CardContent>
-          </Card>
-
-          {/* Community Growth */}
-          <Card
-            sx={{
-              backgroundColor: '#1e293b',
-              border: '1px solid #334155',
-              borderRadius: 2,
-            }}
-          >
-            <CardContent sx={{ p: 3 }}>
-              <Typography variant="h6" sx={{ color: '#f1f5f9', fontSize: '1rem', fontWeight: 600, mb: 3 }}>
-                Community Growth
-              </Typography>
-              <List sx={{ p: 0 }}>
-                {communityData.map((item, index) => (
-                  <React.Fragment key={item.id}>
-                    <ListItem sx={{ px: 0, py: 1.5 }}>
-                      <ListItemAvatar>
-                        <Avatar
-                          sx={{
-                            width: 32,
-                            height: 32,
-                            backgroundColor: '#334155',
-                            color: '#e2e8f0',
-                            fontSize: '0.875rem',
-                          }}
-                        >
-                          {item.user.charAt(0)}
-                        </Avatar>
-                      </ListItemAvatar>
-                      <ListItemText
-                        primary={
-                          <Typography variant="body2" sx={{ color: '#f1f5f9', fontSize: '0.875rem' }}>
-                            {item.user}
-                          </Typography>
-                        }
-                        secondary={
-                          <Typography variant="body2" sx={{ color: '#94a3b8', fontSize: '0.75rem' }}>
-                            {item.action} • {item.time}
-                          </Typography>
-                        }
-                      />
-                    </ListItem>
-                    {index < communityData.length - 1 && <Divider sx={{ borderColor: '#334155' }} />}
-                  </React.Fragment>
-                ))}
-              </List>
             </CardContent>
           </Card>
         </Box>
 
         {/* Right Sidebar */}
         <Box sx={{ width: { lg: 300 }, flexShrink: 0 }}>
-          {/* Recent Notifications */}
+          {/* Top Members */}
           <Card
             sx={{
-              backgroundColor: '#1e293b',
-              border: '1px solid #334155',
+              backgroundColor: 'hsl(var(--muted))',
+              border: '1px solid hsl(var(--border))',
               borderRadius: 2,
               mb: 3,
             }}
           >
             <CardContent sx={{ p: 3 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Typography variant="h6" sx={{ color: '#f1f5f9', fontSize: '0.875rem', fontWeight: 600 }}>
-                  Recent Notifications
-                </Typography>
-                <IconButton
-                  onClick={handleMenuClick}
-                  sx={{
-                    color: '#94a3b8',
-                    '&:hover': { color: '#f1f5f9' },
-                    p: 0.5,
-                  }}
-                >
-                  <MoreVert sx={{ fontSize: '18px' }} />
-                </IconButton>
-              </Box>
-              <List sx={{ p: 0 }}>
-                {recentNotifications.map((notification, index) => (
-                  <React.Fragment key={notification.id}>
-                    <ListItem sx={{ px: 0, py: 1.5 }}>
-                      <ListItemAvatar>
-                        <Avatar
-                          sx={{
-                            width: 28,
-                            height: 28,
-                            backgroundColor: '#334155',
-                            color: '#e2e8f0',
-                            fontSize: '0.75rem',
-                          }}
-                        >
-                          {notification.user.charAt(0)}
-                        </Avatar>
-                      </ListItemAvatar>
-                      <ListItemText
-                        primary={
-                          <Typography variant="body2" sx={{ color: '#f1f5f9', fontSize: '0.75rem', lineHeight: 1.4 }}>
-                            {notification.user}
-                          </Typography>
-                        }
-                        secondary={
-                          <Box>
-                            <Typography variant="body2" sx={{ color: '#94a3b8', fontSize: '0.7rem' }}>
-                              {notification.action}
-                            </Typography>
-                            <Typography variant="body2" sx={{ color: '#64748b', fontSize: '0.65rem' }}>
-                              {notification.time}
-                            </Typography>
-                          </Box>
-                        }
-                      />
-                    </ListItem>
-                    {index < recentNotifications.length - 1 && <Divider sx={{ borderColor: '#334155' }} />}
-                  </React.Fragment>
-                ))}
-              </List>
-            </CardContent>
-          </Card>
-
-          {/* Top Members */}
-          <Card
-            sx={{
-              backgroundColor: '#1e293b',
-              border: '1px solid #334155',
-              borderRadius: 2,
-            }}
-          >
-            <CardContent sx={{ p: 3 }}>
-              <Typography variant="h6" sx={{ color: '#f1f5f9', fontSize: '0.875rem', fontWeight: 600, mb: 3 }}>
+              <Typography variant="h6" sx={{ color: 'hsl(var(--foreground))', fontSize: '0.875rem', fontWeight: 600, mb: 3 }}>
                 Top Members
               </Typography>
               <List sx={{ p: 0 }}>
-                {topMembers.map((member, index) => (
-                  <React.Fragment key={member.id}>
+                {data.balances.slice(0, 5).map((member, index) => (
+                  <React.Fragment key={member.principal.toString()}>
                     <ListItem sx={{ px: 0, py: 1.5 }}>
                       <ListItemAvatar>
                         <Avatar
                           sx={{
                             width: 32,
                             height: 32,
-                            backgroundColor: '#334155',
-                            color: '#e2e8f0',
+                            backgroundColor: 'hsl(var(--primary))',
+                            color: 'hsl(var(--primary-foreground))',
                             fontSize: '0.75rem',
                           }}
                         >
-                          {member.name.charAt(0)}
+                          {getUserDisplayName(member.principal).charAt(0)}
                         </Avatar>
                       </ListItemAvatar>
                       <ListItemText
                         primary={
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" sx={{ color: '#f1f5f9', fontSize: '0.75rem' }}>
-                              {member.name}
+                            <Typography variant="body2" sx={{ color: 'hsl(var(--foreground))', fontSize: '0.75rem' }}>
+                              {getUserDisplayName(member.principal)}
                             </Typography>
                             <Chip
-                              label={member.change}
+                              label={`#${index + 1}`}
                               size="small"
                               sx={{
-                                backgroundColor: '#10b981',
-                                color: '#ffffff',
+                                backgroundColor: index === 0 ? 'hsl(var(--warning))' : 'hsl(var(--muted-foreground))',
+                                color: 'white',
                                 fontSize: '0.65rem',
                                 height: 18,
                                 '& .MuiChip-label': { px: 1 }
@@ -493,47 +509,79 @@ const Dashboard: React.FC = () => {
                           </Box>
                         }
                         secondary={
-                          <Typography variant="body2" sx={{ color: '#94a3b8', fontSize: '0.7rem' }}>
-                            {member.reputation} pts
+                          <Typography variant="body2" sx={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.7rem' }}>
+                            {Number(member.balance)} REP
                           </Typography>
                         }
                       />
                     </ListItem>
-                    {index < topMembers.length - 1 && <Divider sx={{ borderColor: '#334155' }} />}
+                    {index < Math.min(data.balances.length, 5) - 1 && <Divider sx={{ borderColor: 'hsl(var(--border))' }} />}
                   </React.Fragment>
                 ))}
+                {data.balances.length === 0 && (
+                  <Typography sx={{ color: 'hsl(var(--muted-foreground))', textAlign: 'center', py: 2 }}>
+                    No members found
+                  </Typography>
+                )}
+              </List>
+            </CardContent>
+          </Card>
+
+          {/* Trusted Awarders */}
+          <Card
+            sx={{
+              backgroundColor: 'hsl(var(--muted))',
+              border: '1px solid hsl(var(--border))',
+              borderRadius: 2,
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="h6" sx={{ color: 'hsl(var(--foreground))', fontSize: '0.875rem', fontWeight: 600, mb: 3 }}>
+                Trusted Awarders ({data.awarders.length})
+              </Typography>
+              <List sx={{ p: 0 }}>
+                {data.awarders.slice(0, 5).map((awarder, index) => (
+                  <React.Fragment key={awarder.id.toString()}>
+                    <ListItem sx={{ px: 0, py: 1.5 }}>
+                      <ListItemAvatar>
+                        <Avatar
+                          sx={{
+                            width: 28,
+                            height: 28,
+                            backgroundColor: 'hsl(var(--success))',
+                            color: 'white',
+                            fontSize: '0.75rem',
+                          }}
+                        >
+                          <AdminPanelSettings fontSize="small" />
+                        </Avatar>
+                      </ListItemAvatar>
+                      <ListItemText
+                        primary={
+                          <Typography variant="body2" sx={{ color: 'hsl(var(--foreground))', fontSize: '0.75rem', lineHeight: 1.4 }}>
+                            {awarder.name}
+                          </Typography>
+                        }
+                        secondary={
+                          <Typography variant="body2" sx={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.65rem' }}>
+                            Trusted Awarder
+                          </Typography>
+                        }
+                      />
+                    </ListItem>
+                    {index < Math.min(data.awarders.length, 5) - 1 && <Divider sx={{ borderColor: 'hsl(var(--border))' }} />}
+                  </React.Fragment>
+                ))}
+                {data.awarders.length === 0 && (
+                  <Typography sx={{ color: 'hsl(var(--muted-foreground))', textAlign: 'center', py: 2 }}>
+                    No awarders found
+                  </Typography>
+                )}
               </List>
             </CardContent>
           </Card>
         </Box>
       </Box>
-
-      {/* Menu */}
-      <Menu
-        anchorEl={menuAnchor}
-        open={Boolean(menuAnchor)}
-        onClose={handleMenuClose}
-        PaperProps={{
-          sx: { 
-            backgroundColor: 'hsl(var(--muted))', 
-            border: '1px solid hsl(var(--border))',
-            color: 'hsl(var(--foreground))',
-          }
-        }}
-      >
-        <MenuItem onClick={handleMenuClose} sx={{ fontSize: '0.875rem', color: 'hsl(var(--foreground))' }}>
-          <Visibility sx={{ mr: 1, fontSize: '16px' }} />
-          View
-        </MenuItem>
-        <MenuItem onClick={handleMenuClose} sx={{ fontSize: '0.875rem', color: 'hsl(var(--foreground))' }}>
-          <Edit sx={{ mr: 1, fontSize: '16px' }} />
-          Edit
-        </MenuItem>
-        <MenuItem onClick={handleMenuClose} sx={{ fontSize: '0.875rem', color: 'hsl(var(--foreground))' }}>
-          <Settings sx={{ mr: 1, fontSize: '16px' }} />
-          Settings
-        </MenuItem>
-      </Menu>
     </Box>
   );
 };
