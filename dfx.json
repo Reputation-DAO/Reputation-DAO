@@ -1,0 +1,35 @@
+{
+  "canisters": {
+    "reputation_dao": {
+      "main": "src/reputation_dao/main.mo",
+      "type": "motoko",
+      "id": "owyeu-jiaaa-aaaam-qdvwq-cai"
+  
+    },
+    "frontend": {
+      "type": "assets",
+      "source": ["frontend/dist"],
+      "id": "37le5-2yaaa-aaaam-qdwhq-cai"
+      
+    }
+  },
+  "dfx": "0.27.0",
+  "networks": {
+    "local": {
+      "bind": "127.0.0.1:8000",
+      "type": "ephemeral"
+    },
+    "ic": {
+      "providers": [
+        "https://ic0.app/"
+      ],
+      "type": "persistent"
+    }
+  },
+  "defaults": {
+    "build": {
+      "packtool": ""
+    }
+  },
+  "version": 1
+}

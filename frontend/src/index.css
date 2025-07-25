@@ -1,0 +1,116 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 98%;
+    --foreground: 222 47% 11%;
+
+
+    --primary: 220 90% 56%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 95%;
+    --secondary-foreground: 222 47% 11%;
+
+    --accent: 200 90% 55%;
+    --accent-foreground: 0 0% 100%;
+
+
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 10% 40%;
+
+    --info: 210 100% 50%;
+    --info-foreground: 0 0% 100%;
+
+    --success: 142 70% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 45 100% 50%;
+    --warning-foreground: 0 0% 0%;
+
+    --destructive: 0 80% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 14% 90%;
+    --input: 220 14% 90%;
+    --ring: 220 90% 56%;
+
+    --radius: 0.5rem;
+
+    --shadow-lg: 0 6px 20px rgba(0, 0, 0, 0.1);
+    --glass-blur: blur(14px);
+    --glass-border: 1px solid rgba(0, 0, 0, 0.08);
+    --transition-fast: 150ms ease-in-out;
+    --transition-smooth: 300ms ease-in-out;
+
+    --gradient-header: linear-gradient(135deg, hsl(220 90% 56% / 0.85), hsl(0 0% 100% / 0.9));
+  }
+
+  .dark {
+    --background: 222 47% 11%;
+    --foreground: 0 0% 98%;
+
+
+    --primary: 220 90% 66%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 222 30% 20%;
+    --secondary-foreground: 0 0% 98%;
+
+    --accent: 200 90% 65%;
+    --accent-foreground: 0 0% 100%;
+
+    --muted: 222 30% 17%;
+
+    --muted-foreground: 220 10% 65%;
+
+    --info: 210 100% 60%;
+    --info-foreground: 0 0% 100%;
+
+    --success: 142 70% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 45 100% 50%;
+    --warning-foreground: 0 0% 0%;
+
+    --destructive: 0 80% 65%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 222 30% 25%;
+    --input: 222 30% 25%;
+    --ring: 220 90% 66%;
+
+    --radius: 0.5rem;
+
+    --shadow-lg: 0 6px 20px rgba(0, 0, 0, 0.25);
+    --glass-blur: blur(14px);
+    --glass-border: 1px solid rgba(255, 255, 255, 0.1);
+    --transition-fast: 150ms ease-in-out;
+    --transition-smooth: 300ms ease-in-out;
+
+    --gradient-header: linear-gradient(135deg, hsl(220 90% 66% / 0.85), hsl(222 47% 11% / 0.9));
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    margin: 0;
+    min-height: 100vh;
+    font-family: system-ui, sans-serif;
+  }
+
+  html, body {
+    overflow: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  body::-webkit-scrollbar {
+    display: none;
+  }
+}
