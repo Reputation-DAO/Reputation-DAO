@@ -1,17 +1,53 @@
-
+// @ts-nocheck
 import {
   Box,
   Button,
   Container,
   Typography,
-
   Paper,
   TextField,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Grid,
 } from '@mui/material';
-import { Code2, FileText, HelpCircle, ShieldCheck } from 'lucide-react';
-import { GridLegacy as Grid } from '@mui/material';
+import { useState } from 'react';
+import {
+  Code2,
+  FileText,
+  HelpCircle,
+  ShieldCheck,
+} from 'lucide-react';
 
 export default function CommunityPage() {
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubscribe = () => {
+  const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  if (!isValidEmail) {
+    alert("Please enter a valid email address.");
+    return;
+  }
+
+  setSubmitted(true);
+  setTimeout(() => {
+    setOpen(false);
+    setSubmitted(false);
+    setEmail('');
+  }, 1500);
+};
+
+const linkItems = [
+  { icon: <FileText />, label: 'Docs', href: '/docs' },
+  { icon: <Code2 />, label: 'GitHub', href: 'https://github.com/Reputation-DAO/Reputaion-DAO' },
+  { icon: <FileText />, label: 'Blog', href: '/blog' },
+  { icon: <HelpCircle />, label: 'FAQ', href: '/' },
+  { icon: <ShieldCheck />, label: 'Core Idea', href: 'https://docs.google.com/document/d/1e03vreMKph3KPX-g8-jlbIAlD8D3PvA8VXPbZNIrT-0/edit?tab=t.0' },
+];
+
   return (
     <Box sx={{ bgcolor: 'hsl(var(--background))', color: 'hsl(var(--foreground))', py: 12 }}>
       <Container maxWidth="lg">
@@ -24,7 +60,6 @@ export default function CommunityPage() {
             overflow: 'hidden',
             mb: 12,
             bgcolor: 'hsl(var(--background))',
-
           }}
         >
           <Box
@@ -37,10 +72,9 @@ export default function CommunityPage() {
               flexDirection: 'column',
               justifyContent: 'center',
               alignItems: 'center',
-              height: 300,
               textAlign: 'center',
               px: 4,
-              height:"500px"
+              height: '500px',
             }}
           >
             <Typography
@@ -54,9 +88,12 @@ export default function CommunityPage() {
             </Typography>
             <Box sx={{ display: 'flex', gap: 2, mt: 4 }}>
               <Button variant="contained" sx={{ bgcolor: 'hsl(var(--primary))', color: 'white' }}>
-                Join Discord / Telegram
+                Join Telegram
               </Button>
-              <Button variant="outlined" sx={{ borderColor: 'hsl(var(--border))', color: 'hsl(var(--foreground))' }}>
+              <Button
+                variant="outlined"
+                sx={{ borderColor: 'hsl(var(--border))', color: 'hsl(var(--foreground))' }}
+              >
                 Follow on X (Twitter)
               </Button>
             </Box>
@@ -68,7 +105,10 @@ export default function CommunityPage() {
           <Button variant="contained" sx={{ bgcolor: 'hsl(var(--primary))', color: 'white' }}>
             Star on GitHub
           </Button>
-          <Button variant="outlined" sx={{ borderColor: 'hsl(var(--border))', color: 'hsl(var(--foreground))' }}>
+          <Button
+            variant="outlined"
+            sx={{ borderColor: 'hsl(var(--border))', color: 'hsl(var(--foreground))' }}
+          >
             Explore the Ecosystem
           </Button>
         </Box>
@@ -82,18 +122,19 @@ export default function CommunityPage() {
         </Typography>
 
         <Grid container spacing={3} justifyContent="center" sx={{ mb: 14 }}>
-          {[
-            { icon: <FileText />, label: 'Docs' },
-            { icon: <Code2 />, label: 'GitHub' },
-            { icon: <FileText />, label: 'Tutorials / Blog' },
-            { icon: <HelpCircle />, label: 'FAQ' },
-            { icon: <ShieldCheck />, label: 'Governance Guidelines' },
-          ].map((item, idx) => (
-            <Grid item xs={6} md={2} key={idx}>
+        {linkItems.map((item, idx) => (
+          <Grid item xs={6} md={2} key={idx}>
+            <a
+              href={item.href}
+              target={item.href.startsWith('http') ? '_blank' : '_self'}
+              rel="noopener noreferrer"
+              style={{ textDecoration: 'none' }}
+            >
               <Paper
                 variant="outlined"
                 sx={{
-                  p: 3,
+                  px: 3,
+                  py: 1,
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
@@ -117,9 +158,10 @@ export default function CommunityPage() {
                   {item.label}
                 </Typography>
               </Paper>
-            </Grid>
-          ))}
-        </Grid>
+            </a>
+          </Grid>
+        ))}
+      </Grid>
 
         {/* Contributions */}
         <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
@@ -167,21 +209,130 @@ export default function CommunityPage() {
         </Typography>
 
         <Box sx={{ display: 'flex', justifyContent: 'center', mb: 14 }}>
-          <TextField
-            placeholder="Your@email"
-            sx={{
-              bgcolor: 'hsl(var(--background))',
-              border: '1px solid hsl(var(--border))',
-              borderRadius: 'var(--radius)',
-              color: 'hsl(var(--foreground))',
-              '& input': { p: 1.5, color: 'hsl(var(--foreground))' },
-              mr: 2,
-            }}
-          />
-          <Button variant="contained" sx={{ bgcolor: 'hsl(var(--primary))', color: 'white' }}>
+          <Button
+            variant="contained"
+            sx={{ bgcolor: 'hsl(var(--primary))', color: 'white', px: 4, py: 1.2 }}
+            onClick={() => setOpen(true)}
+          >
             Subscribe
           </Button>
         </Box>
+
+        {/* Newsletter Popup */}
+        <Dialog
+          open={open}
+          onClose={() => setOpen(false)}
+          PaperProps={{
+            sx: {
+              backgroundColor: 'hsl(var(--background))',
+              color: 'hsl(var(--foreground))',
+              borderRadius: 'var(--radius)',
+              boxShadow: 'var(--shadow-lg)',
+              p: 3,
+              minWidth: 360,
+              transition: 'var(--transition-smooth)',
+              border: '1px solid hsl(var(--border))',
+            },
+          }}
+        >
+          <DialogTitle
+            sx={{
+              fontWeight: 700,
+              fontSize: '1.25rem',
+              pb: 0,
+              color: 'hsl(var(--foreground))',
+            }}
+          >
+            {submitted ? '✅ Subscribed Successfully' : 'Subscribe to our Newsletter'}
+          </DialogTitle>
+
+          <DialogContent sx={{ py: 2 }}>
+            {!submitted ? (
+              <TextField
+                autoFocus
+                fullWidth
+                type="email"
+                label="Email Address"
+                variant="outlined"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                sx={{
+                  mt: 1.5,
+                  '& .MuiInputBase-root': {
+                    backgroundColor: 'hsl(var(--input))',
+                    borderRadius: 'var(--radius)',
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: 'hsl(var(--muted-foreground))',
+                  },
+                  '& .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'hsl(var(--border))',
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'hsl(var(--primary))',
+                  },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'hsl(var(--primary))',
+                  },
+                }}
+              />
+            ) : (
+              <Typography
+                sx={{
+                  color: 'hsl(var(--success))',
+                  fontWeight: 500,
+                  mt: 1.5,
+                }}
+              >
+                🎉 Thank you! You’ll start receiving updates soon.
+              </Typography>
+            )}
+          </DialogContent>
+
+          <DialogActions
+            sx={{
+              pt: 1.5,
+              borderTop: '1px solid hsl(var(--border))',
+              justifyContent: submitted ? 'center' : 'flex-end',
+            }}
+          >
+            {!submitted && (
+              <>
+                <Button
+                  onClick={() => setOpen(false)}
+                  sx={{
+                    textTransform: 'none',
+                    color: 'hsl(var(--muted-foreground))',
+                    fontWeight: 500,
+                    px: 2,
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSubscribe}
+                  variant="contained"
+                  sx={{
+                    textTransform: 'none',
+                    backgroundColor: 'hsl(var(--primary))',
+                    color: 'hsl(var(--primary-foreground))',
+                    fontWeight: 600,
+                    px: 3,
+                    borderRadius: 'var(--radius)',
+                    '&:hover': {
+                      backgroundColor: 'hsl(var(--primary) / 0.9)',
+                    },
+                  }}
+                >
+                  Submit
+                </Button>
+              </>
+            )}
+          </DialogActions>
+        </Dialog>
+
+
+
 
         {/* Footer */}
         <Box

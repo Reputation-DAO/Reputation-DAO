@@ -2,7 +2,7 @@
 import React from 'react';
 
 import { Box, Container, Typography, Paper } from '@mui/material';
-import { ShieldCheck, Users, Layers ,Lock } from 'lucide-react';
+import { ShieldCheck, Users, Layers ,Lock ,TrendingUp,Zap } from 'lucide-react';
 import { GridLegacy as Grid } from '@mui/material';
 
 
@@ -27,7 +27,18 @@ const features = [
     icon:<Lock style={{ color: 'hsl(var(--primary))' }} />,
     title: 'Permanent',
     desc: 'Once earned, your reputation is permanently recorded on-chain, providing a lasting record of your contributions.',
+  },
+  {
+    icon: <TrendingUp style={{ color: 'hsl(var(--primary))' }} />,
+    title: 'Earnable',
+    desc: 'Reputation isn’t given — it’s earned. Every action, contribution, or endorsement boosts your on-chain identity.',
+  },
+  {
+    icon: <Zap style={{ color: 'hsl(var(--primary))' }} />,
+    title: 'Synergistic',
+    desc: 'Works alongside DAOs, platforms, and ecosystems to supercharge governance, rewards, and trust without extra friction.',
   }
+
 ];
 
 export default function KeyFeatures() {

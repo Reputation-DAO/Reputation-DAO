@@ -1,6 +1,6 @@
 
 import { Box, Container, Typography, Button, Stack } from '@mui/material';
-
+import { Link as MuiLink } from '@mui/material';
 export default function Hero() {
   return (
     <Box
@@ -45,46 +45,60 @@ export default function Hero() {
           spacing={1.5}
           justifyContent="center"
         >
-          <Button
-            variant="contained"
-            sx={{
-              bgcolor: 'hsl(var(--primary))',
-              color: 'hsl(var(--primary-foreground))',
-              textTransform: 'none',
-              px: 4,
-              py: 1.2,
-              fontSize: 13,
-              borderRadius: 'var(--radius)',
-              boxShadow: 'var(--shadow-lg)',
-              '&:hover': {
-                opacity: 0.9,
+          <MuiLink
+            href="https://www.youtube.com/watch?v=f5_kVgIzl_E"
+            target="_blank"
+            underline="none"
+            sx={{ display: 'inline-block' }}
+          >
+            <Button
+              variant="contained"
+              sx={{
                 bgcolor: 'hsl(var(--primary))',
-              },
-              transition: 'var(--transition-smooth)',
-            }}
-          >
-            Watch Demo
-          </Button>
+                color: 'hsl(var(--primary-foreground))',
+                textTransform: 'none',
+                px: 4,
+                py: 1.2,
+                fontSize: 13,
+                borderRadius: 'var(--radius)',
+                boxShadow: 'var(--shadow-lg)',
+                '&:hover': {
+                  opacity: 0.9,
+                  bgcolor: 'hsl(var(--primary))',
+                },
+                transition: 'var(--transition-smooth)',
+              }}
+            >
+              Watch Demo
+            </Button>
+          </MuiLink>
 
-          <Button
-            variant="outlined"
-            sx={{
-              textTransform: 'none',
-              px: 4,
-              py: 1.2,
-              fontSize: 13,
-              borderRadius: 'var(--radius)',
-              borderColor: 'hsl(var(--border))',
-              color: 'hsl(var(--foreground))',
-              '&:hover': {
-                bgcolor: 'hsl(var(--muted))',
-                borderColor: 'hsl(var(--border))',
-              },
-              transition: 'var(--transition-smooth)',
-            }}
+          <MuiLink
+            href="https://github.com/Reputation-DAO/Reputaion-DAO"
+            target="_blank"
+            underline="none"
+            sx={{ display: 'inline-block' }}
           >
-            View GitHub
-          </Button>
+            <Button
+              variant="outlined"
+              sx={{
+                textTransform: 'none',
+                px: 4,
+                py: 1.2,
+                fontSize: 13,
+                borderRadius: 'var(--radius)',
+                borderColor: 'hsl(var(--border))',
+                color: 'hsl(var(--foreground))',
+                '&:hover': {
+                  bgcolor: 'hsl(var(--muted))',
+                  borderColor: 'hsl(var(--border))',
+                },
+                transition: 'var(--transition-smooth)',
+              }}
+            >
+              View GitHub
+            </Button>
+          </MuiLink>
         </Stack>
       </Container>
       
