@@ -23,7 +23,20 @@ const DrawerContent: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Box
+      sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        py: 2,
+        overflowY: 'auto',
+        scrollbarWidth: 'none', // Firefox
+        '&::-webkit-scrollbar': {
+          display: 'none', // Chrome, Safari, Edge
+        },
+      }}
+    >
       {/* Profile Section */}
       <Box
         sx={{

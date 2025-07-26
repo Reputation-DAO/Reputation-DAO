@@ -1,9 +1,10 @@
-import { Actor } from '@dfinity/agent';
+
 import { idlFactory } from '../../../../src/declarations/reputation_dao/reputation_dao.did.js';
 import type { _SERVICE } from '../../../../src/declarations/reputation_dao/reputation_dao.did.d.ts';
 
 //modify this canisterID based on where the dfx playground hosts your backend
-const canisterId = 'wxani-naaaa-aaaab-qadgq-cai';
+
+const canisterId = 'owyeu-jiaaa-aaaam-qdvwq-cai';
 
 export const getPlugActor = async () => {
   if (!window.ic?.plug) {

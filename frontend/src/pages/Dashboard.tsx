@@ -20,7 +20,6 @@ import {
 import {
   People as Users,
   AdminPanelSettings,
-  Star,
   NorthEast as ArrowUpRight,
   Refresh,
   History,
