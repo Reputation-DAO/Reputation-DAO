@@ -4,7 +4,7 @@ import type { _SERVICE } from '../../../../src/declarations/reputation_dao/reput
 
 //modify this canisterID based on where the dfx playground hosts your backend
 
-const canisterId = 'owyeu-jiaaa-aaaam-qdvwq-cai';
+const canisterId = 'mdwwn-niaaa-aaaab-qabta-cai';
 
 export const getPlugActor = async () => {
   if (!window.ic?.plug) {
@@ -84,14 +84,23 @@ export const isPlugConnected = async (): Promise<boolean> => {
 
 // Utility function to get current principal
 export const getCurrentPrincipal = async () => {
-  if (!window.ic?.plug) {
-    throw new Error('Plug extension not found');
+  try {
+    if (!window.ic?.plug) {
+      console.log('❌ Plug extension not found');
+      return null;
+    }
+    
+    const isConnected = await isPlugConnected();
+    if (!isConnected) {
+      console.log('❌ Plug is not connected');
+      return null;
+    }
+    
+    const principal = await window.ic.plug.agent.getPrincipal();
+    console.log('✅ Got principal:', principal.toString());
+    return principal;
+  } catch (error) {
+    console.error('❌ Error getting current principal:', error);
+    return null;
   }
-  
-  const isConnected = await isPlugConnected();
-  if (!isConnected) {
-    throw new Error('Plug is not connected');
-  }
-  
-  return await window.ic.plug.agent.getPrincipal();
 };

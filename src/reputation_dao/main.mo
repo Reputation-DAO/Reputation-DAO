@@ -16,7 +16,7 @@ import Iter "mo:base/Iter";
 
 
 // Main Reputation DAO actor
-actor ReputationDAO {
+persistent actor ReputationDAO {
 
     // Transaction log entry type
     public type TransactionType = {
@@ -42,28 +42,28 @@ actor ReputationDAO {
     // --- Stable State ---
 
     // Reputation balances: Principal -> Nat
-    stable var balances : Trie.Trie<Principal, Nat> = Trie.empty();
+    var balances : Trie.Trie<Principal, Nat> = Trie.empty();
 
     // Trusted awarders: Principal -> () (acts as a set)
-    stable var trustedAwarders : Trie.Trie<Principal, Text> = Trie.empty();
+    var trustedAwarders : Trie.Trie<Principal, Text> = Trie.empty();
 
 
     // Daily minted amount per awarder: Principal -> Nat
-    stable var dailyMinted : Trie.Trie<Principal, Nat> = Trie.empty();
+    var dailyMinted : Trie.Trie<Principal, Nat> = Trie.empty();
 
     // Last mint timestamp per awarder: Principal -> Nat (epoch seconds)
-    stable var lastMintTimestamp : Trie.Trie<Principal, Nat> = Trie.empty();
+    var lastMintTimestamp : Trie.Trie<Principal, Nat> = Trie.empty();
 
     // Transaction log storage
-    stable var transactionHistory : [Transaction] = [];
-    stable var nextTransactionId : Nat = 1;
+    var transactionHistory : [Transaction] = [];
+    var nextTransactionId : Nat = 1;
 
     // Owner/admin principal (replace with your actual principal before deploy)
 
 
     // TODO: Set your admin principal aka your plug id here 
 
-    stable var owner : Principal = Principal.fromText("gvlvr-wz5ef-7evg7-bphlu-yld24-vgds7-ghcic-do3kl-ecvlh-3mdkp-2ae"); 
+    var owner : Principal = Principal.fromText("ofkbl-m6bgx-xlgm3-ko4y6-mh7i4-kp6b4-sojbh-wyy2r-aznnp-gmqtb-xqe"); 
 
 
     // --- Utility functions and core logic ---

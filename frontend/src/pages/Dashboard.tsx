@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Principal } from '@dfinity/principal';
 import {
   Box,
@@ -35,7 +35,8 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { getPlugActor, getCurrentPrincipal } from '../components/canister/reputationDao';
+import { getPlugActor } from '../components/canister/reputationDao';
+import { useRole } from '../contexts/RoleContext';
 
 interface Transaction {
   id: number;
@@ -62,8 +63,6 @@ interface DashboardData {
   balances: Balance[];
   awarders: Awarder[];
   transactionCount: number;
-  currentUser: Principal | null;
-  userRole: 'Admin' | string | 'User';
 }
 
 interface ChartData {
@@ -73,19 +72,21 @@ interface ChartData {
   net: number;
 }
 
-const Dashboard: React.FC = () => {
+const Dashboard: React.FC = React.memo(() => {
+  // Use role context instead of local state
+  const { userName } = useRole();
+  
   const [data, setData] = useState<DashboardData>({
     transactions: [],
     balances: [],
     awarders: [],
     transactionCount: 0,
-    currentUser: null,
-    userRole: 'User',
   });
   const [chartData, setChartData] = useState<ChartData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(false);
 
   // Format timestamp to relative time
   const formatTime = (timestamp: number | bigint): string => {
@@ -154,7 +155,10 @@ const Dashboard: React.FC = () => {
 
   // Load all dashboard data
   const loadDashboardData = async () => {
+    if (isLoadingData) return; // Prevent multiple simultaneous loads
+    
     try {
+      setIsLoadingData(true);
       setError(null);
       
       const actor = await getPlugActor();
@@ -162,9 +166,6 @@ const Dashboard: React.FC = () => {
         throw new Error('Failed to connect to blockchain');
       }
 
-      // Get current user
-      const currentUser = await getCurrentPrincipal();
-      
       // Fetch all data in parallel
       const [
         transactions,
@@ -203,28 +204,11 @@ const Dashboard: React.FC = () => {
         .sort((a, b) => b.balance - a.balance)
         .slice(0, 10);
 
-      // Determine user role
-      let userRole = 'User';
-      const currentUserText = currentUser.toString();
-      
-      // Check if owner (replace with actual owner principal)
-      if (currentUserText === '3d34m-ksxgd-46a66-2ibf7-kutsn-jg3vv-2yfjf-anbwh-u4lpl-tqu7d-yae') {
-        userRole = 'Admin';
-      } else {
-        // Check if awarder
-        const awarder = awarders.find((a: any) => a.id.toString() === currentUserText);
-        if (awarder) {
-          userRole = awarder.name;
-        }
-      }
-
       setData({
         transactions: transactions.slice(0, 10), // Get latest 10 transactions
         balances: balances, // Already sorted and limited
         awarders,
         transactionCount: Number(transactionCount),
-        currentUser,
-        userRole,
       });
 
       // Process chart data
@@ -237,16 +221,18 @@ const Dashboard: React.FC = () => {
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setIsLoadingData(false);
     }
   };
 
   // Load data on component mount
   useEffect(() => {
     loadDashboardData();
-  }, []);
+  }, []); // Empty dependency array to run only once
 
   // Refresh data
   const handleRefresh = () => {
+    if (isLoadingData) return; // Prevent refresh while loading
     setRefreshing(true);
     loadDashboardData();
   };
@@ -288,7 +274,7 @@ const Dashboard: React.FC = () => {
               fontSize: { xs: '1.5rem', md: '2rem' },
             }}
           >
-            Welcome, {data.userRole}
+            Welcome, {userName || 'User'}
           </Typography>
           <IconButton
             onClick={handleRefresh}
@@ -698,6 +684,6 @@ const Dashboard: React.FC = () => {
       </Box>
     </Box>
   );
-};
+});
 
 export default Dashboard;

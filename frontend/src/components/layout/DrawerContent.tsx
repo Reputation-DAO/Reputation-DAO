@@ -9,9 +9,11 @@ import {
   Avatar,
   Typography,
   IconButton,
+  Chip,
 } from '@mui/material';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { navItems } from './navItems';
+import { getFilteredNavItems } from './navItems';
+import { useRole } from '../../contexts/RoleContext';
 import {
   Help as HelpIcon,
   QuestionAnswer as FAQIcon,
@@ -21,6 +23,23 @@ import {
 const DrawerContent: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { userRole, userName, isAdmin, isAwarder } = useRole();
+
+  // Get filtered navigation items based on user role
+  const availableNavItems = getFilteredNavItems(userRole as any);
+
+  const getRoleDisplayName = () => {
+    if (isAdmin) return 'Admin';
+    if (isAwarder) return 'Trusted Awarder';
+    return 'Member';
+  };
+
+  const getUserInitials = () => {
+    if (userName && userName !== '') {
+      return userName.slice(0, 2).toUpperCase();
+    }
+    return 'U';
+  };
 
   return (
     <Box
@@ -50,11 +69,11 @@ const DrawerContent: React.FC = () => {
             sx={{
               width: 40,
               height: 40,
-              backgroundColor: 'hsl(var(--primary))',
-              color: 'hsl(var(--primary-foreground))',
+              backgroundColor: isAdmin ? 'hsl(var(--warning))' : isAwarder ? 'hsl(var(--success))' : 'hsl(var(--primary))',
+              color: 'white',
             }}
           >
-            JD
+            {getUserInitials()}
           </Avatar>
           <Box sx={{ flex: 1 }}>
             <Typography
@@ -65,17 +84,32 @@ const DrawerContent: React.FC = () => {
                 fontSize: '0.875rem',
               }}
             >
-              John Doe
+              {userName || 'Unknown User'}
             </Typography>
-            <Typography
-              variant="body2"
-              sx={{
-                color: 'hsl(var(--muted-foreground))',
-                fontSize: '0.75rem',
-              }}
-            >
-              Active Member
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'hsl(var(--muted-foreground))',
+                  fontSize: '0.75rem',
+                }}
+              >
+                {getRoleDisplayName()}
+              </Typography>
+              {(isAdmin || isAwarder) && (
+                <Chip
+                  label={isAdmin ? 'Admin' : 'Awarder'}
+                  size="small"
+                  sx={{
+                    height: 16,
+                    fontSize: '0.65rem',
+                    backgroundColor: isAdmin ? 'hsl(var(--warning))' : 'hsl(var(--success))',
+                    color: 'white',
+                    '& .MuiChip-label': { px: 0.75 }
+                  }}
+                />
+              )}
+            </Box>
           </Box>
           <IconButton
             sx={{
@@ -92,7 +126,7 @@ const DrawerContent: React.FC = () => {
       {/* Navigation */}
       <Box sx={{ flex: 1, py: 2 }}>
         <List sx={{ p: 0 }}>
-          {navItems.map((item) => {
+          {availableNavItems.map((item) => {
             const isActive = location.pathname === item.path;
             return (
               <ListItem key={item.path} disablePadding sx={{ px: 2, mb: 0.5 }}>

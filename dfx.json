@@ -2,15 +2,8 @@
   "canisters": {
     "reputation_dao": {
       "main": "src/reputation_dao/main.mo",
-      "type": "motoko",
-      "id": "owyeu-jiaaa-aaaam-qdvwq-cai"
+      "type": "motoko"
   
-    },
-    "frontend": {
-      "type": "assets",
-      "source": ["frontend/dist"],
-      "id": "37le5-2yaaa-aaaam-qdwhq-cai"
-      
     }
   },
   "dfx": "0.27.0",

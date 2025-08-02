@@ -37,10 +37,9 @@ export default function CommunityPage() {
               flexDirection: 'column',
               justifyContent: 'center',
               alignItems: 'center',
-              height: 300,
+              height: "500px",
               textAlign: 'center',
               px: 4,
-              height:"500px"
             }}
           >
             <Typography

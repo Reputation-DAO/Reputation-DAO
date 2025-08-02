@@ -47,6 +47,7 @@ export default function Hero() {
         >
           <Button
             variant="contained"
+            href='https://youtu.be/f5_kVgIzl_E?feature=shared'
             sx={{
               bgcolor: 'hsl(var(--primary))',
               color: 'hsl(var(--primary-foreground))',

@@ -4,17 +4,9 @@ import {
   Container,
   Typography,
   Paper,
-  Grid,
-  TextField,
-  Avatar,
   Chip,
-  InputAdornment,
-  IconButton,
   Divider,
 } from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
-import TwitterIcon from '@mui/icons-material/Twitter';
-import LinkedInIcon from '@mui/icons-material/LinkedIn';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 
 export default function BlogPage() {
@@ -74,7 +66,6 @@ export default function BlogPage() {
     },
   ];
 
-  const categories = ['Governance', 'Web3', 'Reputation', 'Identity', 'ICP', 'Project Update'];
   const featuredPost = posts.find((p) => p.isFeatured);
   const editorsPick = posts.find((p) => p.isEditorsPick);
   const latestPosts = posts.filter((p) => !p.isFeatured && !p.isEditorsPick);
@@ -102,9 +93,9 @@ export default function BlogPage() {
           </Box>
         </Paper>
 
-        <Grid container spacing={5}>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 5 }}>
           {/* --- MAIN CONTENT (POSTS) --- */}
-          <Grid item xs={12} md={8}>
+          <Box sx={{ flex: 1, maxWidth: { xs: '100%', md: '66.666%' } }}>
             {/* Featured Post */}
             {featuredPost && (
               <Box sx={{ mb: 6 }}>
@@ -130,9 +121,16 @@ export default function BlogPage() {
             )}
 
             {/* Latest Posts Grid */}
-            <Grid container spacing={3} sx={{ mb: 6 }}>
-  {latestPosts.map((post) => (
-    <Grid item xs={12} sm={6} md={4} lg={3} xl={2} key={post.id}>
+            <Box 
+              sx={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', 
+                gap: 3, 
+                mb: 6 
+              }}
+            >
+              {latestPosts.map((post) => (
+                <Box key={post.id}>
       <Paper
         variant="outlined"
         sx={{
@@ -197,9 +195,9 @@ export default function BlogPage() {
           </Typography>
         </Box>
       </Paper>
-    </Grid>
-  ))}
-</Grid>
+                </Box>
+              ))}
+            </Box>
 
             
             {/* Editor's Pick */}
@@ -255,11 +253,11 @@ export default function BlogPage() {
               ))}
             </Box>
 
-          </Grid>
+          </Box>
 
           {/* --- SIDEBAR --- */}
           
-        </Grid>
+        </Box>
       </Container>
     </Box>
   );
