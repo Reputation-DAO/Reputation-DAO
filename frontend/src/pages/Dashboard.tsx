@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Principal } from '@dfinity/principal';
 import {
   Box,
@@ -24,6 +24,7 @@ import {
   Refresh,
   History,
   TrendingUp,
+  EmojiEvents as EmojiEventsIcon,
 } from '@mui/icons-material';
 import {
   AreaChart,
@@ -63,6 +64,8 @@ interface DashboardData {
   balances: Balance[];
   awarders: Awarder[];
   transactionCount: number;
+  userReputation: number;
+  userTransactions: Transaction[];
 }
 
 interface ChartData {
@@ -74,13 +77,15 @@ interface ChartData {
 
 const Dashboard: React.FC = React.memo(() => {
   // Use role context instead of local state
-  const { userName } = useRole();
+  const { userName, userRole, currentPrincipal } = useRole();
   
   const [data, setData] = useState<DashboardData>({
     transactions: [],
     balances: [],
     awarders: [],
     transactionCount: 0,
+    userReputation: 0,
+    userTransactions: [],
   });
   const [chartData, setChartData] = useState<ChartData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -204,15 +209,33 @@ const Dashboard: React.FC = React.memo(() => {
         .sort((a, b) => b.balance - a.balance)
         .slice(0, 10);
 
+      // Calculate user-specific data
+      const currentUserPrincipal = currentPrincipal?.toString();
+      let userReputation = 0;
+      let userTransactions: Transaction[] = [];
+
+      if (currentUserPrincipal) {
+        // Get user's reputation from balance map
+        userReputation = balanceMap.get(currentUserPrincipal) || 0;
+        
+        // Filter transactions that involve the current user
+        userTransactions = transactions.filter((tx: any) => 
+          tx.to.toString() === currentUserPrincipal || tx.from.toString() === currentUserPrincipal
+        );
+      }
+
       setData({
         transactions: transactions.slice(0, 10), // Get latest 10 transactions
         balances: balances, // Already sorted and limited
         awarders,
         transactionCount: Number(transactionCount),
+        userReputation,
+        userTransactions: userTransactions.slice(0, 10), // Latest 10 user transactions
       });
 
-      // Process chart data
-      const processedChartData = processChartData(transactions);
+      // Process chart data - use user-specific transactions for regular users
+      const chartTransactions = userRole === 'User' ? userTransactions : transactions;
+      const processedChartData = processChartData(chartTransactions);
       setChartData(processedChartData);
 
     } catch (err) {
@@ -313,11 +336,40 @@ const Dashboard: React.FC = React.memo(() => {
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+              gridTemplateColumns: { xs: '1fr', sm: userRole === 'User' ? '1fr 1fr 1fr' : '1fr 1fr' },
               gap: 2,
               mb: 4,
             }}
           >
+            {/* My Reputation Card - Only for regular users */}
+            {userRole === 'User' && (
+              <Card
+                sx={{
+                  backgroundColor: 'hsl(var(--muted))',
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: 2,
+                }}
+              >
+                <CardContent sx={{ p: 3 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                    <Typography variant="h6" sx={{ color: 'hsl(var(--foreground) / 0.8)', fontSize: '0.875rem', fontWeight: 500 }}>
+                      My Reputation
+                    </Typography>
+                    <EmojiEventsIcon sx={{ color: 'hsl(var(--warning))', fontSize: '20px' }} />
+                  </Box>
+                  <Typography variant="h4" sx={{ color: 'hsl(var(--foreground))', fontWeight: 600, mb: 1 }}>
+                    {data.userReputation}
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <TrendingUp sx={{ color: 'hsl(var(--success))', fontSize: '16px' }} />
+                    <Typography variant="body2" sx={{ color: 'hsl(var(--success))', fontSize: '0.75rem' }}>
+                      Current score
+                    </Typography>
+                  </Box>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Total Transactions Card */}
             <Card
               sx={{
@@ -385,7 +437,7 @@ const Dashboard: React.FC = React.memo(() => {
             <CardContent sx={{ p: 3 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Typography variant="h6" sx={{ color: 'hsl(var(--foreground))', fontSize: '1rem', fontWeight: 600 }}>
-                  Recent Activity
+                  {userRole === 'User' ? 'My Activity' : 'Recent Activity'}
                 </Typography>
                 <Button
                   variant="outlined"
@@ -404,7 +456,7 @@ const Dashboard: React.FC = React.memo(() => {
                 </Button>
               </Box>
               <List sx={{ p: 0 }}>
-                {data.transactions.slice(0, 5).map((transaction, index) => (
+                {(userRole === 'User' ? data.userTransactions : data.transactions).slice(0, 5).map((transaction, index) => (
                   <React.Fragment key={transaction.id}>
                     <ListItem sx={{ px: 0, py: 1.5 }}>
                       <ListItemAvatar>
@@ -455,14 +507,14 @@ const Dashboard: React.FC = React.memo(() => {
                         }}
                       />
                     </ListItem>
-                    {index < Math.min(data.transactions.length, 5) - 1 && (
+                    {index < Math.min((userRole === 'User' ? data.userTransactions : data.transactions).length, 5) - 1 && (
                       <Divider sx={{ borderColor: 'hsl(var(--border))' }} />
                     )}
                   </React.Fragment>
                 ))}
-                {data.transactions.length === 0 && (
+                {(userRole === 'User' ? data.userTransactions : data.transactions).length === 0 && (
                   <Typography sx={{ color: 'hsl(var(--muted-foreground))', textAlign: 'center', py: 2 }}>
-                    No recent activity
+                    {userRole === 'User' ? 'No activity yet' : 'No recent activity'}
                   </Typography>
                 )}
               </List>
@@ -479,7 +531,7 @@ const Dashboard: React.FC = React.memo(() => {
           >
             <CardContent sx={{ p: 3 }}>
               <Typography variant="h6" sx={{ color: 'hsl(var(--foreground))', fontSize: '1rem', fontWeight: 600, mb: 3 }}>
-                7-Day Activity Overview
+                {userRole === 'User' ? 'My 7-Day Activity' : '7-Day Activity Overview'}
               </Typography>
               {chartData.length > 0 ? (
                 <Box sx={{ height: 300 }}>

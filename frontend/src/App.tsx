@@ -1,4 +1,3 @@
-
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import HomeLayout from './components/layout/HomePageLayout';
@@ -22,6 +21,7 @@ function App() {
     <RoleProvider>
       <Router>
         <Routes>
+          {/* Public Routes */}
           <Route
             path="/"
             element={
@@ -55,25 +55,26 @@ function App() {
             }
           />
           <Route
-            path="/auth"
+            path="/Auth"
             element={
-              <HomeLayout>
-                <Auth />
-              </HomeLayout>
+              <Auth />
             }
           />
 
+          {/* Protected Routes */}
+          {/* Dashboard - All roles can access */}
           <Route
-            path="/Dashboard"
+            path="/dashboard"
             element={
               <Layout>
-                <ProtectedRoute allowedRoles={['Admin', 'Awarder']}>
+                <ProtectedRoute allowedRoles={['Admin', 'Awarder', 'User']}>
                   <Dashboard />
                 </ProtectedRoute>
               </Layout>
             }
           />
 
+          {/* Award Reputation - Admin and Awarder only */}
           <Route
             path="/award"
             element={
@@ -84,6 +85,8 @@ function App() {
               </Layout>
             }
           />
+
+          {/* Revoke Reputation - Admin only */}
           <Route
             path="/revoke"
             element={
@@ -94,6 +97,8 @@ function App() {
               </Layout>
             }
           />
+
+          {/* Manage Awarders - Admin only */}
           <Route
             path="/awarders"
             element={
@@ -104,21 +109,25 @@ function App() {
               </Layout>
             }
           />
+
+          {/* View Balances - All roles can access */}
           <Route
             path="/balances"
             element={
               <Layout>
-                <ProtectedRoute allowedRoles={['Admin', 'Awarder']}>
+                <ProtectedRoute allowedRoles={['Admin', 'Awarder', 'User']}>
                   <ViewBalances />
                 </ProtectedRoute>
               </Layout>
             }
           />
+
+          {/* Transaction Log - All roles can access */}
           <Route
             path="/transactions"
             element={
               <Layout>
-                <ProtectedRoute allowedRoles={['Admin', 'Awarder']}>
+                <ProtectedRoute allowedRoles={['Admin', 'Awarder', 'User']}>
                   <TransactionLogSimple />
                 </ProtectedRoute>
               </Layout>

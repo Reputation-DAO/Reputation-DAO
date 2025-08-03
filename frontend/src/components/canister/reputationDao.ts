@@ -4,7 +4,7 @@ import type { _SERVICE } from '../../../../src/declarations/reputation_dao/reput
 
 //modify this canisterID based on where the dfx playground hosts your backend
 
-const canisterId = 'mdwwn-niaaa-aaaab-qabta-cai';
+const canisterId = '6zfvq-kiaaa-aaaab-qacra-cai';
 
 export const getPlugActor = async () => {
   if (!window.ic?.plug) {
