@@ -30,8 +30,8 @@ export default function TechnicalOverview() {
       component="section"
       sx={{
         width: '100%',
-        py: { xs: 6, md: 12 },
-        bgcolor: 'hsl(var(--background))',
+        py: { xs: 0, md: 0 },
+        bgcolor: 'transparent',
       }}
     >
       <Container maxWidth="lg">
@@ -42,7 +42,7 @@ export default function TechnicalOverview() {
             fontSize: { xs: '2.5rem', md: '3rem' },
             textAlign: 'center',
             color: 'hsl(var(--foreground))',
-            mb: { xs: 8, md: 12 },
+            mb: { xs: 3, md: 5 },
             letterSpacing: '-0.75px',
             lineHeight: 1.2,
             position: 'relative',
@@ -111,6 +111,15 @@ export default function TechnicalOverview() {
             </Box>
           ))}
         </Stack>
+      <Box
+          sx={{
+            width: '100%',
+            height: '1px',
+            my: 6,
+            background: 'linear-gradient(to right, transparent, hsl(var(--border)), transparent)',
+            
+          }}
+        />
       </Container>
     </Box>
   );

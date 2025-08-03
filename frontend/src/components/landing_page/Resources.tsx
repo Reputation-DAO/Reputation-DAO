@@ -51,8 +51,8 @@ export default function Resources() {
       component="section"
       sx={{
         width: '100%',
-        py: { xs: 1, md: 2 },
-        bgcolor: 'hsl(var(--background))',
+        py: { xs: 0, md: 0 },
+        bgcolor: 'transparent',
       }}
     >
       <Container maxWidth="lg" sx={{ px: 3 }}>
@@ -63,7 +63,7 @@ export default function Resources() {
             fontSize: { xs: '2.5rem', md: '3rem' },
             textAlign: 'center',
             color: 'hsl(var(--foreground))',
-            mb: { xs: 8, md: 12 },
+            mb: { xs: 3, md: 5 },
             letterSpacing: '-1px',
             lineHeight: 1.15,
             position: 'relative',

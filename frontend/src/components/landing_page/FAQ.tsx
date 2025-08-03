@@ -54,8 +54,8 @@ export default function FAQ() {
       component="section"
       sx={{
         width: '100%',
-        py: { xs: 1, md: 2 },
-        bgcolor: 'hsl(var(--background))',
+        py: { xs: 0, md: 0 },
+        bgcolor: 'transparent',
       }}
     >
       <Container maxWidth="md" sx={{ px: 1 }}>

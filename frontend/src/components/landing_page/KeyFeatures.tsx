@@ -1,10 +1,11 @@
+
 import React from 'react';
 import {
   Box,
   Container,
   Typography,
   Paper,
-  Grid as MuiGrid,
+
 } from '@mui/material';
 import {
   ShieldCheck,
@@ -15,6 +16,7 @@ import {
   Zap,
 } from 'lucide-react';
 
+import { GridLegacy as Grid } from '@mui/material';
 const features = [
   {
     icon: <ShieldCheck style={{ color: 'hsl(var(--primary))' }} />,
@@ -54,8 +56,8 @@ export default function KeyFeatures() {
       component="section"
       sx={{
         width: '100%',
-        py: { xs: 6, md: 8 },
-        bgcolor: 'hsl(var(--background))',
+        py: { xs: 0, md: 0 },
+        bgcolor: 'transparent',
       }}
     >
       <Container maxWidth="lg" sx={{ px: { xs: 2, md: 3 } }}>
@@ -66,7 +68,7 @@ export default function KeyFeatures() {
     fontSize: { xs: '2.5rem', md: '3rem' },
     textAlign: 'center',
     color: 'hsl(var(--foreground))',
-    mb: { xs: 8, md: 12 },
+    mb: { xs: 3, md: 5 },
     letterSpacing: '-0.75px',
     lineHeight: 1.2,
     position: 'relative',
@@ -75,9 +77,9 @@ export default function KeyFeatures() {
           Why Reputation DAO?
         </Typography>
 
-        <MuiGrid container spacing={6} justifyContent="center">
+        <Grid container spacing={6} justifyContent="center">
           {features.map((item, index) => (
-            <MuiGrid
+            <Grid
               item
               xs={12}
               sm={6}
@@ -129,9 +131,9 @@ export default function KeyFeatures() {
                   {item.desc}
                 </Typography>
               </Paper>
-            </MuiGrid>
+            </Grid>
           ))}
-        </MuiGrid>
+        </Grid>
 
         <Box
           sx={{

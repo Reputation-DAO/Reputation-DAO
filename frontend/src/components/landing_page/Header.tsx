@@ -38,7 +38,6 @@ export default function Header() {
         border: '1px solid hsl(var(--border))',
         backdropFilter: 'blur(8px)',
         WebkitBackdropFilter: 'blur(8px)',
-        boxShadow: 'none',
         transition: 'var(--transition-smooth)',
         boxShadow: 'inset -8px 0 8px -5px hsl(var(--primary))',
 
@@ -102,8 +101,11 @@ export default function Header() {
                 underline="none"
                 sx={{
                   color: 'hsl(var(--foreground))',
+                  fontWeight: 600,
                   transition: 'color 0.2s ease',
-                  '&:hover': { color: 'hsl(var(--primary))' },
+                  '&:hover': { color: 'hsl(var(--primary))' ,
+                              textShadow: '0 0 8px hsl(var(--primary))',
+                              },
                 }}
               >
                 {label}

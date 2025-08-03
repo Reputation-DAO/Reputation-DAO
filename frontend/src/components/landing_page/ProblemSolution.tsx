@@ -4,21 +4,24 @@ import { AlertTriangle, CheckCircle } from 'lucide-react';
 
 export default function ProblemSolution() {
   return (
-    <Box component="section" sx={{ width: '100%', py: { xs: 5, md: 7 }, bgcolor: 'hsl(var(--background))' }}>
+    <Box component="section" 
+    sx={{ width: '100%', 
+    py: { xs: 2, md: 4 },
+     bgcolor: 'transparent' }}>
       <Container maxWidth="lg" sx={{ textAlign: 'center', px: 3 }}>
         <Typography
-  variant="h3"
-  sx={{
-    fontWeight: 800,
-    fontSize: { xs: '2.5rem', md: '3rem' },
-    textAlign: 'center',
-    color: 'hsl(var(--foreground))',
-    mb: { xs: 8, md: 12 },
-    letterSpacing: '-0.75px',
-    lineHeight: 1.2,
-    position: 'relative',
-  }}
->
+            variant="h3"
+            sx={{
+              fontWeight: 800,
+              fontSize: { xs: '2.5rem', md: '3rem' },
+              textAlign: 'center',
+              color: 'hsl(var(--foreground))',
+              mb: { xs: 3, md: 5 },
+              letterSpacing: '-0.75px',
+              lineHeight: 1.2,
+              position: 'relative',
+            }}
+          >
           Problem vs. Solution
         </Typography>
 

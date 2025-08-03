@@ -1,4 +1,4 @@
-import { Box, Container, Typography, Stack } from '@mui/material';
+import { Box, Container, Typography } from '@mui/material';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { motion } from 'framer-motion';
 
@@ -27,8 +27,8 @@ export default function HowItWorks() {
       sx={{
         width: '100%',
         height:'100%',
-        py: { xs: 1, md: 2 },
-        bgcolor: 'hsl(var(--background))',
+        py: { xs: 0, md: 0 },
+        bgcolor: 'transparent',
       }}
     >
       <Container maxWidth="lg" sx={{ px: 3 }}>
@@ -39,7 +39,7 @@ export default function HowItWorks() {
     fontSize: { xs: '2.5rem', md: '3rem' },
     textAlign: 'center',
     color: 'hsl(var(--foreground))',
-    mb: { xs: 8, md: 12 },
+     mb: { xs: 3, md: 5 },
     letterSpacing: '-0.75px',
     lineHeight: 1.2,
     position: 'relative',
@@ -76,7 +76,7 @@ export default function HowItWorks() {
                   height: '100%',
                   textAlign: 'center',
                   position: 'relative',
-                  backgroundColor: 'hsl(var(--card))',
+                  backgroundColor: 'hsl(var(--background))',
                   transition: 'all 0.3s ease-in-out',
                 }}
               >
