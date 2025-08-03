@@ -18,7 +18,7 @@
     --accent-foreground: 0 0% 100%;
 
 
-    --muted: 220 14% 96%;
+    --muted: 222 16% 92%;
     --muted-foreground: 220 10% 40%;
 
     --info: 210 100% 50%;
@@ -33,7 +33,7 @@
     --destructive: 0 80% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 14% 90%;
+    --border: 220 90% 50%;
     --input: 220 14% 90%;
     --ring: 220 90% 56%;
 
@@ -49,7 +49,7 @@
   }
 
   .dark {
-    --background: 222 47% 11%;
+    --background: 222 50% 3%;
     --foreground: 0 0% 98%;
 
 
@@ -78,7 +78,7 @@
     --destructive: 0 80% 65%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 222 30% 25%;
+    --border: 220 90% 40%;
     --input: 222 30% 25%;
     --ring: 220 90% 66%;
 

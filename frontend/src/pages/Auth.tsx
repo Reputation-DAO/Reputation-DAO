@@ -88,7 +88,7 @@ const AuthPage = () => {
             alt="Logo"
             sx={{
               width: 600,
-              height: 400,
+              height: 600,
             }}
           />
           <br/>
