@@ -61,7 +61,7 @@ export default function LandingPage() {
         }}
       />
 
-      {/* Right Glow */}
+     
       <Box
         sx={{
           position: 'absolute',
