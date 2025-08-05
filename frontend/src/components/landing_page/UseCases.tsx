@@ -1,6 +1,6 @@
-
 import { Box, Container, Typography, Paper } from '@mui/material';
 import { GridLegacy as Grid } from '@mui/material';
+
 const useCases = [
   {
     image: '/assets/governance.png',
@@ -25,31 +25,41 @@ export default function UseCases() {
       component="section"
       sx={{
         width: '100%',
-        py: { xs: 5, md: 7 },
-        bgcolor: 'hsl(var(--background))',
+        py: { xs: 0, md: 0 },
+        bgcolor: 'transparent',
       }}
     >
       <Container maxWidth="lg" sx={{ px: 3 }}>
         <Typography
-          variant="h3"
-          sx={{
-            fontWeight: 600,
-            fontSize: { xs: '1.8rem', md: '2rem' },
-            color: 'hsl(var(--foreground))',
-            textAlign: 'left',
-            mb: 8,
-          }}
-        >
+  variant="h3"
+  sx={{
+    fontWeight: 800,
+    fontSize: { xs: '2.5rem', md: '3rem' },
+    textAlign: 'center',
+    color: 'hsl(var(--foreground))',
+    mb: { xs: 3, md: 5 },
+    letterSpacing: '-0.75px',
+    lineHeight: 1.2,
+    position: 'relative',
+  }}
+>
           Where Reputation DAO Fits
         </Typography>
 
         <Grid container spacing={4} justifyContent="center">
           {useCases.map((item, idx) => (
-            <Grid key={idx} item xs={12} md={4} sx={{ display: 'flex', justifyContent: 'center' }}>
+            <Grid
+              key={idx}
+              item
+              xs={12}
+              sm={6}
+              md={4}
+              sx={{ display: 'flex', justifyContent: 'center' }}
+            >
               <Paper
                 variant="outlined"
                 sx={{
-                  width: 260,
+                  width: 300,
                   display: 'flex',
                   flexDirection: 'column',
                   borderRadius: 'calc(var(--radius) + 4px)',
@@ -60,7 +70,7 @@ export default function UseCases() {
                   '&:hover': {
                     boxShadow: '0px 8px 30px rgba(0,0,0,0.05)',
                     transform: 'translateY(-2px)',
-                    borderColor: 'hsl(var(--foreground) / 0.1)',
+                    borderColor: 'hsl(var(--foreground))',
                   },
                 }}
               >
@@ -105,16 +115,17 @@ export default function UseCases() {
             </Grid>
           ))}
         </Grid>
-      </Container>
-      <Box
-      sx={{
-        width: '100%',
-        height: '1px',
-        my: 4,
-        background: 'linear-gradient(to right, transparent, hsl(var(--border)), transparent)',
-      }}
-    />
 
+        <Box
+          sx={{
+            width: '100%',
+            height: '1px',
+            my: 6,
+            background: 'linear-gradient(to right, transparent, hsl(var(--border)), transparent)',
+            
+          }}
+        />
+      </Container>
     </Box>
   );
 }

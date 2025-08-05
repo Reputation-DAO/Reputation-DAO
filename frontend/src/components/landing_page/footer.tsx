@@ -1,7 +1,36 @@
-
-import { Box, Link as MuiLink, Typography, Stack, TextField, Button } from '@mui/material';
+import {
+  Box,
+  Link as MuiLink,
+  Typography,
+  Stack,
+  TextField,
+  Button,
+} from '@mui/material';
 import { GridLegacy as Grid } from '@mui/material';
+import { useState } from 'react';
+
 export default function Footer() {
+
+
+  const [email, setEmail] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubscribe = () => {
+    const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+    if (!isValidEmail) {
+      alert('Please enter a valid email address.');
+      return;
+    }
+
+    setSubmitted(true);
+    setTimeout(() => {
+      setSubmitted(false);
+      setEmail('');
+    }, 2000);
+  };
+
+
+
   return (
     <Box
       component="footer"
@@ -117,6 +146,9 @@ export default function Footer() {
               placeholder="Your email"
               size="small"
               variant="outlined"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSubscribe()}
               sx={{
                 flexGrow: 1,
                 input: {
@@ -131,6 +163,8 @@ export default function Footer() {
             />
             <Button
               variant="contained"
+              onClick={handleSubscribe}
+              disabled={submitted}
               sx={{
                 textTransform: 'none',
                 px: 2.5,
@@ -144,9 +178,20 @@ export default function Footer() {
                 },
               }}
             >
-              Subscribe
+              {submitted ? '✅' : 'Subscribe'}
             </Button>
           </Box>
+          {submitted && (
+            <Typography
+              sx={{
+                mt: 1,
+                fontSize: 12.5,
+                color: 'hsl(var(--success))',
+              }}
+            >
+              🎉 Thank you for subscribing!
+            </Typography>
+          )}
         </Grid>
       </Grid>
 

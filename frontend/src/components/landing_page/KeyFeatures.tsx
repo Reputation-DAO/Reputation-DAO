@@ -1,12 +1,22 @@
 
 import React from 'react';
+import {
+  Box,
+  Container,
+  Typography,
+  Paper,
 
-import { Box, Container, Typography, Paper } from '@mui/material';
-import { ShieldCheck, Users, Layers ,Lock } from 'lucide-react';
+} from '@mui/material';
+import {
+  ShieldCheck,
+  Users,
+  Layers,
+  Lock,
+  TrendingUp,
+  Zap,
+} from 'lucide-react';
+
 import { GridLegacy as Grid } from '@mui/material';
-
-
-
 const features = [
   {
     icon: <ShieldCheck style={{ color: 'hsl(var(--primary))' }} />,
@@ -24,10 +34,20 @@ const features = [
     desc: 'Your reputation seamlessly integrates across platforms, enhancing trust and consistency wherever you participate.',
   },
   {
-    icon:<Lock style={{ color: 'hsl(var(--primary))' }} />,
+    icon: <Lock style={{ color: 'hsl(var(--primary))' }} />,
     title: 'Permanent',
     desc: 'Once earned, your reputation is permanently recorded on-chain, providing a lasting record of your contributions.',
-  }
+  },
+  {
+    icon: <TrendingUp style={{ color: 'hsl(var(--primary))' }} />,
+    title: 'Earnable',
+    desc: 'Reputation isn’t given — it’s earned. Every action, contribution, or endorsement boosts your on-chain identity.',
+  },
+  {
+    icon: <Zap style={{ color: 'hsl(var(--primary))' }} />,
+    title: 'Synergistic',
+    desc: 'Works alongside DAOs, platforms, and ecosystems to supercharge governance, rewards, and trust without extra friction.',
+  },
 ];
 
 export default function KeyFeatures() {
@@ -36,31 +56,41 @@ export default function KeyFeatures() {
       component="section"
       sx={{
         width: '100%',
-        py: { xs: 2.5, md: 3.5 },
-        bgcolor: 'hsl(var(--background))',
+        py: { xs: 0, md: 0 },
+        bgcolor: 'transparent',
       }}
     >
-      <Container maxWidth="lg" sx={{ px: 3 }}>
+      <Container maxWidth="lg" sx={{ px: { xs: 2, md: 3 } }}>
         <Typography
-          variant="h3"
-          sx={{
-            fontWeight: 600,
-            fontSize: { xs: '1.8rem', md: '2rem' },
-            color: 'hsl(var(--foreground))',
-            textAlign: 'left',
-            mb: 6,
-          }}
-        >
+  variant="h3"
+  sx={{
+    fontWeight: 800,
+    fontSize: { xs: '2.5rem', md: '3rem' },
+    textAlign: 'center',
+    color: 'hsl(var(--foreground))',
+    mb: { xs: 3, md: 5 },
+    letterSpacing: '-0.75px',
+    lineHeight: 1.2,
+    position: 'relative',
+  }}
+>
           Why Reputation DAO?
         </Typography>
 
-        <Grid container spacing={4} justifyContent="center">
-          {features.map((item, idx) => (
-            <Grid key={idx} item xs={12} md={4} sx={{ display: 'flex', justifyContent: 'center' }}>
+        <Grid container spacing={6} justifyContent="center">
+          {features.map((item, index) => (
+            <Grid
+              item
+              xs={12}
+              sm={6}
+              md={4}
+              key={index}
+              sx={{ display: 'flex', justifyContent: 'center' }}
+            >
               <Paper
                 variant="outlined"
                 sx={{
-                  width: 260,
+                  width: 300,
                   height: 260,
                   p: 3,
                   borderRadius: 'var(--radius)',
@@ -74,15 +104,13 @@ export default function KeyFeatures() {
                   gap: 2,
                   transition: 'all 0.3s ease',
                   '&:hover': {
-                    boxShadow: '0px 8px 30px rgba(0,0,0,0.05)',
+                    boxShadow: '0px 8px 30px rgba(0,0,0,0.06)',
                     transform: 'translateY(-3px)',
-                    borderColor: 'hsl(var(--foreground) / 0.15)',
+                    borderColor: 'hsl(var(--foreground))',
                   },
                 }}
               >
-                <Box sx={{ mb: 1 }}>
-                  {React.cloneElement(item.icon, { size: 40 })}
-                </Box>
+                <Box>{React.cloneElement(item.icon, { size: 40 })}</Box>
                 <Typography
                   sx={{
                     fontWeight: 600,
@@ -94,7 +122,6 @@ export default function KeyFeatures() {
                 </Typography>
                 <Typography
                   sx={{
-                    mt: 0.5,
                     fontSize: 14,
                     px: 1,
                     color: 'hsl(var(--muted-foreground))',
@@ -107,15 +134,17 @@ export default function KeyFeatures() {
             </Grid>
           ))}
         </Grid>
+
+        <Box
+          sx={{
+            width: '100%',
+            height: '1px',
+            my: 6,
+            background:
+              'linear-gradient(to right, transparent, hsl(var(--border)), transparent)',
+          }}
+        />
       </Container>
-      <Box
-      sx={{
-        width: '100%',
-        height: '1px',
-        my: 4,
-        background: 'linear-gradient(to right, transparent, hsl(var(--border)), transparent)',
-      }}
-    />
     </Box>
   );
 }

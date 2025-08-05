@@ -1,4 +1,3 @@
-
 import {
   AppBar,
   Box,
@@ -9,8 +8,6 @@ import {
 import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
 import { useState, useEffect } from 'react';
-
-
 
 export default function Header() {
   const [mode, setMode] = useState<'light' | 'dark'>(
@@ -25,23 +22,25 @@ export default function Header() {
   }, [mode]);
 
   const navItems = [
-  { label: 'Docs', href: '/docs' },
-  { label: 'Blog', href: '/blog' },
-  { label: 'Community', href: '/community' },
-];
+    { label: 'Docs', href: '/docs' },
+    { label: 'Blog', href: '/blog' },
+    { label: 'Community', href: '/community' },
+  ];
 
   return (
     <AppBar
       position="sticky"
       elevation={0}
       sx={{
-        bgcolor: 'hsl(var(--background))',
+        background: 'linear-gradient(to right, hsl(var(--primary)), hsl(var(--background)))',
+
         color: 'hsl(var(--foreground))',
-        borderBottom: '1px solid hsl(var(--border))',
+        border: '1px solid hsl(var(--border))',
         backdropFilter: 'blur(8px)',
         WebkitBackdropFilter: 'blur(8px)',
-        boxShadow: 'none',
         transition: 'var(--transition-smooth)',
+        boxShadow: 'inset -8px 0 8px -5px hsl(var(--primary))',
+
       }}
     >
       <Container
@@ -50,36 +49,34 @@ export default function Header() {
           py: 1,
           display: 'flex',
           alignItems: 'center',
+          justifyContent: 'space-between',
           minHeight: '56px',
         }}
       >
+        {/* Logo + Brand */}
         <MuiLink
           href="/"
           underline="none"
           sx={{
             display: 'flex',
             alignItems: 'center',
-            gap: 0.75,
+            gap: 1,
             fontWeight: 600,
             fontSize: '1rem',
-            color: 'hsl(var(--foreground))',
+            color: 'black',
             letterSpacing: '0.02em',
           }}
         >
-
-          <Box
-            sx={{
-              width: 8,
-              height: 8,
-              bgcolor: 'hsl(var(--primary))',
-              borderRadius: '2px',
-            }}
-          />
+        <img
+          src="/assets/dark_logo.png"
+          alt="Logo"
+          style={{ height: '40px', width: '50px' }}
+        />
+         
           Reputation DAO
         </MuiLink>
 
-        <Box sx={{ flexGrow: 1 }} />
-
+        {/* Nav + Actions */}
         <Box
           sx={{
             display: 'flex',
@@ -87,11 +84,12 @@ export default function Header() {
             gap: 3,
           }}
         >
+          {/* Navigation Links */}
           <Box
             sx={{
               display: { xs: 'none', md: 'flex' },
               alignItems: 'center',
-              gap: 3,
+              gap: 2.5,
               fontSize: 13,
               color: 'hsl(var(--muted-foreground))',
             }}
@@ -102,9 +100,12 @@ export default function Header() {
                 href={href}
                 underline="none"
                 sx={{
-                  transition: 'color hsl(var(--foreground))',
-                  color:"hsl(var(--foreground))",
-                  '&:hover': { color: 'hsl(var(--primary))' },
+                  color: 'hsl(var(--foreground))',
+                  fontWeight: 600,
+                  transition: 'color 0.2s ease',
+                  '&:hover': { color: 'hsl(var(--primary))' ,
+                              textShadow: '0 0 8px hsl(var(--primary))',
+                              },
                 }}
               >
                 {label}
@@ -112,37 +113,41 @@ export default function Header() {
             ))}
           </Box>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          {/* Theme Toggle + CTA */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <IconButton
+              aria-label="Toggle theme"
               onClick={() => setMode(mode === 'dark' ? 'light' : 'dark')}
               size="small"
               sx={{
                 color: 'hsl(var(--foreground))',
-                transition: 'var(--transition-fast)',
-                '&:hover': { transform: 'rotate(15deg) scale(1.05)' },
+                transition: 'transform 0.2s ease',
+                '&:hover': {
+                  transform: 'rotate(15deg) scale(1.05)',
+                },
               }}
             >
               {mode === 'dark' ? <Brightness7Icon fontSize="small" /> : <Brightness4Icon fontSize="small" />}
             </IconButton>
 
             <MuiLink
-              href="auth"
+              href="/auth"
               underline="none"
               sx={{
                 display: 'inline-block',
                 backgroundColor: 'hsl(var(--primary))',
                 color: 'hsl(var(--primary-foreground))',
                 textTransform: 'none',
-                px: 2,
+                px: 2.25,
                 py: 0.75,
                 fontSize: 12,
                 borderRadius: 'var(--radius)',
                 boxShadow: 'var(--shadow-lg)',
+                transition: 'opacity 0.25s ease, background-color 0.25s ease',
                 '&:hover': {
                   opacity: 0.9,
                   backgroundColor: 'hsl(var(--primary))',
                 },
-                transition: 'var(--transition-smooth)',
               }}
             >
               Get Started

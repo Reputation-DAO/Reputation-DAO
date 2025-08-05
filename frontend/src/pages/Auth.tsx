@@ -85,13 +85,13 @@ const AuthPage = () => {
           <Box
             component="img"
             src="/assets/dark_logo.png" // Replace with your logo path
-            alt="Nexura Logo"
+            alt="Logo"
             sx={{
-              width: 400,
-              height: 400,
+              width: 600,
+              height: 600,
             }}
           />
-
+          <br/>
           <Typography variant="h3" fontWeight="bold" color="black">
             Reputation DAO
           </Typography>
