@@ -10,6 +10,7 @@ import RevokeRep from './pages/RevokeRep';
 import ManageAwarders from './pages/ManageAwarders';
 import ViewBalances from './pages/ViewBalances';
 import TransactionLogSimple from './pages/TransactionLogSimple';
+import DecaySystemPage from './pages/DecaySystemPage';
 import LandingPage from './pages/LandingPage';
 import Docs from './pages/Docs';
 import Community from './pages/Community';
@@ -69,6 +70,18 @@ function App() {
               <Layout>
                 <ProtectedRoute allowedRoles={['Admin', 'Awarder', 'User']}>
                   <Dashboard />
+                </ProtectedRoute>
+              </Layout>
+            }
+          />
+
+          {/* Decay System - All roles can access */}
+          <Route
+            path="/decay"
+            element={
+              <Layout>
+                <ProtectedRoute allowedRoles={['Admin', 'Awarder', 'User']}>
+                  <DecaySystemPage />
                 </ProtectedRoute>
               </Layout>
             }

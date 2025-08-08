@@ -1,6 +1,14 @@
+type UserDecayInfo = 
+ record {
+   lastActivityTime: nat;
+   lastDecayTime: nat;
+   registrationTime: nat;
+   totalDecayed: nat;
+ };
 type TransactionType = 
  variant {
    Award;
+   Decay;
    Revoke;
  };
 type Transaction = 
@@ -13,6 +21,14 @@ type Transaction =
    to: principal;
    transactionType: TransactionType;
  };
+type DecayConfig = 
+ record {
+   decayInterval: nat;
+   decayRate: nat;
+   enabled: bool;
+   gracePeriod: nat;
+   minThreshold: nat;
+ };
 type Awarder = 
  record {
    id: principal;
@@ -20,13 +36,34 @@ type Awarder =
  };
 service : {
   addTrustedAwarder: (p: principal, name: text) -> (text);
+  applyDecayToSpecificUser: (p: principal) -> (text);
   awardRep: (to: principal, amount: nat, reason: opt text) -> (text);
+  configureDecay: (decayRate: nat, decayInterval: nat, minThreshold: 
+   nat, gracePeriod: nat, enabled: bool) -> (text);
   getBalance: (p: principal) -> (nat) query;
+  getBalanceWithDetails: (p: principal) ->
+   (record {
+      currentBalance: nat;
+      decayInfo: opt UserDecayInfo;
+      pendingDecay: nat;
+      rawBalance: nat;
+    }) query;
+  getDecayConfig: () -> (DecayConfig) query;
+  getDecayStatistics: () ->
+   (record {
+      configEnabled: bool;
+      lastGlobalDecayProcess: nat;
+      totalDecayedPoints: nat;
+    }) query;
+  getRawBalance: (p: principal) -> (nat) query;
   getTransactionById: (id: nat) -> (opt Transaction) query;
   getTransactionCount: () -> (nat) query;
   getTransactionHistory: () -> (vec Transaction) query;
   getTransactionsByUser: (user: principal) -> (vec Transaction) query;
   getTrustedAwarders: () -> (vec Awarder) query;
+  getUserDecayInfo: (p: principal) -> (opt UserDecayInfo) query;
+  previewDecayAmount: (p: principal) -> (nat) query;
+  processBatchDecay: () -> (text);
   removeTrustedAwarder: (p: principal) -> (text);
   revokeRep: (from: principal, amount: nat, reason: opt text) -> (text);
 }

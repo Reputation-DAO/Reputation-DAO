@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Principal } from '@dfinity/principal';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -76,6 +77,8 @@ interface ChartData {
 }
 
 const Dashboard: React.FC = React.memo(() => {
+  const navigate = useNavigate();
+  
   // Use role context instead of local state
   const { userName, userRole, currentPrincipal } = useRole();
   
@@ -527,6 +530,7 @@ const Dashboard: React.FC = React.memo(() => {
               backgroundColor: 'hsl(var(--muted))',
               border: '1px solid hsl(var(--border))',
               borderRadius: 2,
+              mb: 3,
             }}
           >
             <CardContent sx={{ p: 3 }}>
@@ -550,27 +554,55 @@ const Dashboard: React.FC = React.memo(() => {
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis 
                         dataKey="date" 
-                        stroke="hsl(var(--muted-foreground))"
-                        fontSize={12}
+                        axisLine={false} 
+                        tickLine={false}
+                        tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
                       />
                       <YAxis 
-                        stroke="hsl(var(--muted-foreground))"
-                        fontSize={12}
+                        axisLine={false} 
+                        tickLine={false}
+                        tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
                       />
-                      <Tooltip 
-                        contentStyle={{
-                          backgroundColor: 'hsl(var(--background))',
-                          border: '1px solid hsl(var(--border))',
-                          borderRadius: '8px',
-                          color: 'hsl(var(--foreground))',
+                      <Tooltip
+                        content={({ active, payload, label }) => {
+                          if (active && payload && payload.length) {
+                            return (
+                              <Box
+                                sx={{
+                                  backgroundColor: 'hsl(var(--background))',
+                                  border: '1px solid hsl(var(--border))',
+                                  borderRadius: 1,
+                                  p: 1.5,
+                                  boxShadow: 2,
+                                }}
+                              >
+                                <Typography variant="body2" sx={{ color: 'hsl(var(--foreground))', fontWeight: 600, mb: 1 }}>
+                                  {label}
+                                </Typography>
+                                {payload.map((entry, index) => (
+                                  <Typography
+                                    key={index}
+                                    variant="body2"
+                                    sx={{ color: entry.color, fontSize: '0.75rem' }}
+                                  >
+                                    {entry.name}: {entry.value}
+                                  </Typography>
+                                ))}
+                              </Box>
+                            );
+                          }
+                          return null;
                         }}
-                        labelStyle={{ color: 'hsl(var(--foreground))' }}
                       />
-                      <Legend />
+                      <Legend
+                        wrapperStyle={{
+                          fontSize: '12px',
+                          color: 'hsl(var(--muted-foreground))',
+                        }}
+                      />
                       <Area
                         type="monotone"
                         dataKey="awards"
-                        stackId="1"
                         stroke="#22c55e"
                         fillOpacity={1}
                         fill="url(#colorAwards)"
@@ -579,7 +611,6 @@ const Dashboard: React.FC = React.memo(() => {
                       <Area
                         type="monotone"
                         dataKey="revokes"
-                        stackId="2"
                         stroke="#ef4444"
                         fillOpacity={1}
                         fill="url(#colorRevokes)"
@@ -592,11 +623,10 @@ const Dashboard: React.FC = React.memo(() => {
                 <Box
                   sx={{
                     height: 200,
-                    backgroundColor: 'hsl(var(--background))',
-                    borderRadius: 1,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    color: 'hsl(var(--muted-foreground))',
                     border: '1px solid hsl(var(--border))',
                   }}
                 >
@@ -607,6 +637,39 @@ const Dashboard: React.FC = React.memo(() => {
               )}
             </CardContent>
           </Card>
+
+          {/* Quick Access Card */}
+          <Card
+            sx={{
+              backgroundColor: 'hsl(var(--muted))',
+              border: '1px solid hsl(var(--border))',
+              borderRadius: 2,
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="h6" sx={{ color: 'hsl(var(--foreground))', fontSize: '1rem', fontWeight: 600, mb: 2 }}>
+                System Features
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'hsl(var(--muted-foreground))', mb: 3 }}>
+                Access advanced system features and monitoring tools
+              </Typography>
+              <Button
+                variant="outlined"
+                onClick={() => navigate('/decay')}
+                sx={{
+                  color: 'hsl(var(--primary))',
+                  borderColor: 'hsl(var(--border))',
+                  '&:hover': {
+                    borderColor: 'hsl(var(--primary))',
+                    backgroundColor: 'hsl(var(--muted))',
+                  },
+                }}
+              >
+                View Decay System
+              </Button>
+            </CardContent>
+          </Card>
+
         </Box>
 
         {/* Right Sidebar */}

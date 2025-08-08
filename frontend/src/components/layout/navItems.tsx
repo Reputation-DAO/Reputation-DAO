@@ -6,6 +6,7 @@ import RemoveCircleIcon from '@mui/icons-material/RemoveCircle';
 import GroupIcon from '@mui/icons-material/Group';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import HistoryIcon from '@mui/icons-material/History';
+import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 
 export interface NavItem {
   label: string;
@@ -19,6 +20,12 @@ export const navItems: NavItem[] = [
     label: 'Dashboard', 
     path: '/dashboard', 
     icon: <DashboardIcon />, 
+    allowedRoles: ['Admin', 'Awarder', 'User'] 
+  },
+  { 
+    label: 'Decay System', 
+    path: '/decay', 
+    icon: <TrendingDownIcon />, 
     allowedRoles: ['Admin', 'Awarder', 'User'] 
   },
   { 
