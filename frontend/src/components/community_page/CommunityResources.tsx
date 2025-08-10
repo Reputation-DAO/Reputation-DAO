@@ -13,7 +13,7 @@ const linkItems: LinkItem[] = [
   { icon: <Code2 size={26} />, label: 'GitHub', href: 'https://github.com/Reputation-DAO/Reputaion-DAO' },
   { icon: <FileText size={26} />, label: 'Blog', href: '/blog' },
   { icon: <HelpCircle size={26} />, label: 'FAQ', href: '/' },
-  { icon: <ShieldCheck size={26} />, label: 'Core Idea', href: 'https://docs.google.com/document/d/...' },
+  { icon: <ShieldCheck size={26} />, label: 'Core Idea', href: 'https://docs.google.com/document/d/1e03vreMKph3KPX-g8-jlbIAlD8D3PvA8VXPbZNIrT-0/edit?tab=t.0' },
 ];
 
 export default function CommunityResources(): JSX.Element {

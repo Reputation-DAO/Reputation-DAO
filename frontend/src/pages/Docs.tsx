@@ -1,205 +1,170 @@
+import React, { useState } from 'react';
 import {
   Box,
-  Container,
-  Typography,
+  CssBaseline,
   Paper,
+  Typography,
   List,
   ListItemButton,
   ListItemText,
-  Divider,
+  Container,
 } from '@mui/material';
+
+import DocsContentGettingStarted from '../components/docs/GettingStarted';
+import DocsContentArchitecture from '../components/docs/Architecture';
+import DocsContentSmartContract from '../components/docs/SmartContract';
+import DocsContentAPI from '../components/docs/API';
+import DocsContentIntegrationGuide from '../components/docs/IntegrationGuide';
+import DocsContentGovernance from '../components/docs/Governance';
 
 const navItems = [
   'Getting Started',
   'Architecture Overview',
-  'Smart Contract (Motoko Canister)',
+  'Smart Contracts',
   'API Reference',
   'Integration Guide (Plug, Internet Identity, Stoic)',
   'Governance Rules',
-  'FAQ',
 ];
 
-const apiEndpoints = [
-  { endpoint: 'getReputationScore(userId)', desc: 'Retrieves the reputation score for a given user ID.' },
-  { endpoint: 'updateReputationScore(userId, delta)', desc: 'Updates the reputation score for a user by a specified delta.' },
-  { endpoint: 'getGovernanceRules()', desc: 'Returns the current governance rules for the DAO.' },
+const contentComponents = [
+  <DocsContentGettingStarted />,
+  <DocsContentArchitecture />,
+  <DocsContentSmartContract />,
+  <DocsContentAPI />,
+  <DocsContentIntegrationGuide />,
+  <DocsContentGovernance />,
 ];
 
-export default function DocsPage() {
+export default function DocsLayout() {
+  const [activeIndex, setActiveIndex] = useState(0);
+
   return (
-    <Box sx={{ display: 'flex', height: '100vh', bgcolor: 'hsl(var(--background))' }}>
+    <Container
+      maxWidth={false}
+      disableGutters
+      sx={{
+        display: 'flex',
+        py: 4,
+        px: 5,
+        bgcolor: 'hsl(var(--background))',
+        color: 'hsl(var(--foreground))',
+        gap: 4,
+      }}
+    >
+      <CssBaseline />
+
       {/* Sidebar */}
-      <Paper
-        component="aside"
-        elevation={4}
+      {/* Sidebar */}
+<Paper
+  component="aside"
+  elevation={6}
+  sx={{
+    width: 260,
+    flexShrink: 0,
+    bgcolor: 'hsl(var(--card))',
+    border: '1px solid hsl(var(--border))',
+    py: 3,
+    px: 2,
+    display: 'flex',
+    flexDirection: 'column',
+    borderRadius: 'calc(var(--radius) * 1.5)', // smoother corners
+    height: 'calc(100vh - 128px)', // match content height
+    position: 'sticky',
+    top: 96,
+    boxShadow:
+      '0 4px 20px rgba(0, 0, 0, 0.05), inset 0 0 0 1px hsl(var(--border))', // soft outer + subtle inner border
+    backdropFilter: 'blur(8px)', // glassy effect if background allows
+    overflow: 'hidden', // clip ripple effects
+  }}
+>
+  <Typography
+    variant="subtitle2"
+    sx={{
+      fontWeight: 700,
+      letterSpacing: 0.5,
+      mb: 2,
+      fontSize: 14,
+      px: 1,
+      color: 'hsl(var(--foreground))',
+      textTransform: 'uppercase',
+    }}
+  >
+    Documentation
+  </Typography>
+
+  <List dense disablePadding>
+    {navItems.map((text, idx) => (
+      <ListItemButton
+        key={idx}
+        selected={idx === activeIndex}
+        onClick={() => setActiveIndex(idx)}
         sx={{
-          width: 260,
-          backdropFilter: 'blur(12px)',
-          bgcolor: 'hsl(var(--card) / 0.6)',
-          borderRight: '1px solid hsl(var(--border))',
-          px: 2,
-          py: 3,
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
+          py: 1,
+          px: 1.5,
+          borderRadius: 'var(--radius)',
+          color: 'hsl(var(--foreground))',
+          fontWeight: idx === activeIndex ? 600 : 500,
+          transition: 'all 0.25s ease',
+          '&.Mui-selected': {
+            bgcolor: 'hsl(var(--primary) / 0.15)',
+            color: 'hsl(var(--foreground))',
+            boxShadow: 'inset 0 0 0 1px hsl(var(--primary))',
+          },
+          '&:hover': {
+            bgcolor: 'hsl(var(--primary) / 0.08)',
+            transform: 'translateX(4px)',
+          },
         }}
       >
-        <Box>
-          <Typography sx={{ fontWeight: 600, mb: 2, fontSize: 14, color: 'hsl(var(--muted-foreground))' }}>
-            Documentation
-          </Typography>
-          <List dense disablePadding>
-            {navItems.map((text, idx) => (
-              <ListItemButton
-                key={idx}
-                selected={idx === 0}
-                sx={{
-                  py: 1,
-                  borderRadius: 'var(--radius)',
-                  color: 'hsl(var(--foreground))',
-                  transition: 'all 0.2s ease',
-                  '&.Mui-selected': {
-                    bgcolor: 'hsl(var(--primary) / 0.1)',
-                    color: 'hsl(var(--foreground))',
-                  },
-                  '&:hover': {
-                    bgcolor: 'hsl(var(--primary) / 0.05)',
-                  },
-                }}
-              >
-                <ListItemText
-                  primaryTypographyProps={{ fontSize: 13, fontWeight: 500 }}
-                  primary={text}
-                />
-              </ListItemButton>
-            ))}
-          </List>
-        </Box>
+        <ListItemText
+          primaryTypographyProps={{
+            fontSize: 13,
+            fontWeight: idx === activeIndex ? 600 : 500,
+          }}
+          primary={text}
+        />
+      </ListItemButton>
+    ))}
+  </List>
+</Paper>
 
-        <Box sx={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', mt: 4 }}>
-          <Typography>Need help?</Typography>
-          <Typography sx={{ color: 'hsl(var(--foreground))', fontWeight: 500 }}>Contact Support</Typography>
-        </Box>
-      </Paper>
 
-      {/* Main Content */}
-      <Box component="main" sx={{ flexGrow: 1, p: 6, overflowY: 'auto' }}>
-        <Container maxWidth="md" disableGutters>
-          <Typography variant="h6" sx={{ color: 'hsl(var(--muted-foreground))', mb: 1 }}>
-            Docs
-          </Typography>
-          <Typography variant="h4" sx={{ fontWeight: 600, mb: 2, color: 'hsl(var(--foreground))' }}>
-            Getting Started
-          </Typography>
-          <Typography sx={{ color: 'hsl(var(--muted-foreground))', mb: 4 }}>
-            Welcome to the Reputation DAO documentation. This guide will help you understand the core concepts and get started with integrating Reputation DAO into your applications.
-          </Typography>
+      {/* Docs Content */}
+      <Box
+  component={Paper}
+  elevation={4}
+  sx={{
+    flexGrow: 1,
+    bgcolor: 'hsl(var(--card))',
+    border: '1px solid hsl(var(--border))',
+    px: 5,
+    py: 3,
+    color:"hsl(var(--foreground))",
+    borderRadius: 'var(--radius)',
+    height: 'calc(100vh - 128px)', // same height as sidebar
+    overflowY: 'auto', // scroll internally if content is long
+    /* Scrollbar Styling */
+    '&::-webkit-scrollbar': {
+      width: '6px',
+    },
+    '&::-webkit-scrollbar-track': {
+      background: 'transparent',
+    },
+    '&::-webkit-scrollbar-thumb': {
+      backgroundColor: 'hsl(var(--primary) / 0.7)',
+      borderRadius: '4px',
+      transition: 'background-color 0.2s ease',
+    },
+    '&::-webkit-scrollbar-thumb:hover': {
+      backgroundColor: 'hsl(var(--primary))',
+    },
+    scrollbarWidth: 'thin', // Firefox
+    scrollbarColor: 'hsl(var(--primary) / 0.7) transparent', // Firefox
+  }}
+>
+  {contentComponents[activeIndex]}
+</Box>
 
-          <Divider sx={{ my: 4, borderColor: 'hsl(var(--border))' }} />
-
-          {/* Prerequisites */}
-          <Typography variant="h6" sx={{ mb: 2, color: 'hsl(var(--foreground))' }}>
-            Prerequisites
-          </Typography>
-          <Box
-            component="ul"
-            sx={{
-              pl: 3,
-              mb: 4,
-              color: 'hsl(var(--muted-foreground))',
-              '& li': { mb: 1.2, fontSize: 14 },
-            }}
-          >
-            <li>Node.js and npm installed</li>
-            <li>Basic understanding of blockchain concepts</li>
-          </Box>
-
-          {/* Installation */}
-          <Typography variant="h6" sx={{ mb: 2, color: 'hsl(var(--foreground))' }}>
-            Installation
-          </Typography>
-          <Paper
-            variant="outlined"
-            sx={{
-              fontFamily: 'monospace',
-              fontSize: 14,
-              p: 2,
-              borderRadius: 'var(--radius)',
-              bgcolor: 'hsl(var(--muted) / 0.2)',
-              borderColor: 'hsl(var(--border))',
-              mb: 4,
-              color: 'hsl(var(--foreground))',
-            }}
-          >
-            npm install reputation-dao
-          </Paper>
-
-          {/* Basic Usage */}
-          <Typography variant="h6" sx={{ mb: 2, color: 'hsl(var(--foreground))' }}>
-            Basic Usage
-          </Typography>
-          <Paper
-            variant="outlined"
-            sx={{
-              fontFamily: 'monospace',
-              fontSize: 14,
-              p: 2,
-              borderRadius: 'var(--radius)',
-              bgcolor: 'hsl(var(--muted) / 0.2)',
-              borderColor: 'hsl(var(--border))',
-              mb: 4,
-              color: 'hsl(var(--foreground))',
-            }}
-          >
-{`import { getReputationScore } from 'reputation-dao';
-
-const score = await getReputationScore('user-principal-id');`}
-          </Paper>
-
-          {/* API Reference */}
-          <Typography variant="h6" sx={{ mb: 2, color: 'hsl(var(--foreground))' }}>
-            API Endpoints
-          </Typography>
-          <Paper
-            variant="outlined"
-            sx={{
-              borderRadius: 'var(--radius)',
-              overflow: 'hidden',
-              mb: 4,
-              borderColor: 'hsl(var(--border))',
-              bgcolor: 'hsl(var(--card))',
-            }}
-          >
-            <Box sx={{ display: 'flex', p: 1.5, fontWeight: 600, fontSize: 13, color: 'hsl(var(--foreground))' }}>
-              <Box width="50%" pl={1}>Endpoint</Box>
-              <Box width="50%">Description</Box>
-            </Box>
-            {apiEndpoints.map((api, idx) => (
-              <Box
-                key={idx}
-                sx={{
-                  display: 'flex',
-                  borderTop: '1px solid hsl(var(--border))',
-                  p: 1.5,
-                  fontSize: 13,
-                  color: 'hsl(var(--muted-foreground))',
-                }}
-              >
-                <Box width="50%" pl={1} sx={{ fontFamily: 'monospace' }}>{api.endpoint}</Box>
-                <Box width="50%">{api.desc}</Box>
-              </Box>
-            ))}
-          </Paper>
-
-          {/* Integration Link */}
-          <Typography variant="h6" sx={{ mb: 2, color: 'hsl(var(--foreground))' }}>
-            Integration Examples
-          </Typography>
-          <Typography sx={{ color: 'hsl(var(--muted-foreground))' }}>
-            For detailed integration examples with Plug, Internet Identity, and Stoic, refer to the <strong>Integration Guide</strong> section.
-          </Typography>
-        </Container>
-      </Box>
-    </Box>
+    </Container>
   );
 }

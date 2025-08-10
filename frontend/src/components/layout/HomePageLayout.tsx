@@ -8,7 +8,7 @@ const PublicLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     <div className="flex flex-col min-h-screen bg-background text-foreground transition-colors">
       <CssBaseline />
       <Header />
-      <main className="flex-grow py-12 max-w-6xl mx-auto px-4">
+      <main className="flex-grow py-12 max-w-6xl mx-auto px-0">
         {children}
       </main>
       <Footer />
