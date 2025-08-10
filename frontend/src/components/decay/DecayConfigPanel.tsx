@@ -50,6 +50,14 @@ const DecayConfigPanel: React.FC<DecayConfigPanelProps> = ({ className, onConfig
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [testingMode, setTestingMode] = useState(true); // Enable testing mode by default
+  // Track if there are changes pending save
+  const isChanged = originalConfig && (
+    originalConfig.decayRate !== config.decayRate ||
+    originalConfig.decayInterval !== config.decayInterval ||
+    originalConfig.minThreshold !== config.minThreshold ||
+    originalConfig.gracePeriod !== config.gracePeriod ||
+    originalConfig.enabled !== config.enabled
+  );
 
   useEffect(() => {
     if (isAdmin) {
@@ -177,7 +185,7 @@ const DecayConfigPanel: React.FC<DecayConfigPanelProps> = ({ className, onConfig
               <CircularProgress />
             </Box>
           ) : (
-            <Box sx={{ space: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {error && (
                 <Alert severity="error" sx={{ mb: 2 }}>
                   {error}
@@ -319,10 +327,10 @@ const DecayConfigPanel: React.FC<DecayConfigPanelProps> = ({ className, onConfig
                   variant="contained"
                   startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />}
                   onClick={handleSave}
-                  disabled={saving}
+                  disabled={saving || !isChanged}
                   color="primary"
                 >
-                  {saving ? 'Saving...' : 'Save Configuration'}
+                  {saving ? 'Saving...' : (isChanged ? 'Save Configuration' : 'No Changes')}
                 </Button>
 
                 <Button
@@ -335,8 +343,8 @@ const DecayConfigPanel: React.FC<DecayConfigPanelProps> = ({ className, onConfig
               </Box>
 
               {config.enabled && (
-                <Alert severity="info" sx={{ mt: 2 }}>
-                  Configuration changes will be applied immediately when saved.
+                <Alert severity={isChanged ? 'warning' : 'info'} sx={{ mt: 2 }}>
+                  {isChanged ? 'Unsaved changes detected. Save to apply new decay behavior.' : 'Configuration is up to date. Changes apply immediately when saved.'}
                 </Alert>
               )}
             </Box>

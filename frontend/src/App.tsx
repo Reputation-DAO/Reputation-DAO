@@ -75,18 +75,6 @@ function App() {
             }
           />
 
-          {/* Decay System - All roles can access */}
-          <Route
-            path="/decay"
-            element={
-              <Layout>
-                <ProtectedRoute allowedRoles={['Admin', 'Awarder', 'User']}>
-                  <DecaySystemPage />
-                </ProtectedRoute>
-              </Layout>
-            }
-          />
-
           {/* Award Reputation - Admin and Awarder only */}
           <Route
             path="/award"
@@ -122,6 +110,19 @@ function App() {
               </Layout>
             }
           />
+
+                    {/* Decay System - All roles can access */}
+          <Route
+            path="/decay"
+            element={
+              <Layout>
+                <ProtectedRoute allowedRoles={['Admin', 'Awarder', 'User']}>
+                  <DecaySystemPage />
+                </ProtectedRoute>
+              </Layout>
+            }
+          />
+
 
           {/* View Balances - All roles can access */}
           <Route

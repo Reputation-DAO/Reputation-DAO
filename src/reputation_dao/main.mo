@@ -8,7 +8,6 @@ import Debug "mo:base/Debug";
 import Principal "mo:base/Principal";
 import Trie "mo:base/Trie";
 import Time "mo:base/Time";
-import Timer "mo:base/Timer";
 import Nat "mo:base/Nat";
 import Int "mo:base/Int";
 import Array "mo:base/Array";
@@ -100,23 +99,20 @@ persistent actor ReputationDAO {
 
     // TODO: Set your admin principal aka your plug id here 
 
-    var owner : Principal = Principal.fromText("ofkbl-m6bgx-xlgm3-ko4y6-mh7i4-kp6b4-sojbh-wyy2r-aznnp-gmqtb-xqe"); 
+    var owner : Principal = Principal.fromText("3d34m-ksxgd-46a66-2ibf7-kutsn-jg3vv-2yfjf-anbwh-u4lpl-tqu7d-yae"); 
 
     // --- AUTOMATIC DECAY TIMER ---
-    
-    // Timer for automatic decay processing
-    var decayTimer : ?Timer.TimerId = null;
+
 
     // Automatic decay processing function
     private func processAutomaticDecay() : async () {
         if (not decayConfig.enabled) return;
-        
+
         Debug.print("Processing automatic decay...");
-        
-        // Process decay for all users
+
         var processedUsers = 0;
         var totalDecayed = 0;
-        
+
         for ((user, _) in Trie.iter(balances)) {
             let decayAmount = applyDecayToUser(user);
             if (decayAmount > 0) {
@@ -124,32 +120,35 @@ persistent actor ReputationDAO {
                 totalDecayed += decayAmount;
             };
         };
-        
+
         lastGlobalDecayProcess := now();
         Debug.print("Automatic decay processed " # debug_show(processedUsers) # " users, total decayed: " # debug_show(totalDecayed));
     };
 
-    // Start the automatic decay timer
-    system func timer(_setGlobalTimer : Nat64 -> ()) : async () {
-        if (decayConfig.enabled) {
-            let timerInterval = #seconds(decayConfig.decayInterval);
-            decayTimer := ?Timer.recurringTimer<system>(timerInterval, processAutomaticDecay);
-            Debug.print("Decay timer started with interval: " # debug_show(decayConfig.decayInterval) # " seconds");
+    // Heartbeat throttle: only process when full interval elapsed
+    system func heartbeat() : async () {
+        if (decayConfig.enabled and now() >= (lastGlobalDecayProcess + decayConfig.decayInterval)) {
+            await processAutomaticDecay();
         };
     };
 
-    // Restart decay timer when configuration changes
-    private func restartDecayTimer() : async () {
-        // Cancel existing timer if any
-        switch (decayTimer) {
-            case (?id) Timer.cancelTimer(id);
-            case null {};
-        };
-
+    // On upgrade we just preserve state; no timer IDs to recreate
+    system func postupgrade() {
+        // Force immediate decay check after upgrade by rewinding lastGlobalDecayProcess
         if (decayConfig.enabled) {
-            let timerInterval = #seconds(decayConfig.decayInterval);
-            decayTimer := ?Timer.recurringTimer<system>(timerInterval, processAutomaticDecay);
-            Debug.print("Decay timer restarted with interval: " # debug_show(decayConfig.decayInterval) # " seconds");
+            if (lastGlobalDecayProcess > 0) { lastGlobalDecayProcess := lastGlobalDecayProcess - decayConfig.decayInterval; };
+        };
+    };
+
+    // Restart logic after config changes: set lastGlobalDecayProcess so next heartbeat triggers soon
+    private func restartDecayTimer() : async () {
+        if (decayConfig.enabled) {
+            // Set to an old time to trigger immediate processing on next heartbeat
+            if (lastGlobalDecayProcess > decayConfig.decayInterval) {
+                lastGlobalDecayProcess := lastGlobalDecayProcess - decayConfig.decayInterval;
+            } else {
+                lastGlobalDecayProcess := 0;
+            };
         };
     };
 
