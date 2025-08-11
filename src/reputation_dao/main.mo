@@ -99,7 +99,7 @@ persistent actor ReputationDAO {
 
     // TODO: Set your admin principal aka your plug id here 
 
-    var owner : Principal = Principal.fromText("3d34m-ksxgd-46a66-2ibf7-kutsn-jg3vv-2yfjf-anbwh-u4lpl-tqu7d-yae"); 
+    var owner : Principal = Principal.fromText("ofkbl-m6bgx-xlgm3-ko4y6-mh7i4-kp6b4-sojbh-wyy2r-aznnp-gmqtb-xqe"); 
 
     // --- AUTOMATIC DECAY TIMER ---
 
@@ -275,10 +275,24 @@ persistent actor ReputationDAO {
         // Update balance
         balances := Trie.put<Principal, Nat>(balances, userKey, Principal.equal, newBalance).0;
 
-        // Update user decay info
+        // Update user decay info with precise interval rollover
         let info = initializeUserDecayInfo(user);
+        let currentTime = now();
+        
+        // Calculate how many complete intervals have passed
+        let timeSinceLastDecay = if (currentTime >= info.lastDecayTime) {
+            Nat.sub(currentTime, info.lastDecayTime)
+        } else { 0 };
+        
+        let intervalsElapsed = if (decayConfig.decayInterval > 0) {
+            timeSinceLastDecay / decayConfig.decayInterval
+        } else { 1 };
+        
+        // Roll lastDecayTime forward by complete intervals to prevent drift
+        let newLastDecayTime = info.lastDecayTime + (intervalsElapsed * decayConfig.decayInterval);
+        
         let updatedInfo = {
-            lastDecayTime = now();
+            lastDecayTime = newLastDecayTime;
             registrationTime = info.registrationTime;
             lastActivityTime = info.lastActivityTime;
             totalDecayed = info.totalDecayed + decayAmount;

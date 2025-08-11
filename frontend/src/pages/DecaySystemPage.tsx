@@ -106,17 +106,18 @@ const DecaySystemPage: React.FC = () => {
       sx={{
         minHeight: '100vh',
         backgroundColor: 'hsl(var(--background))',
-        px: { xs: 2, md: 3 },
-        py: { xs: 2, md: 3 },
+        px: { xs: 3, md: 6, lg: 8 },
+        py: { xs: 4, md: 6 },
       }}
     >
       {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+      <Box sx={{ mb: 6 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
           <IconButton
             onClick={handleBack}
             sx={{
-              mr: 2,
+              mr: 3,
+              p: 2,
               color: 'hsl(var(--muted-foreground))',
               '&:hover': {
                 color: 'hsl(var(--foreground))',
@@ -127,17 +128,17 @@ const DecaySystemPage: React.FC = () => {
             <ArrowBackIcon />
           </IconButton>
           <Typography
-            variant="h4"
+            variant="h3"
             sx={{
               color: 'hsl(var(--foreground))',
-              fontWeight: 600,
-              fontSize: { xs: '1.5rem', md: '2rem' },
+              fontWeight: 700,
+              fontSize: { xs: '1.875rem', md: '2.5rem' },
               flex: 1,
             }}
           >
             Reputation Decay System
           </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
             {/* Testing Mode Toggle */}
             <FormControlLabel
               control={
@@ -166,9 +167,12 @@ const DecaySystemPage: React.FC = () => {
             <IconButton
               onClick={handleRefresh}
               sx={{
+                p: 2,
                 color: 'hsl(var(--primary))',
+                backgroundColor: 'hsl(var(--muted))',
                 '&:hover': {
-                  backgroundColor: 'hsl(var(--muted))',
+                  backgroundColor: 'hsl(var(--primary))',
+                  color: 'hsl(var(--primary-foreground))',
                 },
               }}
             >
@@ -177,22 +181,29 @@ const DecaySystemPage: React.FC = () => {
           </Box>
         </Box>
         <Typography
-          variant="body1"
+          variant="h6"
           sx={{
             color: 'hsl(var(--muted-foreground))',
-            fontSize: '0.875rem',
-            ml: 6,
+            fontSize: '1.125rem',
+            fontWeight: 400,
+            ml: 8,
           }}
         >
           Monitor and configure automatic reputation decay to maintain system balance
         </Typography>
       </Box>
 
-      {/* Testing Mode Alert */}
+            {/* Testing Mode Alert */}
       {testingMode && (
         <Alert 
           severity="warning" 
-          sx={{ mb: 3 }}
+          sx={{ 
+            mb: 6,
+            borderRadius: 2,
+            '& .MuiAlert-message': {
+              fontSize: '1rem',
+            },
+          }}
           action={
             <Button
               color="inherit"
@@ -203,7 +214,7 @@ const DecaySystemPage: React.FC = () => {
             </Button>
           }
         >
-          <Typography variant="body2">
+          <Typography variant="body1">
             <strong>Testing Mode Active:</strong> Decay intervals are set to minutes instead of days for real-time testing.
             This should only be used in development environments.
           </Typography>
@@ -212,11 +223,63 @@ const DecaySystemPage: React.FC = () => {
 
       {/* Tabs */}
       <Paper
+        elevation={0}
+        sx={{
+          backgroundColor: 'hsl(var(--card))',
+          border: '1px solid hsl(var(--border))',
+          borderRadius: 3,
+          mb: 6,
+          overflow: 'hidden',
+        }}
+      >
+        <Tabs
+          value={currentTab}
+          onChange={handleTabChange}
+          variant="scrollable"
+          scrollButtons="auto"
+          sx={{
+            px: 3,
+            '& .MuiTab-root': {
+              color: 'hsl(var(--muted-foreground))',
+              fontSize: '1rem',
+              fontWeight: 500,
+              textTransform: 'none',
+              minHeight: 72,
+              py: 3,
+              '&.Mui-selected': {
+                color: 'hsl(var(--primary))',
+                fontWeight: 600,
+              },
+            },
+            '& .MuiTabs-indicator': {
+              backgroundColor: 'hsl(var(--primary))',
+              height: 3,
+            },
+          }}
+        >
+          {tabs.map((tab) => (
+            <Tab
+              key={tab.value}
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  {tab.icon}
+                  <Typography variant="inherit">{tab.label}</Typography>
+                </Box>
+              }
+              value={tab.value}
+            />
+          ))}
+        </Tabs>
+      </Paper>
+
+      {/* Tabs */}
+      <Paper
+        elevation={0}
         sx={{
           backgroundColor: 'hsl(var(--muted))',
           border: '1px solid hsl(var(--border))',
-          borderRadius: 2,
-          mb: 3,
+          borderRadius: 3,
+          mb: 4,
         }}
       >
         <Tabs
@@ -259,15 +322,15 @@ const DecaySystemPage: React.FC = () => {
       <Box>
         {/* Overview Tab */}
         <TabPanel value={currentTab} index={0}>
-          <Stack spacing={3}>
+          <Stack spacing={4}>
             {/* Status Cards */}
             <DecayStatusCard key={`status-${refreshKey}`} />
             
             {/* Main Content Row */}
             <Box 
               sx={{ 
-                display: 'flex', 
-                gap: 3, 
+                display: 'flex',
+                gap: 4,
                 flexDirection: { xs: 'column', lg: 'row' },
               }}
             >
@@ -277,11 +340,12 @@ const DecaySystemPage: React.FC = () => {
                   sx={{
                     backgroundColor: 'hsl(var(--muted))',
                     border: '1px solid hsl(var(--border))',
-                    borderRadius: 2,
+                    borderRadius: 3,
                     height: '100%',
+                    boxShadow: 'var(--shadow-sm)',
                   }}
                 >
-                  <CardContent sx={{ p: 3, height: '100%' }}>
+                  <CardContent sx={{ p: 4, height: '100%' }}>
                     <Typography variant="h6" sx={{ color: 'hsl(var(--foreground))', mb: 3 }}>
                       Recent Decay Activity
                     </Typography>
@@ -293,16 +357,17 @@ const DecaySystemPage: React.FC = () => {
               </Box>
 
               {/* Quick Filters Sidebar */}
-              <Box sx={{ width: { lg: 350 }, flexShrink: 0 }}>
+              <Box sx={{ width: { lg: 400 }, flexShrink: 0 }}>
                 <Card
                   sx={{
                     backgroundColor: 'hsl(var(--muted))',
                     border: '1px solid hsl(var(--border))',
-                    borderRadius: 2,
+                    borderRadius: 3,
                     height: '100%',
+                    boxShadow: 'var(--shadow-sm)',
                   }}
                 >
-                  <CardContent sx={{ p: 3 }}>
+                  <CardContent sx={{ p: 4 }}>
                     <Typography variant="h6" sx={{ color: 'hsl(var(--foreground))', mb: 3 }}>
                       Quick Filters
                     </Typography>
@@ -321,11 +386,11 @@ const DecaySystemPage: React.FC = () => {
 
         {/* History Tab */}
         <TabPanel value={currentTab} index={2}>
-          <Stack spacing={3}>
+          <Stack spacing={4}>
             <Box 
               sx={{ 
-                display: 'flex', 
-                gap: 3, 
+                display: 'flex',
+                gap: 4,
                 flexDirection: { xs: 'column', lg: 'row' },
               }}
             >
@@ -335,10 +400,11 @@ const DecaySystemPage: React.FC = () => {
                   sx={{
                     backgroundColor: 'hsl(var(--muted))',
                     border: '1px solid hsl(var(--border))',
-                    borderRadius: 2,
+                    borderRadius: 3,
+                    boxShadow: 'var(--shadow-sm)',
                   }}
                 >
-                  <CardContent sx={{ p: 3 }}>
+                  <CardContent sx={{ p: 4 }}>
                     <Typography variant="h6" sx={{ color: 'hsl(var(--foreground))', mb: 3 }}>
                       Decay History Chart
                     </Typography>
@@ -350,7 +416,7 @@ const DecaySystemPage: React.FC = () => {
               </Box>
               
               {/* Transaction Filter */}
-              <Box sx={{ width: { lg: 350 }, flexShrink: 0 }}>
+              <Box sx={{ width: { lg: 400 }, flexShrink: 0 }}>
                 <DecayTransactionFilter key={`filter-${refreshKey}`} />
               </Box>
             </Box>

@@ -28,7 +28,7 @@ interface RoleProviderProps {
 const hardcodedRoles: Record<string, { role: UserRole; userName: string }> = {
   // Admin/Owner principals
   'rdmx6-jaaaa-aaaah-qca7a-cai': { role: 'Admin' as UserRole, userName: 'Admin User' },
-  'ofkbl-m6aaa-aaaah-qctzq-cai': { role: 'Admin' as UserRole, userName: 'Admin User' },
+  'ofkbl-m6bgx-xlgm3-ko4y6-mh7i4-kp6b4-sojbh-wyy2r-aznnp-gmqtb-xqe': { role: 'Admin' as UserRole, userName: 'Admin User' },
   // Add more admin principals as needed
   
   // Trusted Awarder principals

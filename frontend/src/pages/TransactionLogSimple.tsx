@@ -20,7 +20,7 @@ import { getPlugActor } from '../components/canister/reputationDao';
 
 interface Transaction {
   id: number;
-  transactionType: { Award: null } | { Revoke: null };
+  transactionType: { Award: null } | { Revoke: null } | { Decay: null };
   from: string;
   to: string;
   amount: number;
@@ -69,12 +69,18 @@ const TransactionLogSimple: React.FC = () => {
     return `${principal.slice(0, 6)}...${principal.slice(-6)}`;
   };
 
-  const getTransactionTypeColor = (type: Transaction['transactionType']): 'success' | 'error' => {
-    return 'Award' in type ? 'success' : 'error';
+  const getTransactionTypeColor = (
+    type: Transaction['transactionType']
+  ): 'success' | 'error' | 'warning' => {
+    if ('Award' in type) return 'success';
+    if ('Revoke' in type) return 'error';
+    return 'warning';
   };
 
   const getTransactionTypeText = (type: Transaction['transactionType']): string => {
-    return 'Award' in type ? 'Award' : 'Revoke';
+    if ('Award' in type) return 'Award';
+    if ('Revoke' in type) return 'Revoke';
+    return 'Decay';
   };
 
   if (loading) {
