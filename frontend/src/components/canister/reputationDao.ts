@@ -95,3 +95,7 @@ export const getCurrentPrincipal = async () => {
   
   return await window.ic.plug.agent.getPrincipal();
 };
+
+
+
+

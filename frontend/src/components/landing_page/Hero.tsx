@@ -9,6 +9,7 @@ export default function Hero() {
     position: 'relative',
     width: '100%',
     py: { xs: 10, md: 14 },
+    height: '500px',
     overflow: 'visible', // allow glow outside
     display: 'flex',
     alignItems: 'center',

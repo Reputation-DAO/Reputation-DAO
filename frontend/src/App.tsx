@@ -15,6 +15,9 @@ import Docs from './pages/Docs';
 import Community from './pages/Community';
 import Blog from './pages/Blog';
 import Auth from './pages/Auth';
+import Test from './pages/test'; 
+import PostDetailPage from './pages/PostDetailPost';
+
 
 function App() {
   return (
@@ -28,6 +31,7 @@ function App() {
             </HomeLayout>
           }
         />
+
         <Route
           path="/Blog"
           element={
@@ -36,6 +40,27 @@ function App() {
             </HomeLayout>
           }
         />
+        <Route
+  path="/posts/:id"
+  element={
+    <HomeLayout>
+      <PostDetailPage />
+    </HomeLayout>
+  }
+/>
+
+{/* to be removed temporary establiashed*/}
+
+        <Route
+          path="/test"
+          element={
+            <HomeLayout>
+              <Test />
+            </HomeLayout>
+          }
+        />
+
+
         <Route
           path="/Docs"
           element={
