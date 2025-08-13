@@ -6,7 +6,7 @@ import { Box, Container, Typography, Paper, Divider } from '@mui/material';
 export default function API() {
   return (
     <Container maxWidth="md" disableGutters>
-      hey api
+      FEATURE STILL IN DEVELOPMENT
     </Container>
   );
 }

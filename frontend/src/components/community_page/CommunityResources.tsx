@@ -1,5 +1,10 @@
 import { Grid, Paper, Typography ,Box} from '@mui/material';
-import { Code2, FileText, HelpCircle, ShieldCheck } from 'lucide-react';
+import GitHubIcon from '@mui/icons-material/GitHub';
+import LightbulbIcon from '@mui/icons-material/Lightbulb';
+import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
+import SlideshowIcon from '@mui/icons-material/Slideshow';
+import SchemaIcon from '@mui/icons-material/Schema';
+import DesignServicesIcon from '@mui/icons-material/DesignServices';
 import { ReactNode } from 'react';
 
 interface LinkItem {
@@ -8,12 +13,37 @@ interface LinkItem {
   href: string;
 }
 
-const linkItems: LinkItem[] = [
-  { icon: <FileText size={26} />, label: 'Docs', href: '/docs' },
-  { icon: <Code2 size={26} />, label: 'GitHub', href: 'https://github.com/Reputation-DAO/Reputaion-DAO' },
-  { icon: <FileText size={26} />, label: 'Blog', href: '/blog' },
-  { icon: <HelpCircle size={26} />, label: 'FAQ', href: '/' },
-  { icon: <ShieldCheck size={26} />, label: 'Core Idea', href: 'https://docs.google.com/document/d/1e03vreMKph3KPX-g8-jlbIAlD8D3PvA8VXPbZNIrT-0/edit?tab=t.0' },
+const linkItems = [
+  {
+    label: 'GitHub',
+    href: 'https://github.com/Reputation-DAO/Reputation-DAO',
+    icon: <GitHubIcon fontSize="medium" />,
+  },
+  {
+    label: 'Core Idea',
+    href: 'https://docs.google.com/document/d/1e03vreMKph3KPX-g8-jlbIAlD8D3PvA8VXPbZNIrT-0/edit?tab=t.0',
+    icon: <LightbulbIcon fontSize="medium" />,
+  },
+  {
+    label: 'Watch Demo',
+    href: 'https://www.youtube.com/watch?v=f5_kVgIzl_E',
+    icon: <PlayCircleOutlineIcon fontSize="medium" />,
+  },
+  {
+    label: 'Presentation',
+    href: 'https://www.canva.com/design/DAGt5PFilsg/SE7k5cKSesAPZNCN7EikaQ/edit',
+    icon: <SlideshowIcon fontSize="medium" />,
+  },
+  {
+    label: 'Complete Flow chart',
+    href: 'https://www.figma.com/board/fWhXwD7MX9wxylm8SumTqr/REPUTAION-DAO-WORKFLOW?t=xV8nwU4sJ0ZQSwEq-0',
+    icon: <SchemaIcon fontSize="medium" />,
+  },
+  {
+    label: 'Figma Link',
+    href: 'https://www.figma.com/design/1Qwqc7fWOyigkncoVoSiPH/REPUTATION-DAO?t=xV8nwU4sJ0ZQSwEq-0',
+    icon: <DesignServicesIcon fontSize="medium" />,
+  },
 ];
 
 export default function CommunityResources(): JSX.Element {

@@ -1,6 +1,13 @@
 import { useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { Container, Typography, Box, CircularProgress, Chip, Stack } from "@mui/material";
+import { 
+  Container, 
+  Typography, 
+  Box, 
+  CircularProgress, 
+  Chip, 
+  Stack 
+} from "@mui/material";
 import { blogActor, type Post } from "../components/canister/blogBackend";
 
 export default function PostDetailPage() {
@@ -14,8 +21,18 @@ export default function PostDetailPage() {
     (async () => {
       try {
         const fetched = await blogActor.getPostById(Number(id));
-        // No .Some or unwrap here, just set fetched directly
-        setPost(fetched ?? null);
+
+        // Unwrap optional array returned from Motoko (?Post)
+        if (Array.isArray(fetched) && fetched.length > 0) {
+          const postObj = {
+            ...fetched[0],
+            // Convert status variant { Published: null } → "Published"
+            status: Object.keys(fetched[0].status)[0] as "Draft" | "Published" | "Archived",
+          };
+          setPost(postObj);
+        } else {
+          setPost(null);
+        }
       } catch (error) {
         console.error("Error fetching post:", error);
         setPost(null);
@@ -43,11 +60,13 @@ export default function PostDetailPage() {
     );
   }
 
+  // Motoko Time.now() is in nanoseconds → convert to ms
   const timestamp = typeof post.date === "number" ? post.date / 1_000_000 : Date.now();
   const dateStr = new Date(timestamp).toLocaleDateString();
 
   return (
     <Container maxWidth="md" sx={{ py: 6 }}>
+      {/* Title */}
       <Typography
         variant="h2"
         fontWeight={900}
@@ -71,10 +90,12 @@ export default function PostDetailPage() {
         {post.title}
       </Typography>
 
+      {/* Date + Author */}
       <Typography variant="subtitle2" color="text.secondary" mb={3} fontWeight={600}>
         {dateStr} · {post.author?.name ?? "Unknown author"}
       </Typography>
 
+      {/* Image */}
       {post.image && (
         <Box
           component="img"
@@ -92,6 +113,7 @@ export default function PostDetailPage() {
         />
       )}
 
+      {/* Content */}
       <Typography
         variant="body1"
         sx={{
@@ -107,14 +129,16 @@ export default function PostDetailPage() {
         {post.content}
       </Typography>
 
+      {/* Meta info */}
       <Stack direction="row" spacing={1} mb={2} flexWrap="wrap">
         <Chip label={`Category: ${post.category}`} color="primary" />
         <Chip label={`Views: ${post.views ?? 0}`} />
-        <Chip label={`Status: ${post.status?.toString() ?? "Unknown"}`} />
+        <Chip label={`Status: ${post.status}`} />
         <Chip label={`Editor’s Pick: ${post.isEditorsPick ? "Yes" : "No"}`} />
         <Chip label={`Featured: ${post.isFeatured ? "Yes" : "No"}`} />
       </Stack>
 
+      {/* Author Avatar */}
       {post.author?.avatar && (
         <Box
           component="img"
