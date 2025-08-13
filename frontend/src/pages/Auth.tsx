@@ -189,19 +189,6 @@ const AuthPage = () => {
 
               <Box display="flex" flexDirection="column" gap={1}>
                 <Button
-                  variant="outlined"
-                  startIcon={<Google />}
-                  fullWidth
-                  sx={{
-                    borderRadius: 'var(--radius)',
-                    textTransform: 'none',
-                    color: 'hsl(var(--foreground))',
-                    borderColor: 'hsl(var(--border))',
-                  }}
-                >
-                  Connect with Google
-                </Button>
-                <Button
                   component={MuiLink}
                   href="/dashboard" // Update this to your desired route
                   variant="outlined"

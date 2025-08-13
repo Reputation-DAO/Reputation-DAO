@@ -1,7 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import HomeLayout from './components/layout/HomePageLayout';
-import { RoleProvider } from './contexts/RoleContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
 import Dashboard from './pages/Dashboard';
@@ -19,8 +18,7 @@ import Auth from './pages/Auth';
 
 function App() {
   return (
-    <RoleProvider>
-      <Router>
+    <Router>
         <Routes>
           {/* Public Routes */}
           <Route
@@ -149,7 +147,6 @@ function App() {
           />
         </Routes>
       </Router>
-    </RoleProvider>
   );
 }
 

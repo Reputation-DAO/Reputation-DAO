@@ -2,8 +2,7 @@ import React from 'react';
 import { Box, CssBaseline, Drawer } from '@mui/material';
 import AppBarHeader from './AppBarHeader';
 import DrawerContent from './DrawerContent';
-import { Connect2ICProvider, client } from '../../connect2ic';
-import { RoleProvider } from '../../RoleContext';
+import { RoleProvider } from '../../contexts/RoleContext';
 const drawerWidth = 220;
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -22,7 +21,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   };
 
   return (
-    <Connect2ICProvider client={client}>
     <RoleProvider>
     <Box sx={{ display: 'flex' }}>
       <CssBaseline />
@@ -73,8 +71,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       </Box>
 
     </Box>
-      </RoleProvider>
-    </Connect2ICProvider>
+    </RoleProvider>
   );
 };
 
