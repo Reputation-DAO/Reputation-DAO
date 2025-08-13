@@ -4,7 +4,6 @@
       "main": "src/reputation_dao/main.mo",
       "type": "motoko",
       "id": "owyeu-jiaaa-aaaam-qdvwq-cai"
- 
     },
     "frontend": {
       "type": "assets",
@@ -16,6 +15,7 @@
       "type": "motoko",
       "main": "src/blog_backend/main.mo",
       "id":"oy2j4-syaaa-aaaam-qdvxq-cai"
+
     }
 
   },

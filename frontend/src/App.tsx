@@ -1,7 +1,7 @@
-
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import HomeLayout from './components/layout/HomePageLayout';
+import { ProtectedRoute } from './components/ProtectedRoute';
 
 
 import Dashboard from './pages/Dashboard';
@@ -10,6 +10,7 @@ import RevokeRep from './pages/RevokeRep';
 import ManageAwarders from './pages/ManageAwarders';
 import ViewBalances from './pages/ViewBalances';
 import TransactionLogSimple from './pages/TransactionLogSimple';
+import DecaySystemPage from './pages/DecaySystemPage';
 import LandingPage from './pages/LandingPage';
 import Docs from './pages/Docs';
 import Community from './pages/Community';
@@ -41,13 +42,13 @@ function App() {
           }
         />
         <Route
-  path="/posts/:id"
-  element={
-    <HomeLayout>
-      <PostDetailPage />
-    </HomeLayout>
-  }
-/>
+          path="/posts/:id"
+          element={
+            <HomeLayout>
+              <PostDetailPage />
+            </HomeLayout>
+          }
+        />
 
 {/* to be removed temporary establiashed*/}
 
@@ -83,60 +84,96 @@ function App() {
             <HomeLayout>
               <Auth />
             </HomeLayout>
-          }
-        />
+            }
+          />
 
-        <Route
-          path="/Dashboard"
-          element={
-            <Layout>
-              <Dashboard />
-            </Layout>
-          }
-        />
+          {/* Protected Routes */}
+          {/* Dashboard - All roles can access */}
+          <Route
+            path="/dashboard"
+            element={
+              <Layout>
+                <ProtectedRoute allowedRoles={['Admin', 'Awarder', 'User']}>
+                  <Dashboard />
+                </ProtectedRoute>
+              </Layout>
+            }
+          />
 
-        <Route
-          path="/award"
-          element={
-            <Layout>
-              <AwardRep />
-            </Layout>
-          }
-        />
-        <Route
-          path="/revoke"
-          element={
-            <Layout>
-              <RevokeRep />
-            </Layout>
-          }
-        />
-        <Route
-          path="/awarders"
-          element={
-            <Layout>
-              <ManageAwarders />
-            </Layout>
-          }
-        />
-        <Route
-          path="/balances"
-          element={
-            <Layout>
-              <ViewBalances />
-            </Layout>
-          }
-        />
-        <Route
-          path="/transactions"
-          element={
-            <Layout>
-              <TransactionLogSimple />
-            </Layout>
-          }
-        />
-      </Routes>
-    </Router>
+          {/* Award Reputation - Admin and Awarder only */}
+          <Route
+            path="/award"
+            element={
+              <Layout>
+                <ProtectedRoute allowedRoles={['Admin', 'Awarder']}>
+                  <AwardRep />
+                </ProtectedRoute>
+              </Layout>
+            }
+          />
+
+          {/* Revoke Reputation - Admin only */}
+          <Route
+            path="/revoke"
+            element={
+              <Layout>
+                <ProtectedRoute allowedRoles={['Admin']}>
+                  <RevokeRep />
+                </ProtectedRoute>
+              </Layout>
+            }
+          />
+
+          {/* Manage Awarders - Admin only */}
+          <Route
+            path="/awarders"
+            element={
+              <Layout>
+                <ProtectedRoute allowedRoles={['Admin']}>
+                  <ManageAwarders />
+                </ProtectedRoute>
+              </Layout>
+            }
+          />
+
+                    {/* Decay System - All roles can access */}
+          <Route
+            path="/decay"
+            element={
+              <Layout>
+                <ProtectedRoute allowedRoles={['Admin', 'Awarder', 'User']}>
+                  <DecaySystemPage />
+                </ProtectedRoute>
+              </Layout>
+            }
+          />
+
+
+          {/* View Balances - All roles can access */}
+          <Route
+            path="/balances"
+            element={
+              <Layout>
+                <ProtectedRoute allowedRoles={['Admin', 'Awarder', 'User']}>
+                  <ViewBalances />
+                </ProtectedRoute>
+              </Layout>
+            }
+          />
+
+          {/* Transaction Log - All roles can access */}
+          <Route
+            path="/transactions"
+            element={
+              <Layout>
+                <ProtectedRoute allowedRoles={['Admin', 'Awarder', 'User']}>
+                  <TransactionLogSimple />
+                </ProtectedRoute>
+              </Layout>
+            }
+          />
+        </Routes>
+      </Router>
   );
 }
 

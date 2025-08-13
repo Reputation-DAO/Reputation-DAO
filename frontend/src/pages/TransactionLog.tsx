@@ -26,7 +26,7 @@ import { Principal } from '@dfinity/principal';
 
 interface BackendTransaction {
   id: bigint;
-  transactionType: { Award: null } | { Revoke: null };
+  transactionType: { Award: null } | { Revoke: null } | { Decay: null };
   from: Principal;
   to: Principal;
   amount: bigint;
@@ -36,7 +36,7 @@ interface BackendTransaction {
 
 interface Transaction {
   id: number;
-  transactionType: { Award: null } | { Revoke: null };
+  transactionType: { Award: null } | { Revoke: null } | { Decay: null };
   from: string;
   to: string;
   amount: number;

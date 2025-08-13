@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Principal } from '@dfinity/principal';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -24,6 +25,7 @@ import {
   Refresh,
   History,
   TrendingUp,
+  EmojiEvents as EmojiEventsIcon,
 } from '@mui/icons-material';
 import {
   AreaChart,
@@ -35,7 +37,8 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { getPlugActor, getCurrentPrincipal } from '../components/canister/reputationDao';
+import { getPlugActor } from '../components/canister/reputationDao';
+import { useRole } from '../contexts/RoleContext';
 
 interface Transaction {
   id: number;
@@ -62,8 +65,8 @@ interface DashboardData {
   balances: Balance[];
   awarders: Awarder[];
   transactionCount: number;
-  currentUser: Principal | null;
-  userRole: 'Admin' | string | 'User';
+  userReputation: number;
+  userTransactions: Transaction[];
 }
 
 interface ChartData {
@@ -73,19 +76,25 @@ interface ChartData {
   net: number;
 }
 
-const Dashboard: React.FC = () => {
+const Dashboard: React.FC = React.memo(() => {
+  const navigate = useNavigate();
+  
+  // Use role context instead of local state
+  const { userName, userRole, currentPrincipal } = useRole();
+  
   const [data, setData] = useState<DashboardData>({
     transactions: [],
     balances: [],
     awarders: [],
     transactionCount: 0,
-    currentUser: null,
-    userRole: 'User',
+    userReputation: 0,
+    userTransactions: [],
   });
   const [chartData, setChartData] = useState<ChartData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(false);
 
   // Format timestamp to relative time
   const formatTime = (timestamp: number | bigint): string => {
@@ -154,7 +163,10 @@ const Dashboard: React.FC = () => {
 
   // Load all dashboard data
   const loadDashboardData = async () => {
+    if (isLoadingData) return; // Prevent multiple simultaneous loads
+    
     try {
+      setIsLoadingData(true);
       setError(null);
       
       const actor = await getPlugActor();
@@ -162,9 +174,6 @@ const Dashboard: React.FC = () => {
         throw new Error('Failed to connect to blockchain');
       }
 
-      // Get current user
-      const currentUser = await getCurrentPrincipal();
-      
       // Fetch all data in parallel
       const [
         transactions,
@@ -203,19 +212,19 @@ const Dashboard: React.FC = () => {
         .sort((a, b) => b.balance - a.balance)
         .slice(0, 10);
 
-      // Determine user role
-      let userRole = 'User';
-      const currentUserText = currentUser.toString();
-      
-      // Check if owner (replace with actual owner principal)
-      if (currentUserText === '3d34m-ksxgd-46a66-2ibf7-kutsn-jg3vv-2yfjf-anbwh-u4lpl-tqu7d-yae') {
-        userRole = 'Admin';
-      } else {
-        // Check if awarder
-        const awarder = awarders.find((a: any) => a.id.toString() === currentUserText);
-        if (awarder) {
-          userRole = awarder.name;
-        }
+      // Calculate user-specific data
+      const currentUserPrincipal = currentPrincipal?.toString();
+      let userReputation = 0;
+      let userTransactions: Transaction[] = [];
+
+      if (currentUserPrincipal) {
+        // Get user's reputation from balance map
+        userReputation = balanceMap.get(currentUserPrincipal) || 0;
+        
+        // Filter transactions that involve the current user
+        userTransactions = transactions.filter((tx: any) => 
+          tx.to.toString() === currentUserPrincipal || tx.from.toString() === currentUserPrincipal
+        );
       }
 
       setData({
@@ -223,12 +232,13 @@ const Dashboard: React.FC = () => {
         balances: balances, // Already sorted and limited
         awarders,
         transactionCount: Number(transactionCount),
-        currentUser,
-        userRole,
+        userReputation,
+        userTransactions: userTransactions.slice(0, 10), // Latest 10 user transactions
       });
 
-      // Process chart data
-      const processedChartData = processChartData(transactions);
+      // Process chart data - use user-specific transactions for regular users
+      const chartTransactions = userRole === 'User' ? userTransactions : transactions;
+      const processedChartData = processChartData(chartTransactions);
       setChartData(processedChartData);
 
     } catch (err) {
@@ -237,16 +247,18 @@ const Dashboard: React.FC = () => {
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setIsLoadingData(false);
     }
   };
 
   // Load data on component mount
   useEffect(() => {
     loadDashboardData();
-  }, []);
+  }, []); // Empty dependency array to run only once
 
   // Refresh data
   const handleRefresh = () => {
+    if (isLoadingData) return; // Prevent refresh while loading
     setRefreshing(true);
     loadDashboardData();
   };
@@ -288,7 +300,7 @@ const Dashboard: React.FC = () => {
               fontSize: { xs: '1.5rem', md: '2rem' },
             }}
           >
-            Welcome, {data.userRole}
+            Welcome, {userName || 'User'}
           </Typography>
           <IconButton
             onClick={handleRefresh}
@@ -327,11 +339,40 @@ const Dashboard: React.FC = () => {
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+              gridTemplateColumns: { xs: '1fr', sm: userRole === 'User' ? '1fr 1fr 1fr' : '1fr 1fr' },
               gap: 2,
               mb: 4,
             }}
           >
+            {/* My Reputation Card - Only for regular users */}
+            {userRole === 'User' && (
+              <Card
+                sx={{
+                  backgroundColor: 'hsl(var(--muted))',
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: 2,
+                }}
+              >
+                <CardContent sx={{ p: 3 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                    <Typography variant="h6" sx={{ color: 'hsl(var(--foreground) / 0.8)', fontSize: '0.875rem', fontWeight: 500 }}>
+                      My Reputation
+                    </Typography>
+                    <EmojiEventsIcon sx={{ color: 'hsl(var(--warning))', fontSize: '20px' }} />
+                  </Box>
+                  <Typography variant="h4" sx={{ color: 'hsl(var(--foreground))', fontWeight: 600, mb: 1 }}>
+                    {data.userReputation}
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <TrendingUp sx={{ color: 'hsl(var(--success))', fontSize: '16px' }} />
+                    <Typography variant="body2" sx={{ color: 'hsl(var(--success))', fontSize: '0.75rem' }}>
+                      Current score
+                    </Typography>
+                  </Box>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Total Transactions Card */}
             <Card
               sx={{
@@ -399,7 +440,7 @@ const Dashboard: React.FC = () => {
             <CardContent sx={{ p: 3 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Typography variant="h6" sx={{ color: 'hsl(var(--foreground))', fontSize: '1rem', fontWeight: 600 }}>
-                  Recent Activity
+                  {userRole === 'User' ? 'My Activity' : 'Recent Activity'}
                 </Typography>
                 <Button
                   variant="outlined"
@@ -418,7 +459,7 @@ const Dashboard: React.FC = () => {
                 </Button>
               </Box>
               <List sx={{ p: 0 }}>
-                {data.transactions.slice(0, 5).map((transaction, index) => (
+                {(userRole === 'User' ? data.userTransactions : data.transactions).slice(0, 5).map((transaction, index) => (
                   <React.Fragment key={transaction.id}>
                     <ListItem sx={{ px: 0, py: 1.5 }}>
                       <ListItemAvatar>
@@ -469,14 +510,14 @@ const Dashboard: React.FC = () => {
                         }}
                       />
                     </ListItem>
-                    {index < Math.min(data.transactions.length, 5) - 1 && (
+                    {index < Math.min((userRole === 'User' ? data.userTransactions : data.transactions).length, 5) - 1 && (
                       <Divider sx={{ borderColor: 'hsl(var(--border))' }} />
                     )}
                   </React.Fragment>
                 ))}
-                {data.transactions.length === 0 && (
+                {(userRole === 'User' ? data.userTransactions : data.transactions).length === 0 && (
                   <Typography sx={{ color: 'hsl(var(--muted-foreground))', textAlign: 'center', py: 2 }}>
-                    No recent activity
+                    {userRole === 'User' ? 'No activity yet' : 'No recent activity'}
                   </Typography>
                 )}
               </List>
@@ -489,11 +530,12 @@ const Dashboard: React.FC = () => {
               backgroundColor: 'hsl(var(--muted))',
               border: '1px solid hsl(var(--border))',
               borderRadius: 2,
+              mb: 3,
             }}
           >
             <CardContent sx={{ p: 3 }}>
               <Typography variant="h6" sx={{ color: 'hsl(var(--foreground))', fontSize: '1rem', fontWeight: 600, mb: 3 }}>
-                7-Day Activity Overview
+                {userRole === 'User' ? 'My 7-Day Activity' : '7-Day Activity Overview'}
               </Typography>
               {chartData.length > 0 ? (
                 <Box sx={{ height: 300 }}>
@@ -512,27 +554,55 @@ const Dashboard: React.FC = () => {
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis 
                         dataKey="date" 
-                        stroke="hsl(var(--muted-foreground))"
-                        fontSize={12}
+                        axisLine={false} 
+                        tickLine={false}
+                        tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
                       />
                       <YAxis 
-                        stroke="hsl(var(--muted-foreground))"
-                        fontSize={12}
+                        axisLine={false} 
+                        tickLine={false}
+                        tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
                       />
-                      <Tooltip 
-                        contentStyle={{
-                          backgroundColor: 'hsl(var(--background))',
-                          border: '1px solid hsl(var(--border))',
-                          borderRadius: '8px',
-                          color: 'hsl(var(--foreground))',
+                      <Tooltip
+                        content={({ active, payload, label }) => {
+                          if (active && payload && payload.length) {
+                            return (
+                              <Box
+                                sx={{
+                                  backgroundColor: 'hsl(var(--background))',
+                                  border: '1px solid hsl(var(--border))',
+                                  borderRadius: 1,
+                                  p: 1.5,
+                                  boxShadow: 2,
+                                }}
+                              >
+                                <Typography variant="body2" sx={{ color: 'hsl(var(--foreground))', fontWeight: 600, mb: 1 }}>
+                                  {label}
+                                </Typography>
+                                {payload.map((entry, index) => (
+                                  <Typography
+                                    key={index}
+                                    variant="body2"
+                                    sx={{ color: entry.color, fontSize: '0.75rem' }}
+                                  >
+                                    {entry.name}: {entry.value}
+                                  </Typography>
+                                ))}
+                              </Box>
+                            );
+                          }
+                          return null;
                         }}
-                        labelStyle={{ color: 'hsl(var(--foreground))' }}
                       />
-                      <Legend />
+                      <Legend
+                        wrapperStyle={{
+                          fontSize: '12px',
+                          color: 'hsl(var(--muted-foreground))',
+                        }}
+                      />
                       <Area
                         type="monotone"
                         dataKey="awards"
-                        stackId="1"
                         stroke="#22c55e"
                         fillOpacity={1}
                         fill="url(#colorAwards)"
@@ -541,7 +611,6 @@ const Dashboard: React.FC = () => {
                       <Area
                         type="monotone"
                         dataKey="revokes"
-                        stackId="2"
                         stroke="#ef4444"
                         fillOpacity={1}
                         fill="url(#colorRevokes)"
@@ -554,11 +623,10 @@ const Dashboard: React.FC = () => {
                 <Box
                   sx={{
                     height: 200,
-                    backgroundColor: 'hsl(var(--background))',
-                    borderRadius: 1,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    color: 'hsl(var(--muted-foreground))',
                     border: '1px solid hsl(var(--border))',
                   }}
                 >
@@ -569,6 +637,39 @@ const Dashboard: React.FC = () => {
               )}
             </CardContent>
           </Card>
+
+          {/* Quick Access Card */}
+          <Card
+            sx={{
+              backgroundColor: 'hsl(var(--muted))',
+              border: '1px solid hsl(var(--border))',
+              borderRadius: 2,
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="h6" sx={{ color: 'hsl(var(--foreground))', fontSize: '1rem', fontWeight: 600, mb: 2 }}>
+                System Features
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'hsl(var(--muted-foreground))', mb: 3 }}>
+                Access advanced system features and monitoring tools
+              </Typography>
+              <Button
+                variant="outlined"
+                onClick={() => navigate('/decay')}
+                sx={{
+                  color: 'hsl(var(--primary))',
+                  borderColor: 'hsl(var(--border))',
+                  '&:hover': {
+                    borderColor: 'hsl(var(--primary))',
+                    backgroundColor: 'hsl(var(--muted))',
+                  },
+                }}
+              >
+                View Decay System
+              </Button>
+            </CardContent>
+          </Card>
+
         </Box>
 
         {/* Right Sidebar */}
@@ -698,6 +799,6 @@ const Dashboard: React.FC = () => {
       </Box>
     </Box>
   );
-};
+});
 
 export default Dashboard;
