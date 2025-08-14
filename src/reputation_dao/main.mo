@@ -99,7 +99,7 @@ persistent actor ReputationDAO {
 
     // TODO: Set your admin principal aka your plug id here 
 
-    var owner : Principal = Principal.fromText("ofkbl-m6bgx-xlgm3-ko4y6-mh7i4-kp6b4-sojbh-wyy2r-aznnp-gmqtb-xqe"); 
+    var owner : Principal = Principal.fromText("gvlvr-wz5ef-7evg7-bphlu-yld24-vgds7-ghcic-do3kl-ecvlh-3mdkp-2ae"); 
 
     // --- AUTOMATIC DECAY TIMER ---
 

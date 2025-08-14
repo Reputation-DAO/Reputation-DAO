@@ -40,7 +40,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   const [isCheckingRole, setIsCheckingRole] = useState(false);
 
   // Owner principal - replace with your actual owner principal
-  const OWNER_PRINCIPAL = 'ofkbl-m6bgx-xlgm3-ko4y6-mh7i4-kp6b4-sojbh-wyy2r-aznnp-gmqtb-xqe';
+  const OWNER_PRINCIPAL = 'gvlvr-wz5ef-7evg7-bphlu-yld24-vgds7-ghcic-do3kl-ecvlh-3mdkp-2ae';
 
   const determineUserRole = async (): Promise<void> => {
     if (isCheckingRole) {

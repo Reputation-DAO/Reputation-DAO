@@ -1,17 +1,17 @@
 import { Box, Paper, Typography, Button } from '@mui/material';
 
-export default function HeroSection(): JSX.Element {
+export default function HeroSection() {
   return (
     <Paper
-  sx={{
-    borderRadius: '0',
-    border: 'none', // remove MUI's outlined border
-    borderBottom: '1px solid hsl(var(--border))',
-    overflow: 'hidden',
-    mb: 0,
-    bgcolor: 'hsl(var(--background))',
-  }}
->
+      sx={{
+        borderRadius: '0',
+        border: 'none', // remove MUI's outlined border
+        borderBottom: '1px solid hsl(var(--border))',
+        overflow: 'hidden',
+        mb: 0,
+        bgcolor: 'hsl(var(--background))',
+      }}
+    >
       <Box
         sx={{
           position: 'relative',

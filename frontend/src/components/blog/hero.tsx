@@ -1,6 +1,7 @@
 import { Box, Paper, Typography, Button } from "@mui/material";
+import type { FC } from "react";
 
-export default function HeroSection(): JSX.Element {
+const HeroSection: FC = () => {
   return (
     <Paper
       elevation={0}
@@ -10,13 +11,12 @@ export default function HeroSection(): JSX.Element {
         borderBottom: "1px solid hsl(var(--border))",
         overflow: "hidden",
         bgcolor: "hsl(var(--background))",
-        borderBottom: '1px solid hsl(var(--border))',
       }}
     >
       <Box
         sx={{
           position: "relative",
-          height: "500px", // responsive height
+          height: "500px",
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
@@ -96,4 +96,6 @@ export default function HeroSection(): JSX.Element {
       </Box>
     </Paper>
   );
-}
+};
+
+export default HeroSection;

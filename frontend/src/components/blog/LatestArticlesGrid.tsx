@@ -1,4 +1,4 @@
-import { Grid, Skeleton, Box } from "@mui/material";
+import { GridLegacy as Grid, Skeleton, Box } from "@mui/material";
 import BlogCard from "./blogCard";
 import type { Post } from "../canister/blogBackend";
 
@@ -11,16 +11,16 @@ export default function LatestArticlesGrid({ loading, posts }: LatestArticlesGri
   return (
     <Box
       sx={{
-        maxWidth: "1400px", // control total width
-        mx: "auto", // center horizontally
-        px: { xs: 2, sm: 3, md: 4 }, // equal padding left/right
+        maxWidth: "1400px",
+        mx: "auto",
+        px: { xs: 2, sm: 3, md: 4 },
       }}
     >
       <Grid
         container
         spacing={4}
         sx={{ mt: 2 }}
-        justifyContent="center" // ensures even spacing
+        justifyContent="center"
       >
         {loading
           ? Array.from({ length: 6 }).map((_, idx) => (

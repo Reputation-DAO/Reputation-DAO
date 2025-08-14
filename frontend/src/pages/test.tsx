@@ -1,5 +1,5 @@
 // src/components/TestBlogBackend.tsx
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { blogActor } from '../components/canister/blogBackend';
 import type { Post } from '../components/canister/blogBackend'; // <== Notice `import type`
 

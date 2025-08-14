@@ -7,7 +7,7 @@ import {
   Divider,
   Paper,
 } from '@mui/material';
-import { Google, CreditCard } from '@mui/icons-material';
+import { CreditCard } from '@mui/icons-material';
 import { styled } from '@mui/system';
 import { Link as MuiLink } from '@mui/material';
 import { useState } from "react";

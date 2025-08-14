@@ -2,10 +2,9 @@ import { useEffect, useState } from "react";
 import {
   Box,
   Container,
-  Grid,
+
   Typography,
-  Skeleton,
-  Divider,
+
   keyframes,
 } from "@mui/material";
 import HeroSection from "../components/blog/hero";
@@ -27,20 +26,21 @@ export default function BlogPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const data = await blogActor.getPosts();
-        const formatted = data.map((p) => ({
-          ...p,
-          status: Object.keys(p.status)[0] as "Draft" | "Published" | "Archived",
-        }));
-        setPosts(formatted);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+ useEffect(() => {
+  (async () => {
+    try {
+      const data = await blogActor.getPosts();
+      const formatted = data.map((p: Post) => ({
+        ...p,
+        status: Object.keys(p.status)[0] as "Draft" | "Published" | "Archived",
+      }));
+      setPosts(formatted);
+    } finally {
+      setLoading(false);
+    }
+  })();
+}, []);
+
 
   const featuredPost = posts.find((p) => p.isFeatured);
   const otherPosts = posts.filter((p) => !p.isFeatured);
