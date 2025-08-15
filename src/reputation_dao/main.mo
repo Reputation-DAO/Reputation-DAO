@@ -13,6 +13,7 @@ import Int "mo:base/Int";
 import Array "mo:base/Array";
 import Buffer "mo:base/Buffer";
 import Iter "mo:base/Iter";
+import Text "mo:base/Text";
 
 
 // Main Reputation DAO actor
@@ -57,24 +58,48 @@ persistent actor ReputationDAO {
         totalDecayed: Nat;       // Total amount decayed over time
     };
 
+    // Multi-Organization Types
+    public type OrgID = Text;
+    
+    public type OrgData = {
+        admin: Principal;
+        trustedAwarders: [(Principal, Text)];
+        userBalances: [(Principal, Nat)];
+        dailyMinted: [(Principal, Nat)];
+        lastMintTimestamp: [(Principal, Nat)];
+        userDecayInfo: [(Principal, UserDecayInfo)];
+        transactionHistory: [Transaction];
+        nextTransactionId: Nat;
+        totalDecayedPoints: Nat;
+        lastGlobalDecayProcess: Nat;
+    };
 
-    // --- Stable State ---
+    public type OrgStats = {
+        admin: Principal; 
+        awarderCount: Nat; 
+        userCount: Nat;
+        totalPoints: Nat;
+        totalTransactions: Nat;
+    };
 
-    // Reputation balances: Principal -> Nat
-    var balances : Trie.Trie<Principal, Nat> = Trie.empty();
 
-    // Trusted awarders: Principal -> () (acts as a set)
-    var trustedAwarders : Trie.Trie<Principal, Text> = Trie.empty();
+    // --- Legacy Stable State - DEPRECATED (use multi-org functions) ---
 
-    // Daily minted amount per awarder: Principal -> Nat
-    var dailyMinted : Trie.Trie<Principal, Nat> = Trie.empty();
+    // Reputation balances: Principal -> Nat (DEPRECATED - use org-specific functions)
+    var _balances : Trie.Trie<Principal, Nat> = Trie.empty();
 
-    // Last mint timestamp per awarder: Principal -> Nat (epoch seconds)
-    var lastMintTimestamp : Trie.Trie<Principal, Nat> = Trie.empty();
+    // Trusted awarders: Principal -> Text (DEPRECATED - use org-specific functions)
+    var _trustedAwarders : Trie.Trie<Principal, Text> = Trie.empty();
 
-    // Transaction log storage
-    var transactionHistory : [Transaction] = [];
-    var nextTransactionId : Nat = 1;
+    // Daily minted amount per awarder: Principal -> Nat (DEPRECATED - use org-specific functions)
+    var _dailyMinted : Trie.Trie<Principal, Nat> = Trie.empty();
+
+    // Last mint timestamp per awarder: Principal -> Nat (DEPRECATED - use org-specific functions) 
+    var _lastMintTimestamp : Trie.Trie<Principal, Nat> = Trie.empty();
+
+    // Transaction log storage (DEPRECATED - use org-specific functions)
+    var _transactionHistory : [Transaction] = [];
+    var _nextTransactionId : Nat = 1;
 
     // --- DECAY SYSTEM STATE ---
     
@@ -101,6 +126,11 @@ persistent actor ReputationDAO {
 
     var owner : Principal = Principal.fromText("ofkbl-m6bgx-xlgm3-ko4y6-mh7i4-kp6b4-sojbh-wyy2r-aznnp-gmqtb-xqe"); 
 
+    // --- MULTI-ORGANIZATION STATE ---
+    
+    // Organizations storage: OrgID -> OrgData
+    var organizations : Trie.Trie<Text, OrgData> = Trie.empty(); 
+
     // --- AUTOMATIC DECAY TIMER ---
 
 
@@ -113,7 +143,7 @@ persistent actor ReputationDAO {
         var processedUsers = 0;
         var totalDecayed = 0;
 
-        for ((user, _) in Trie.iter(balances)) {
+        for ((user, _) in Trie.iter(_balances)) {
             let decayAmount = applyDecayToUser(user);
             if (decayAmount > 0) {
                 processedUsers += 1;
@@ -163,10 +193,82 @@ persistent actor ReputationDAO {
         Int.abs(Time.now() / 1_000_000_000)
     };
 
+    // --- Multi-Organization Helper Functions ---
+    
+    // Helper: Create text key for Trie operations
+    private func textKey(t: Text) : Trie.Key<Text> {
+        { key = t; hash = Text.hash(t) }
+    };
+    
+    // Helper: Validate organization exists
+    private func validateOrgExists(orgId: OrgID) : ?OrgData {
+        Trie.find(organizations, textKey(orgId), Text.equal)
+    };
+    
+    // Helper: Update organization data
+    private func updateOrgData(orgId: OrgID, orgData: OrgData) {
+        organizations := Trie.replace(
+            organizations,
+            textKey(orgId),
+            Text.equal,
+            ?orgData
+        ).0;
+    };
+    
+    // Helper: Check if user is trusted awarder in organization
+    private func isOrgTrustedAwarder(orgData: OrgData, user: Principal) : Bool {
+        Array.find<(Principal, Text)>(
+            orgData.trustedAwarders,
+            func((p, _)) = Principal.equal(p, user)
+        ) != null
+    };
+    
+    // Helper: Get user balance in organization
+    private func getOrgUserBalance(orgData: OrgData, user: Principal) : Nat {
+        switch (Array.find<(Principal, Nat)>(
+            orgData.userBalances,
+            func((p, _)) = Principal.equal(p, user)
+        )) {
+            case (?(_, balance)) { balance };
+            case null { 0 };
+        }
+    };
+    
+    // Helper: Update user balance in organization
+    private func updateOrgUserBalance(orgData: OrgData, user: Principal, newBalance: Nat) : OrgData {
+        let updatedBalances = Array.map<(Principal, Nat), (Principal, Nat)>(
+            orgData.userBalances,
+            func((p, balance)) = if (Principal.equal(p, user)) (p, newBalance) else (p, balance)
+        );
+        
+        // If user not found, add them
+        let finalBalances = if (Array.find<(Principal, Nat)>(
+            orgData.userBalances,
+            func((p, _)) = Principal.equal(p, user)
+        ) == null) {
+            Array.append(updatedBalances, [(user, newBalance)])
+        } else {
+            updatedBalances
+        };
+        
+        {
+            admin = orgData.admin;
+            trustedAwarders = orgData.trustedAwarders;
+            userBalances = finalBalances;
+            dailyMinted = orgData.dailyMinted;
+            lastMintTimestamp = orgData.lastMintTimestamp;
+            userDecayInfo = orgData.userDecayInfo;
+            transactionHistory = orgData.transactionHistory;
+            nextTransactionId = orgData.nextTransactionId;
+            totalDecayedPoints = orgData.totalDecayedPoints;
+            lastGlobalDecayProcess = orgData.lastGlobalDecayProcess;
+        }
+    };
+
     // Helper: Add transaction to log
     private func addTransaction(txType: TransactionType, from: Principal, to: Principal, amount: Nat, reason: ?Text) {
         let transaction : Transaction = {
-            id = nextTransactionId;
+            id = _nextTransactionId;
             transactionType = txType;
             from = from;
             to = to;
@@ -175,10 +277,10 @@ persistent actor ReputationDAO {
             reason = reason;
         };
         
-        let buffer = Buffer.fromArray<Transaction>(transactionHistory);
+        let buffer = Buffer.fromArray<Transaction>(_transactionHistory);
         buffer.add(transaction);
-        transactionHistory := Buffer.toArray(buffer);
-        nextTransactionId += 1;
+        _transactionHistory := Buffer.toArray(buffer);
+        _nextTransactionId += 1;
     };
 
     // --- DECAY SYSTEM FUNCTIONS ---
@@ -256,7 +358,7 @@ persistent actor ReputationDAO {
     // Helper: Apply decay to a user
     private func applyDecayToUser(user: Principal) : Nat {
         let userKey = { key = user; hash = Principal.hash(user) };
-        let currentBalance = switch (Trie.get<Principal, Nat>(balances, userKey, Principal.equal)) {
+        let currentBalance = switch (Trie.get<Principal, Nat>(_balances, userKey, Principal.equal)) {
             case (?b) b;
             case null 0;
         };
@@ -273,7 +375,7 @@ persistent actor ReputationDAO {
         };
         
         // Update balance
-        balances := Trie.put<Principal, Nat>(balances, userKey, Principal.equal, newBalance).0;
+        _balances := Trie.put<Principal, Nat>(_balances, userKey, Principal.equal, newBalance).0;
 
         // Update user decay info with precise interval rollover
         let info = initializeUserDecayInfo(user);
@@ -310,153 +412,327 @@ persistent actor ReputationDAO {
         decayAmount
     };
 
-    // --- 1️⃣ awardRep: Trusted awarder mints rep to another user ---
-public shared({caller}) func awardRep(to: Principal, amount: Nat, reason: ?Text) : async Text {
+    // --- 1️⃣ awardRep: Award reputation in an organization ---
+public shared({caller}) func awardRep(orgId: OrgID, to: Principal, amount: Nat, reason: ?Text) : async Text {
     Debug.print("awardRep called by " # Principal.toText(caller));
-
-    let callerKey = { key = caller; hash = Principal.hash(caller) };
-    let toKey = { key = to; hash = Principal.hash(to) };
-
-    // Check: caller is trusted awarder or owner
-    let isOwner = Principal.equal(caller, owner);
-    let isAwarder = switch (Trie.get<Principal, Text>(trustedAwarders, callerKey, Principal.equal)) { case null false; case _ true; };
-    if (not isOwner and not isAwarder) {
-        return "Error: Not a trusted awarder or owner. Caller: " # Principal.toText(caller);
-    };
-
-    // Check: cannot mint to self
-    if (Principal.equal(caller, to)) {
-        return "Error: Cannot award rep to yourself.";
-    };
-
-    // Apply decay to recipient before awarding (to ensure accurate balance)
-    ignore applyDecayToUser(to);
-
-    // Check: daily mint cap (assume 100 per day for demo)
-    let cap = 100;
-    let currentTime = now();
-    let lastTime = switch (Trie.get<Principal, Nat>(lastMintTimestamp, callerKey, Principal.equal)) { case (?t) t; case null 0; };
-    var mintedToday = switch (Trie.get<Principal, Nat>(dailyMinted, callerKey, Principal.equal)) { case (?amt) amt; case null 0; };
-
-    // Reset daily mint if 24h passed
-    if (Nat.sub(currentTime, lastTime) >= 86400) {
-        dailyMinted := Trie.put<Principal, Nat>(dailyMinted, callerKey, Principal.equal, 0).0;
-        mintedToday := 0;
-    };
-
-    if (mintedToday + amount > cap) {
-        return "Error: Daily mint cap exceeded.";
-    };
-
-    // Update state
-    dailyMinted := Trie.put<Principal, Nat>(dailyMinted, callerKey, Principal.equal, mintedToday + amount).0;
-    lastMintTimestamp := Trie.put<Principal, Nat>(lastMintTimestamp, callerKey, Principal.equal, currentTime).0;
-    let prev = switch (Trie.get<Principal, Nat>(balances, toKey, Principal.equal)) { case (?b) b; case null 0; };
-    balances := Trie.put<Principal, Nat>(balances, toKey, Principal.equal, prev + amount).0;
-
-    // Initialize or update user decay info
-    ignore initializeUserDecayInfo(to);
-
-    // Log the transaction
-    addTransaction(#Award, caller, to, amount, reason);
-
-    Debug.print("Rep awarded: " # Nat.toText(amount) # " to " # Principal.toText(to));
-    return "Success: Rep awarded.";
-};
     
-    // --- 2️⃣ revokeRep: Admin can slash (burn) rep from any user ---
-public shared({caller}) func revokeRep(from: Principal, amount: Nat, reason: ?Text) : async Text {
-    if (not Principal.equal(caller, owner)) {
-        return "Error: Only owner can revoke rep.";
+    if (amount == 0) {
+        return "Error: Amount must be greater than 0";
     };
-    let fromKey = { key = from; hash = Principal.hash(from) };
-    let prev = switch (Trie.get<Principal, Nat>(balances, fromKey, Principal.equal)) { case (?b) b; case null 0; };
-    if (prev < amount) {
-        return "Error: Not enough rep to revoke.";
-    };
-    balances := Trie.put<Principal, Nat>(balances, fromKey, Principal.equal, prev - amount).0;
-    
-    // Log the transaction
-    addTransaction(#Revoke, caller, from, amount, reason);
-    
-    Debug.print("Rep revoked: " # Nat.toText(amount) # " from " # Principal.toText(from));
-    return "Success: Rep revoked.";
-};
 
-    // --- 3️⃣ addTrustedAwarder: Owner can add a trusted awarder ---
-public shared({caller}) func addTrustedAwarder(p: Principal, name: Text) : async Text {
-    if (not Principal.equal(caller, owner)) {
-        return "Error: Only owner can add awarders.";
-    };
-    let pKey = { key = p; hash = Principal.hash(p) };
-    trustedAwarders := Trie.put<Principal, Text>(trustedAwarders, pKey, Principal.equal, name).0;
-    Debug.print("Trusted awarder added: " # Principal.toText(p) # " with name: " # name);
-    return "Success: Awarder added.";
-};
+    switch (validateOrgExists(orgId)) {
+        case null { return "Error: Organization does not exist" };
+        case (?orgData) {
+            // Check if caller is a trusted awarder
+            if (not isOrgTrustedAwarder(orgData, caller)) {
+                return "Error: Caller is not a trusted awarder";
+            };
 
-    // --- 4️⃣ removeTrustedAwarder: Owner can remove a trusted awarder ---
-public shared({caller}) func removeTrustedAwarder(p: Principal) : async Text {
-    if (not Principal.equal(caller, owner)) {
-        return "Error: Only owner can remove awarders.";
-    };
-    let pKey = { key = p; hash = Principal.hash(p) };
-    trustedAwarders := Trie.remove<Principal, Text>(trustedAwarders, pKey, Principal.equal).0;
-    Debug.print("Trusted awarder removed: " # Principal.toText(p));
-    return "Success: Awarder removed.";
-};
+            // Check: cannot mint to self
+            if (Principal.equal(caller, to)) {
+                return "Error: Cannot award rep to yourself.";
+            };
 
-    // --- 5️⃣ getBalance: Query any user's rep (with decay applied) ---
-    public query func getBalance(p: Principal) : async Nat {
-        let pKey = { key = p; hash = Principal.hash(p) };
-        let rawBalance = switch (Trie.get<Principal, Nat>(balances, pKey, Principal.equal)) {
-            case (?b) b;
-            case null 0;
+            // Check daily mint limit
+            let currentTime = now();
+            let dailyLimit: Nat = 100;
+            
+            let lastMintTime = switch (Array.find<(Principal, Nat)>(
+                orgData.lastMintTimestamp,
+                func((p, _)) = Principal.equal(p, caller)
+            )) {
+                case (?(_, time)) { time };
+                case null { 0 };
+            };
+            
+            let dailyMintedAmount = if (currentTime >= lastMintTime + 86400 or lastMintTime == 0) { // 24 hours
+                0
+            } else {
+                switch (Array.find<(Principal, Nat)>(
+                    orgData.dailyMinted,
+                    func((p, _)) = Principal.equal(p, caller)
+                )) {
+                    case (?(_, minted)) { minted };
+                    case null { 0 };
+                }
+            };
+
+            if (dailyMintedAmount + amount > dailyLimit) {
+                return "Error: Daily mint cap exceeded";
+            };
+
+            // Update user balance
+            let currentBalance = getOrgUserBalance(orgData, to);
+            let updatedOrgData = updateOrgUserBalance(orgData, to, currentBalance + amount);
+            
+            // Update daily minted tracking
+            let updatedDailyMinted = Array.map<(Principal, Nat), (Principal, Nat)>(
+                updatedOrgData.dailyMinted,
+                func((p, minted)) = if (Principal.equal(p, caller)) (p, dailyMintedAmount + amount) else (p, minted)
+            );
+            
+            let finalDailyMinted = if (Array.find<(Principal, Nat)>(
+                updatedOrgData.dailyMinted,
+                func((p, _)) = Principal.equal(p, caller)
+            ) == null) {
+                Array.append(updatedDailyMinted, [(caller, amount)])
+            } else {
+                updatedDailyMinted
+            };
+            
+            // Update last mint timestamp
+            let updatedLastMintTime = Array.map<(Principal, Nat), (Principal, Nat)>(
+                updatedOrgData.lastMintTimestamp,
+                func((p, time)) = if (Principal.equal(p, caller)) (p, currentTime) else (p, time)
+            );
+            
+            let finalLastMintTime = if (Array.find<(Principal, Nat)>(
+                updatedOrgData.lastMintTimestamp,
+                func((p, _)) = Principal.equal(p, caller)
+            ) == null) {
+                Array.append(updatedLastMintTime, [(caller, currentTime)])
+            } else {
+                updatedLastMintTime
+            };
+            
+            // Create transaction record
+            let transaction: Transaction = {
+                id = updatedOrgData.nextTransactionId;
+                transactionType = #Award;
+                from = caller;
+                to = to;
+                amount = amount;
+                timestamp = currentTime;
+                reason = reason;
+            };
+            
+            let finalOrgData = {
+                admin = updatedOrgData.admin;
+                trustedAwarders = updatedOrgData.trustedAwarders;
+                userBalances = updatedOrgData.userBalances;
+                dailyMinted = finalDailyMinted;
+                lastMintTimestamp = finalLastMintTime;
+                userDecayInfo = updatedOrgData.userDecayInfo;
+                transactionHistory = Array.append(updatedOrgData.transactionHistory, [transaction]);
+                nextTransactionId = updatedOrgData.nextTransactionId + 1;
+                totalDecayedPoints = updatedOrgData.totalDecayedPoints;
+                lastGlobalDecayProcess = updatedOrgData.lastGlobalDecayProcess;
+            };
+            
+            updateOrgData(orgId, finalOrgData);
+            Debug.print("Rep awarded: " # Nat.toText(amount) # " to " # Principal.toText(to));
+            return "Success: " # Nat.toText(amount) # " reputation points awarded to " # Principal.toText(to) # "."
         };
-        
-        // For query functions, we can't modify state, so we calculate decay without applying it
-        let decayAmount = calculateDecayAmount(p, rawBalance);
-        let currentBalance = if (rawBalance >= decayAmount) {
-            Nat.sub(rawBalance, decayAmount)
-        } else {
-            0
+    }
+};
+    
+    // --- 2️⃣ revokeRep: Revoke reputation from a user in an organization (admin only) ---
+public shared({caller}) func revokeRep(orgId: OrgID, from: Principal, amount: Nat, reason: ?Text) : async Text {
+    if (amount == 0) {
+        return "Error: Amount must be greater than 0";
+    };
+
+    switch (validateOrgExists(orgId)) {
+        case null { return "Error: Organization does not exist" };
+        case (?orgData) {
+            // Only admin can revoke reputation
+            if (not Principal.equal(caller, orgData.admin)) {
+                return "Error: Only admin can revoke reputation";
+            };
+
+            let currentBalance = getOrgUserBalance(orgData, from);
+            let newBalance = if (currentBalance >= amount) {
+                Nat.sub(currentBalance, amount)
+            } else {
+                0
+            };
+
+            let updatedOrgData = updateOrgUserBalance(orgData, from, newBalance);
+            
+            // Create transaction record
+            let transaction: Transaction = {
+                id = updatedOrgData.nextTransactionId;
+                transactionType = #Revoke;
+                from = caller;
+                to = from;
+                amount = amount;
+                timestamp = now();
+                reason = reason;
+            };
+            
+            let finalOrgData = {
+                admin = updatedOrgData.admin;
+                trustedAwarders = updatedOrgData.trustedAwarders;
+                userBalances = updatedOrgData.userBalances;
+                dailyMinted = updatedOrgData.dailyMinted;
+                lastMintTimestamp = updatedOrgData.lastMintTimestamp;
+                userDecayInfo = updatedOrgData.userDecayInfo;
+                transactionHistory = Array.append(updatedOrgData.transactionHistory, [transaction]);
+                nextTransactionId = updatedOrgData.nextTransactionId + 1;
+                totalDecayedPoints = updatedOrgData.totalDecayedPoints;
+                lastGlobalDecayProcess = updatedOrgData.lastGlobalDecayProcess;
+            };
+            
+            updateOrgData(orgId, finalOrgData);
+            Debug.print("Rep revoked: " # Nat.toText(amount) # " from " # Principal.toText(from));
+            return "Success: " # Nat.toText(amount) # " reputation points revoked from " # Principal.toText(from) # "."
         };
-        
-        currentBalance
+    }
+};
+
+
+    // --- 3️⃣ addTrustedAwarder: Add a trusted awarder to an organization (admin only) ---
+public shared({caller}) func addTrustedAwarder(orgId: OrgID, p: Principal, name: Text) : async Text {
+    switch (validateOrgExists(orgId)) {
+        case null { return "Error: Organization does not exist" };
+        case (?orgData) {
+            // Only admin can add trusted awarders
+            if (not Principal.equal(caller, orgData.admin)) {
+                return "Error: Only admin can add trusted awarders";
+            };
+
+            // Check if awarder already exists
+            let awarderExists = Array.find<(Principal, Text)>(orgData.trustedAwarders, func (a: (Principal, Text)) : Bool {
+                Principal.equal(a.0, p)
+            });
+
+            switch (awarderExists) {
+                case (?_) { return "Error: Awarder already exists for this organization" };
+                case null {
+                    let newAwarder: (Principal, Text) = (p, name);
+                    
+                    let updatedOrgData = {
+                        admin = orgData.admin;
+                        trustedAwarders = Array.append(orgData.trustedAwarders, [newAwarder]);
+                        userBalances = orgData.userBalances;
+                        dailyMinted = orgData.dailyMinted;
+                        lastMintTimestamp = orgData.lastMintTimestamp;
+                        userDecayInfo = orgData.userDecayInfo;
+                        transactionHistory = orgData.transactionHistory;
+                        nextTransactionId = orgData.nextTransactionId;
+                        totalDecayedPoints = orgData.totalDecayedPoints;
+                        lastGlobalDecayProcess = orgData.lastGlobalDecayProcess;
+                    };
+                    
+                    updateOrgData(orgId, updatedOrgData);
+                    Debug.print("Trusted awarder added: " # Principal.toText(p) # " with name: " # name # " to org: " # orgId);
+                    return "Success: Awarder added to organization " # orgId;
+                };
+            };
+        };
+    };
+};
+
+    // --- 4️⃣ removeTrustedAwarder: Remove a trusted awarder from an organization (admin only) ---
+public shared({caller}) func removeTrustedAwarder(orgId: OrgID, p: Principal) : async Text {
+    switch (validateOrgExists(orgId)) {
+        case null { return "Error: Organization does not exist" };
+        case (?orgData) {
+            // Only admin can remove trusted awarders
+            if (not Principal.equal(caller, orgData.admin)) {
+                return "Error: Only admin can remove trusted awarders";
+            };
+
+            // Find and remove the awarder
+            let filteredAwarders = Array.filter<(Principal, Text)>(orgData.trustedAwarders, func (a: (Principal, Text)) : Bool {
+                not Principal.equal(a.0, p)
+            });
+
+            // Check if awarder was actually removed
+            if (Array.size(filteredAwarders) == Array.size(orgData.trustedAwarders)) {
+                return "Error: Awarder not found in this organization";
+            };
+            
+            let updatedOrgData = {
+                admin = orgData.admin;
+                trustedAwarders = filteredAwarders;
+                userBalances = orgData.userBalances;
+                dailyMinted = orgData.dailyMinted;
+                lastMintTimestamp = orgData.lastMintTimestamp;
+                userDecayInfo = orgData.userDecayInfo;
+                transactionHistory = orgData.transactionHistory;
+                nextTransactionId = orgData.nextTransactionId;
+                totalDecayedPoints = orgData.totalDecayedPoints;
+                lastGlobalDecayProcess = orgData.lastGlobalDecayProcess;
+            };
+            
+            updateOrgData(orgId, updatedOrgData);
+            Debug.print("Trusted awarder removed: " # Principal.toText(p) # " from org: " # orgId);
+            return "Success: Awarder removed from organization " # orgId;
+        };
+    };
+};
+
+    // --- 5️⃣ getBalance: Query user's reputation balance in an organization (with decay applied) ---
+    public query func getBalance(orgId: OrgID, p: Principal) : async ?Nat {
+        switch (validateOrgExists(orgId)) {
+            case null { null };
+            case (?orgData) {
+                let currentBalance = getOrgUserBalance(orgData, p);
+                ?currentBalance
+            };
+        };
     };
 
-    // --- 6️⃣ getTransactionHistory: Get all transactions ---
-    public query func getTransactionHistory() : async [Transaction] {
-        transactionHistory
+    // --- 6️⃣ getTransactionHistory: Get all transactions for an organization ---
+    public query func getTransactionHistory(orgId: OrgID) : async ?[Transaction] {
+        switch (validateOrgExists(orgId)) {
+            case null { null };
+            case (?orgData) { 
+                ?orgData.transactionHistory 
+            };
+        };
     };
 
-    // --- 7️⃣ getTransactionsByUser: Get transactions for a specific user ---
-    public query func getTransactionsByUser(user: Principal) : async [Transaction] {
-        Array.filter<Transaction>(transactionHistory, func(tx: Transaction) : Bool {
-            Principal.equal(tx.from, user) or Principal.equal(tx.to, user)
-        })
+    // --- 7️⃣ getTransactionsByUser: Get transactions for a specific user in an organization ---
+    public query func getTransactionsByUser(orgId: OrgID, user: Principal) : async ?[Transaction] {
+        switch (validateOrgExists(orgId)) {
+            case null { null };
+            case (?orgData) {
+                let userTransactions = Array.filter<Transaction>(orgData.transactionHistory, func(tx: Transaction) : Bool {
+                    Principal.equal(tx.from, user) or Principal.equal(tx.to, user)
+                });
+                ?userTransactions
+            };
+        };
     };
 
-    // --- 8️⃣ getTransactionById: Get a specific transaction by ID ---
-    public query func getTransactionById(id: Nat) : async ?Transaction {
-        Array.find<Transaction>(transactionHistory, func(tx: Transaction) : Bool {
-            tx.id == id
-        })
+    // --- 8️⃣ getTransactionById: Get a specific transaction by ID in an organization ---
+    public query func getTransactionById(orgId: OrgID, id: Nat) : async ?Transaction {
+        switch (validateOrgExists(orgId)) {
+            case null { null };
+            case (?orgData) {
+                Array.find<Transaction>(orgData.transactionHistory, func(tx: Transaction) : Bool {
+                    tx.id == id
+                })
+            };
+        };
     };
 
-    // --- 9️⃣ getTransactionCount: Get total number of transactions ---
-    public query func getTransactionCount() : async Nat {
-        transactionHistory.size()
+    // --- 9️⃣ getTransactionCount: Get total number of transactions for an organization ---
+    public query func getTransactionCount(orgId: OrgID) : async ?Nat {
+        switch (validateOrgExists(orgId)) {
+            case null { null };
+            case (?orgData) { 
+                ?orgData.transactionHistory.size()
+            };
+        };
     };
 
-    // basically to get already registered awarders
-    public query func getTrustedAwarders() : async [Awarder] {
-      let entries = Iter.toArray(Trie.iter(trustedAwarders));
-      Array.map<(Principal, Text), Awarder>(
-        entries,
-        func((p: Principal, name: Text)) : Awarder {
-          { id = p; name = name }
-        }
-      )
+    // basically to get already registered awarders for an organization
+    public query func getTrustedAwarders(orgId: OrgID) : async ?[Awarder] {
+        switch (validateOrgExists(orgId)) {
+            case null { null };
+            case (?orgData) {
+                let awarders = Array.map<(Principal, Text), Awarder>(
+                    orgData.trustedAwarders,
+                    func((p: Principal, name: Text)) : Awarder {
+                        { id = p; name = name }
+                    }
+                );
+                ?awarders
+            };
+        };
     };
 
     // --- DECAY SYSTEM PUBLIC FUNCTIONS ---
@@ -496,7 +772,7 @@ public shared({caller}) func removeTrustedAwarder(p: Principal) : async Text {
     // 1️⃣2️⃣ Get raw balance (before decay calculation)
     public query func getRawBalance(p: Principal) : async Nat {
         let pKey = { key = p; hash = Principal.hash(p) };
-        switch (Trie.get<Principal, Nat>(balances, pKey, Principal.equal)) {
+        switch (Trie.get<Principal, Nat>(_balances, pKey, Principal.equal)) {
             case (?b) b;
             case null 0;
         }
@@ -505,7 +781,7 @@ public shared({caller}) func removeTrustedAwarder(p: Principal) : async Text {
     // 1️⃣3️⃣ Preview decay amount for a user
     public query func previewDecayAmount(p: Principal) : async Nat {
         let pKey = { key = p; hash = Principal.hash(p) };
-        let currentBalance = switch (Trie.get<Principal, Nat>(balances, pKey, Principal.equal)) {
+        let currentBalance = switch (Trie.get<Principal, Nat>(_balances, pKey, Principal.equal)) {
             case (?b) b;
             case null 0;
         };
@@ -532,13 +808,321 @@ public shared({caller}) func removeTrustedAwarder(p: Principal) : async Text {
         return "Success: Applied " # Nat.toText(decayAmount) # " points decay to user.";
     };
 
+    // --- MULTI-ORGANIZATION PUBLIC FUNCTIONS ---
+
+    /// Register a new organization
+    public shared(msg) func registerOrg(orgId: OrgID) : async Text {
+        // Check if org already exists
+        switch (validateOrgExists(orgId)) {
+            case (?_) { return "Error: Organization already exists" };
+            case null { };
+        };
+
+        let caller = msg.caller;
+        
+        // Create new organization data
+        let orgData: OrgData = {
+            admin = caller;
+            trustedAwarders = [(caller, "Admin")]; // Admin is also a trusted awarder by default
+            userBalances = [];
+            dailyMinted = [];
+            lastMintTimestamp = [];
+            userDecayInfo = [];
+            transactionHistory = [];
+            nextTransactionId = 1;
+            totalDecayedPoints = 0;
+            lastGlobalDecayProcess = 0;
+        };
+
+        updateOrgData(orgId, orgData);
+        "Success: Organization registered successfully"
+    };
+
+    /// Add a trusted awarder (only admin can call this)
+    public shared(msg) func addOrgTrustedAwarder(orgId: OrgID, awarder: Principal, name: Text) : async Text {
+        let caller = msg.caller;
+        
+        switch (validateOrgExists(orgId)) {
+            case null { return "Error: Organization does not exist" };
+            case (?orgData) {
+                // Only admin can add trusted awarders
+                if (not Principal.equal(caller, orgData.admin)) {
+                    return "Error: Only admin can add trusted awarders";
+                };
+                
+                // Check if already exists
+                if (isOrgTrustedAwarder(orgData, awarder)) {
+                    return "Error: User is already a trusted awarder";
+                };
+                
+                let updatedOrgData = {
+                    admin = orgData.admin;
+                    trustedAwarders = Array.append(orgData.trustedAwarders, [(awarder, name)]);
+                    userBalances = orgData.userBalances;
+                    dailyMinted = orgData.dailyMinted;
+                    lastMintTimestamp = orgData.lastMintTimestamp;
+                    userDecayInfo = orgData.userDecayInfo;
+                    transactionHistory = orgData.transactionHistory;
+                    nextTransactionId = orgData.nextTransactionId;
+                    totalDecayedPoints = orgData.totalDecayedPoints;
+                    lastGlobalDecayProcess = orgData.lastGlobalDecayProcess;
+                };
+                
+                updateOrgData(orgId, updatedOrgData);
+                "Success: Trusted awarder added successfully"
+            };
+        }
+    };
+
+    /// Award reputation to a user in an organization
+    public shared(msg) func awardOrgRep(orgId: OrgID, to: Principal, amount: Nat, reason: ?Text) : async Text {
+        let caller = msg.caller;
+        
+        if (amount == 0) {
+            return "Error: Amount must be greater than 0";
+        };
+
+        switch (validateOrgExists(orgId)) {
+            case null { return "Error: Organization does not exist" };
+            case (?orgData) {
+                // Check if caller is a trusted awarder
+                if (not isOrgTrustedAwarder(orgData, caller)) {
+                    return "Error: Caller is not a trusted awarder";
+                };
+
+                // Check daily mint limit (reusing existing daily limit of 50)
+                let currentTime = now();
+                let dailyLimit: Nat = 50;
+                
+                let lastMintTime = switch (Array.find<(Principal, Nat)>(
+                    orgData.lastMintTimestamp,
+                    func((p, _)) = Principal.equal(p, caller)
+                )) {
+                    case (?(_, time)) { time };
+                    case null { 0 };
+                };
+                
+                let dailyMintedAmount = if (currentTime >= lastMintTime + 86400 or lastMintTime == 0) { // 24 hours
+                    0
+                } else {
+                    switch (Array.find<(Principal, Nat)>(
+                        orgData.dailyMinted,
+                        func((p, _)) = Principal.equal(p, caller)
+                    )) {
+                        case (?(_, minted)) { minted };
+                        case null { 0 };
+                    }
+                };
+
+                if (dailyMintedAmount + amount > dailyLimit) {
+                    return "Error: Daily mint cap exceeded";
+                };
+
+                // Update user balance
+                let currentBalance = getOrgUserBalance(orgData, to);
+                let updatedOrgData = updateOrgUserBalance(orgData, to, currentBalance + amount);
+                
+                // Update daily minted tracking
+                let updatedDailyMinted = Array.map<(Principal, Nat), (Principal, Nat)>(
+                    updatedOrgData.dailyMinted,
+                    func((p, minted)) = if (Principal.equal(p, caller)) (p, dailyMintedAmount + amount) else (p, minted)
+                );
+                
+                let finalDailyMinted = if (Array.find<(Principal, Nat)>(
+                    updatedOrgData.dailyMinted,
+                    func((p, _)) = Principal.equal(p, caller)
+                ) == null) {
+                    Array.append(updatedDailyMinted, [(caller, amount)])
+                } else {
+                    updatedDailyMinted
+                };
+                
+                // Update last mint timestamp
+                let updatedLastMintTime = Array.map<(Principal, Nat), (Principal, Nat)>(
+                    updatedOrgData.lastMintTimestamp,
+                    func((p, time)) = if (Principal.equal(p, caller)) (p, currentTime) else (p, time)
+                );
+                
+                let finalLastMintTime = if (Array.find<(Principal, Nat)>(
+                    updatedOrgData.lastMintTimestamp,
+                    func((p, _)) = Principal.equal(p, caller)
+                ) == null) {
+                    Array.append(updatedLastMintTime, [(caller, currentTime)])
+                } else {
+                    updatedLastMintTime
+                };
+                
+                // Create transaction record
+                let transaction: Transaction = {
+                    id = updatedOrgData.nextTransactionId;
+                    transactionType = #Award;
+                    from = caller;
+                    to = to;
+                    amount = amount;
+                    timestamp = currentTime;
+                    reason = reason;
+                };
+                
+                let finalOrgData = {
+                    admin = updatedOrgData.admin;
+                    trustedAwarders = updatedOrgData.trustedAwarders;
+                    userBalances = updatedOrgData.userBalances;
+                    dailyMinted = finalDailyMinted;
+                    lastMintTimestamp = finalLastMintTime;
+                    userDecayInfo = updatedOrgData.userDecayInfo;
+                    transactionHistory = Array.append(updatedOrgData.transactionHistory, [transaction]);
+                    nextTransactionId = updatedOrgData.nextTransactionId + 1;
+                    totalDecayedPoints = updatedOrgData.totalDecayedPoints;
+                    lastGlobalDecayProcess = updatedOrgData.lastGlobalDecayProcess;
+                };
+                
+                updateOrgData(orgId, finalOrgData);
+                "Success: Reputation awarded successfully"
+            };
+        }
+    };
+
+    /// Revoke reputation from a user in an organization (only admin)
+    public shared(msg) func revokeOrgRep(orgId: OrgID, from: Principal, amount: Nat, reason: ?Text) : async Text {
+        let caller = msg.caller;
+        
+        if (amount == 0) {
+            return "Error: Amount must be greater than 0";
+        };
+
+        switch (validateOrgExists(orgId)) {
+            case null { return "Error: Organization does not exist" };
+            case (?orgData) {
+                // Only admin can revoke reputation
+                if (not Principal.equal(caller, orgData.admin)) {
+                    return "Error: Only admin can revoke reputation";
+                };
+
+                let currentBalance = getOrgUserBalance(orgData, from);
+                let newBalance = if (currentBalance >= amount) {
+                    Nat.sub(currentBalance, amount)
+                } else {
+                    0
+                };
+
+                let updatedOrgData = updateOrgUserBalance(orgData, from, newBalance);
+                
+                // Create transaction record
+                let transaction: Transaction = {
+                    id = updatedOrgData.nextTransactionId;
+                    transactionType = #Revoke;
+                    from = caller;
+                    to = from;
+                    amount = amount;
+                    timestamp = now();
+                    reason = reason;
+                };
+                
+                let finalOrgData = {
+                    admin = updatedOrgData.admin;
+                    trustedAwarders = updatedOrgData.trustedAwarders;
+                    userBalances = updatedOrgData.userBalances;
+                    dailyMinted = updatedOrgData.dailyMinted;
+                    lastMintTimestamp = updatedOrgData.lastMintTimestamp;
+                    userDecayInfo = updatedOrgData.userDecayInfo;
+                    transactionHistory = Array.append(updatedOrgData.transactionHistory, [transaction]);
+                    nextTransactionId = updatedOrgData.nextTransactionId + 1;
+                    totalDecayedPoints = updatedOrgData.totalDecayedPoints;
+                    lastGlobalDecayProcess = updatedOrgData.lastGlobalDecayProcess;
+                };
+                
+                updateOrgData(orgId, finalOrgData);
+                "Success: Reputation revoked successfully"
+            };
+        }
+    };
+
+    // --- MULTI-ORGANIZATION QUERY FUNCTIONS ---
+
+    /// Get user balance in an organization
+    public query func getOrgBalance(orgId: OrgID, user: Principal) : async ?Nat {
+        switch (validateOrgExists(orgId)) {
+            case (?orgData) { ?getOrgUserBalance(orgData, user) };
+            case null { null };
+        }
+    };
+
+    /// Check if user is a trusted awarder in an organization
+    public query func isOrgTrustedAwarderQuery(orgId: OrgID, user: Principal) : async ?Bool {
+        switch (validateOrgExists(orgId)) {
+            case (?orgData) { ?isOrgTrustedAwarder(orgData, user) };
+            case null { null };
+        }
+    };
+
+    /// Get organization admin
+    public query func getOrgAdmin(orgId: OrgID) : async ?Principal {
+        switch (validateOrgExists(orgId)) {
+            case (?orgData) { ?orgData.admin };
+            case null { null };
+        }
+    };
+
+    /// Get all trusted awarders for an organization
+    public query func getOrgTrustedAwarders(orgId: OrgID) : async ?[Awarder] {
+        switch (validateOrgExists(orgId)) {
+            case (?orgData) {
+                let awarders = Array.map<(Principal, Text), Awarder>(
+                    orgData.trustedAwarders,
+                    func((p, name)) = { id = p; name = name }
+                );
+                ?awarders
+            };
+            case null { null };
+        }
+    };
+
+    /// Get organization transaction history
+    public query func getOrgTransactions(orgId: OrgID) : async ?[Transaction] {
+        switch (validateOrgExists(orgId)) {
+            case (?orgData) { ?orgData.transactionHistory };
+            case null { null };
+        }
+    };
+
+    /// Get all organizations
+    public query func getAllOrgs() : async [OrgID] {
+        let orgIds = Buffer.Buffer<Text>(0);
+        for ((orgId, _) in Trie.iter(organizations)) {
+            orgIds.add(orgId);
+        };
+        Buffer.toArray(orgIds)
+    };
+
+    /// Get organization stats
+    public query func getOrgStats(orgId: OrgID) : async ?OrgStats {
+        switch (validateOrgExists(orgId)) {
+            case (?orgData) {
+                let totalPoints = Array.foldLeft<(Principal, Nat), Nat>(
+                    orgData.userBalances,
+                    0,
+                    func(acc, (_, balance)) = acc + balance
+                );
+                
+                ?{
+                    admin = orgData.admin;
+                    awarderCount = Array.size(orgData.trustedAwarders);
+                    userCount = Array.size(orgData.userBalances);
+                    totalPoints = totalPoints;
+                    totalTransactions = Array.size(orgData.transactionHistory);
+                }
+            };
+            case null { null };
+        }
+    };
+
     // 1️⃣6️⃣ Batch process decay for all users (Owner only)
     public shared({caller}) func processBatchDecay() : async Text {
         if (not Principal.equal(caller, owner)) {
             return "Error: Only owner can process batch decay.";
         };
 
-        let balanceEntries = Iter.toArray(Trie.iter(balances));
+        let balanceEntries = Iter.toArray(Trie.iter(_balances));
         var usersProcessed = 0;
         var totalDecayApplied = 0;
 
@@ -579,7 +1163,7 @@ public shared({caller}) func removeTrustedAwarder(p: Principal) : async Text {
         decayInfo: ?UserDecayInfo;
     } {
         let pKey = { key = p; hash = Principal.hash(p) };
-        let rawBalance = switch (Trie.get<Principal, Nat>(balances, pKey, Principal.equal)) {
+        let rawBalance = switch (Trie.get<Principal, Nat>(_balances, pKey, Principal.equal)) {
             case (?b) b;
             case null 0;
         };
