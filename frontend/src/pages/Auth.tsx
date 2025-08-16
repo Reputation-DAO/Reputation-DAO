@@ -190,7 +190,7 @@ const AuthPage = () => {
               <Box display="flex" flexDirection="column" gap={1}>
                 <Button
                   component={MuiLink}
-                  href="/dashboard" // Update this to your desired route
+                  href="/org-selector" // Update this to your desired route
                   variant="outlined"
                   startIcon={<CreditCard />}
                   fullWidth

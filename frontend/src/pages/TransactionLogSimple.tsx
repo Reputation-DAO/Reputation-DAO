@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Typography,
   Table,
@@ -32,33 +32,59 @@ const TransactionLogSimple: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [orgId, setOrgId] = useState<string | null>(null);
 
+  // Get orgId from localStorage
   useEffect(() => {
-    const fetchTransactions = async () => {
-      try {
-        const actor = await getPlugActor();
-        const result = await actor.getTransactionHistory();
-        // Transform bigint and Principal into usable JS format
-        const formatted = result.map((tx: any) => ({
-          id: Number(tx.id),
-          transactionType: tx.transactionType,
-          from: tx.from.toText(),
-          to: tx.to.toText(),
-          amount: Number(tx.amount),
-          timestamp: Number(tx.timestamp),
-          reason: tx.reason,
-        }));
-        setTransactions(formatted);
-      } catch (err: any) {
-        console.error(err);
-        setError(err.message || 'Failed to fetch transactions.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchTransactions();
+    const storedOrgId = localStorage.getItem('selectedOrgId');
+    if (storedOrgId) {
+      setOrgId(storedOrgId);
+    }
   }, []);
+
+  // Fetch transactions when orgId is available
+  useEffect(() => {
+    console.log('TransactionLogSimple useEffect triggered with orgId:', orgId);
+    if (orgId) {
+      console.log('Fetching transactions for orgId:', orgId);
+      fetchTransactions();
+    }
+  }, [orgId]);
+
+  const fetchTransactions = useCallback(async () => {
+    if (!orgId) return;
+    
+    try {
+      const actor = await getPlugActor();
+      const result = await actor.getTransactionHistory(orgId);
+      
+      // Check if result is valid
+      if (!result || !Array.isArray(result)) {
+        console.log('No valid transactions received');
+        setTransactions([]);
+        return;
+      }
+      
+      // Transform bigint and Principal into usable JS format with safe navigation
+      const formatted = result
+        .filter((tx: any) => tx && tx.from && tx.to) // Filter out invalid transactions
+        .map((tx: any) => ({
+          id: Number(tx.id || 0),
+          transactionType: tx.transactionType || { Award: null },
+          from: tx.from?.toText ? tx.from.toText() : (tx.from?.toString() || 'Unknown'),
+          to: tx.to?.toText ? tx.to.toText() : (tx.to?.toString() || 'Unknown'),
+          amount: Number(tx.amount || 0),
+          timestamp: Number(tx.timestamp || 0),
+          reason: tx.reason || [],
+        }));
+      setTransactions(formatted);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Failed to fetch transactions.');
+    } finally {
+      setLoading(false);
+    }
+  }, [orgId]);
 
   const formatTimestamp = (timestamp: number): string => {
     return new Date(timestamp * 1000).toLocaleString();
@@ -142,6 +168,13 @@ const TransactionLogSimple: React.FC = () => {
 
           <Typography variant="h4" fontWeight={600} textAlign="center">
             Transaction Log
+            {orgId && (
+              <Chip 
+                label={`Org: ${orgId}`} 
+                size="small" 
+                sx={{ ml: 2, bgcolor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }}
+              />
+            )}
           </Typography>
 
           {error && (

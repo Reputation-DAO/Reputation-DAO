@@ -15,6 +15,7 @@ import Docs from './pages/Docs';
 import Community from './pages/Community';
 import Blog from './pages/Blog';
 import Auth from './pages/Auth';
+import OrgSelector from './pages/OrgSelector';
 
 function App() {
   return (
@@ -59,6 +60,14 @@ function App() {
               <Auth />
             }
           />
+          <Route
+            path="/org-selector"
+            element={
+              
+                <OrgSelector />
+              
+            }
+          />
 
           {/* Protected Routes */}
           {/* Dashboard - All roles can access */}
@@ -72,6 +81,7 @@ function App() {
               </Layout>
             }
           />
+         
 
           {/* Award Reputation - Admin and Awarder only */}
           <Route

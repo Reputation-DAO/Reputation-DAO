@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Principal } from '@dfinity/principal';
 import {
   Box,
@@ -62,11 +62,29 @@ const ViewBalances: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [userBalances, setUserBalances] = useState<UserBalance[]>([]);
+  const [orgId, setOrgId] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
     severity: 'success' | 'error' | 'warning' | 'info';
   }>({ open: false, message: '', severity: 'success' });
+
+  // Get orgId from localStorage
+  useEffect(() => {
+    const storedOrgId = localStorage.getItem('selectedOrgId');
+    if (storedOrgId) {
+      setOrgId(storedOrgId);
+    }
+  }, []);
+
+  // Load balances when orgId is available
+  useEffect(() => {
+    console.log('ViewBalances useEffect triggered with orgId:', orgId);
+    if (orgId) {
+      console.log('Loading balances for orgId:', orgId);
+      loadAllBalances();
+    }
+  }, [orgId]);
 
   // Real function to fetch balance from blockchain
   const fetchBalance = async (principalString: string): Promise<number> => {
@@ -80,7 +98,11 @@ const ViewBalances: React.FC = () => {
         throw new Error('Failed to connect to blockchain');
       }
 
-      const balance = await plugActor.getBalance(principal);
+      if (!orgId) {
+        throw new Error('Organization ID not found');
+      }
+
+      const balance = await plugActor.getBalance(orgId, principal);
       return Number(balance);
     } catch (error) {
       console.error('Error fetching balance:', error);
@@ -93,6 +115,8 @@ const ViewBalances: React.FC = () => {
 
   // Load all balances from transaction history
   const loadAllBalances = async () => {
+    if (!orgId) return;
+    
     try {
       setRefreshing(true);
 
@@ -102,19 +126,32 @@ const ViewBalances: React.FC = () => {
         return;
       }
 
-      console.log('Loading transaction history to calculate balances...');
-      const transactions = await plugActor.getTransactionHistory() as BackendTransaction[];
+      console.log('Loading transaction history to calculate balances for orgId:', orgId);
+      const transactions = await plugActor.getTransactionHistory(orgId) as BackendTransaction[];
       console.log('Raw transactions for balance calculation:', transactions);
+
+      // Check if transactions is valid
+      if (!transactions || !Array.isArray(transactions)) {
+        console.log('No valid transactions array received');
+        setUserBalances([]);
+        return;
+      }
 
       // Calculate balances from transaction history
       const balanceMap = new Map<string, number>();
       const activityMap = new Map<string, number>();
 
       transactions.forEach(tx => {
-        const fromStr = tx.from.toString();
-        const toStr = tx.to.toString();
-        const amount = Number(tx.amount);
-        const timestamp = Number(tx.timestamp) / 1000000; // Convert to milliseconds
+        const fromStr = tx.from?.toString() || '';
+        const toStr = tx.to?.toString() || '';
+        const amount = Number(tx.amount || 0);
+        const timestamp = Number(tx.timestamp || 0) / 1000000; // Convert to milliseconds
+
+        // Skip if principals are invalid
+        if (!fromStr || !toStr) {
+          console.warn('Skipping transaction with invalid principals:', tx);
+          return;
+        }
 
         // Track latest activity
         if (!activityMap.has(fromStr) || activityMap.get(fromStr)! < timestamp) {
@@ -257,6 +294,13 @@ const ViewBalances: React.FC = () => {
       >
         <AccountBalanceWallet sx={{ color: 'hsl(var(--primary))' }} />
         View Balances
+        {orgId && (
+          <Chip 
+            label={`Org: ${orgId}`} 
+            size="small" 
+            sx={{ ml: 2, bgcolor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }}
+          />
+        )}
       </Typography>
 
       <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', lg: 'row' } }}>

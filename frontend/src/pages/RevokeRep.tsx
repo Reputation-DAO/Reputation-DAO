@@ -73,21 +73,39 @@ const RevokeRep: React.FC = () => {
   const [recentRevocations, setRecentRevocations] = useState<RevokeTransaction[]>([
     
   ]);
+  const [orgId, setOrgId] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
     severity: 'success' | 'error' | 'warning' | 'info';
   }>({ open: false, message: '', severity: 'success' });
 
+  // Get orgId from localStorage
+  useEffect(() => {
+    const storedOrgId = localStorage.getItem('selectedOrgId');
+    if (storedOrgId) {
+      setOrgId(storedOrgId);
+    }
+  }, []);
+
+  // Load recent revocations when orgId is available
+  useEffect(() => {
+    if (orgId) {
+      loadRecentRevocations();
+    }
+  }, [orgId]);
+
   // Load recent revocations from blockchain
   const loadRecentRevocations = async () => {
+    if (!orgId) return;
+    
     try {
       console.log('🔗 Getting Plug actor connection...');
       const actor = await getPlugActor();
       console.log('✅ Actor connected:', !!actor);
 
-      console.log('📞 Calling getTransactionHistory()...');
-      const transactions = await actor.getTransactionHistory() as BackendTransaction[];
+      console.log('📞 Calling getTransactionHistory() with orgId:', orgId);
+      const transactions = await actor.getTransactionHistory(orgId) as BackendTransaction[];
       console.log('📊 Raw transactions for revocations:', transactions);
 
       if (!transactions || transactions.length === 0) {
@@ -186,14 +204,19 @@ const RevokeRep: React.FC = () => {
       const recipientPrincipal = Principal.fromText(recipient);
       const numAmount = parseInt(amount);
 
+      if (!orgId) {
+        throw new Error('Organization ID not found');
+      }
+
       console.log('Revoking reputation:', {
+        orgId,
         to: recipientPrincipal.toString(),
         amount: numAmount,
         reason: reason
       });
 
       // Call the revoke function on the blockchain
-      await actor.revokeRep(recipientPrincipal, BigInt(numAmount), [reason]);
+      await actor.revokeRep(orgId, recipientPrincipal, BigInt(numAmount), [reason]);
 
       setSnackbar({
         open: true,

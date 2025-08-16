@@ -10,6 +10,14 @@ export interface DecayConfig {
   'decayInterval' : bigint,
   'decayRate' : bigint,
 }
+export type OrgID = string;
+export interface OrgStats {
+  'admin' : Principal,
+  'totalPoints' : bigint,
+  'awarderCount' : bigint,
+  'userCount' : bigint,
+  'totalTransactions' : bigint,
+}
 export interface Transaction {
   'id' : bigint,
   'to' : Principal,
@@ -29,14 +37,20 @@ export interface UserDecayInfo {
   'registrationTime' : bigint,
 }
 export interface _SERVICE {
-  'addTrustedAwarder' : ActorMethod<[Principal, string], string>,
+  'addOrgTrustedAwarder' : ActorMethod<[OrgID, Principal, string], string>,
+  'addTrustedAwarder' : ActorMethod<[OrgID, Principal, string], string>,
   'applyDecayToSpecificUser' : ActorMethod<[Principal], string>,
-  'awardRep' : ActorMethod<[Principal, bigint, [] | [string]], string>,
+  'awardOrgRep' : ActorMethod<
+    [OrgID, Principal, bigint, [] | [string]],
+    string
+  >,
+  'awardRep' : ActorMethod<[OrgID, Principal, bigint, [] | [string]], string>,
   'configureDecay' : ActorMethod<
     [bigint, bigint, bigint, bigint, boolean],
     string
   >,
-  'getBalance' : ActorMethod<[Principal], bigint>,
+  'getAllOrgs' : ActorMethod<[], Array<OrgID>>,
+  'getBalance' : ActorMethod<[OrgID, Principal], [] | [bigint]>,
   'getBalanceWithDetails' : ActorMethod<
     [Principal],
     {
@@ -55,17 +69,31 @@ export interface _SERVICE {
       'totalDecayedPoints' : bigint,
     }
   >,
+  'getOrgAdmin' : ActorMethod<[OrgID], [] | [Principal]>,
+  'getOrgBalance' : ActorMethod<[OrgID, Principal], [] | [bigint]>,
+  'getOrgStats' : ActorMethod<[OrgID], [] | [OrgStats]>,
+  'getOrgTransactions' : ActorMethod<[OrgID], [] | [Array<Transaction>]>,
+  'getOrgTrustedAwarders' : ActorMethod<[OrgID], [] | [Array<Awarder>]>,
   'getRawBalance' : ActorMethod<[Principal], bigint>,
-  'getTransactionById' : ActorMethod<[bigint], [] | [Transaction]>,
-  'getTransactionCount' : ActorMethod<[], bigint>,
-  'getTransactionHistory' : ActorMethod<[], Array<Transaction>>,
-  'getTransactionsByUser' : ActorMethod<[Principal], Array<Transaction>>,
-  'getTrustedAwarders' : ActorMethod<[], Array<Awarder>>,
+  'getTransactionById' : ActorMethod<[OrgID, bigint], [] | [Transaction]>,
+  'getTransactionCount' : ActorMethod<[OrgID], [] | [bigint]>,
+  'getTransactionHistory' : ActorMethod<[OrgID], [] | [Array<Transaction>]>,
+  'getTransactionsByUser' : ActorMethod<
+    [OrgID, Principal],
+    [] | [Array<Transaction>]
+  >,
+  'getTrustedAwarders' : ActorMethod<[OrgID], [] | [Array<Awarder>]>,
   'getUserDecayInfo' : ActorMethod<[Principal], [] | [UserDecayInfo]>,
+  'isOrgTrustedAwarderQuery' : ActorMethod<[OrgID, Principal], [] | [boolean]>,
   'previewDecayAmount' : ActorMethod<[Principal], bigint>,
   'processBatchDecay' : ActorMethod<[], string>,
-  'removeTrustedAwarder' : ActorMethod<[Principal], string>,
-  'revokeRep' : ActorMethod<[Principal, bigint, [] | [string]], string>,
+  'registerOrg' : ActorMethod<[OrgID], string>,
+  'removeTrustedAwarder' : ActorMethod<[OrgID, Principal], string>,
+  'revokeOrgRep' : ActorMethod<
+    [OrgID, Principal, bigint, [] | [string]],
+    string
+  >,
+  'revokeRep' : ActorMethod<[OrgID, Principal, bigint, [] | [string]], string>,
 }
 export declare const idlFactory: IDL.InterfaceFactory;
 export declare const init: (args: { IDL: typeof IDL }) => IDL.Type[];

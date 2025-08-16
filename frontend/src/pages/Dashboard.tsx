@@ -82,6 +82,19 @@ const Dashboard: React.FC = React.memo(() => {
   // Use role context instead of local state
   const { userName, userRole, currentPrincipal } = useRole();
   
+  // Get organization ID from localStorage
+  const [orgId, setOrgId] = useState<string | null>(null);
+  
+  useEffect(() => {
+    const storedOrgId = localStorage.getItem('selectedOrgId');
+    if (storedOrgId) {
+      setOrgId(storedOrgId);
+    } else {
+      // Redirect to org selector if no org selected
+      navigate('/org-selector');
+    }
+  }, [navigate]);
+  
   const [data, setData] = useState<DashboardData>({
     transactions: [],
     balances: [],
@@ -163,7 +176,7 @@ const Dashboard: React.FC = React.memo(() => {
 
   // Load all dashboard data
   const loadDashboardData = async () => {
-    if (isLoadingData) return; // Prevent multiple simultaneous loads
+    if (isLoadingData || !orgId) return; // Prevent multiple simultaneous loads and ensure orgId exists
     
     try {
       setIsLoadingData(true);
@@ -174,16 +187,21 @@ const Dashboard: React.FC = React.memo(() => {
         throw new Error('Failed to connect to blockchain');
       }
 
-      // Fetch all data in parallel
+      // Fetch all data in parallel with orgId parameter
       const [
-        transactions,
-        transactionCount,
-        awarders,
+        transactionsResult,
+        transactionCountResult,
+        awardersResult,
       ] = await Promise.all([
-        actor.getTransactionHistory(),
-        actor.getTransactionCount(),
-        actor.getTrustedAwarders(),
+        actor.getTransactionHistory(orgId),
+        actor.getTransactionCount(orgId),
+        actor.getTrustedAwarders(orgId),
       ]);
+
+      // Handle optional array results from Motoko
+      const transactions = Array.isArray(transactionsResult) ? transactionsResult[0] || [] : transactionsResult || [];
+      const transactionCount = Array.isArray(transactionCountResult) ? transactionCountResult[0] || 0 : transactionCountResult || 0;
+      const awarders = Array.isArray(awardersResult) ? awardersResult[0] || [] : awardersResult || [];
 
       // Get balances by fetching transaction history and calculating
       const balanceMap = new Map<string, number>();
@@ -251,10 +269,12 @@ const Dashboard: React.FC = React.memo(() => {
     }
   };
 
-  // Load data on component mount
+  // Load data on component mount and when orgId changes
   useEffect(() => {
-    loadDashboardData();
-  }, []); // Empty dependency array to run only once
+    if (orgId) {
+      loadDashboardData();
+    }
+  }, [orgId]); // Run when orgId is set
 
   // Refresh data
   const handleRefresh = () => {

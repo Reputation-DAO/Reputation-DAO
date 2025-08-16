@@ -70,9 +70,27 @@ const ManageAwarders: React.FC = () => {
   }>({ open: false, message: '', severity: 'success' });
 
   const [awarders, setAwarders] = useState<Awarder[]>([]);
+  const [orgId, setOrgId] = useState<string | null>(null);
+
+  // Get orgId from localStorage
+  useEffect(() => {
+    const storedOrgId = localStorage.getItem('selectedOrgId');
+    if (storedOrgId) {
+      setOrgId(storedOrgId);
+    }
+  }, []);
+
+  // Load trusted awarders when orgId is available
+  useEffect(() => {
+    if (orgId) {
+      loadTrustedAwarders();
+    }
+  }, [orgId]);
 
   // Load trusted awarders from backend
   const loadTrustedAwarders = async () => {
+    if (!orgId) return;
+    
     try {
       setRefreshing(true);
       
@@ -81,20 +99,29 @@ const ManageAwarders: React.FC = () => {
         throw new Error('Failed to connect to blockchain');
       }
 
-      console.log('Loading trusted awarders...');
-      const backendAwarders = await plugActor.getTrustedAwarders();
+      console.log('Loading trusted awarders for orgId:', orgId);
+      const backendAwarders = await plugActor.getTrustedAwarders(orgId);
       console.log('Backend awarders:', backendAwarders);
 
-      // Transform backend data to frontend format
-      const transformedAwarders: Awarder[] = backendAwarders.map((awarder: any, index: number) => ({
-        id: (index + 1).toString(),
-        name: awarder.name,
-        principal: awarder.id.toString(),
-        status: 'active' as const,
-        joinDate: new Date().toLocaleDateString(), // Could be enhanced with actual join dates
-        totalAwarded: 0, // Could be calculated from transaction history
-        lastActive: new Date().toLocaleDateString()
-      }));
+      // Check if backendAwarders is valid
+      if (!backendAwarders || !Array.isArray(backendAwarders)) {
+        console.log('No valid awarders received');
+        setAwarders([]);
+        return;
+      }
+
+      // Transform backend data to frontend format with safe navigation
+      const transformedAwarders: Awarder[] = backendAwarders
+        .filter((awarder: any) => awarder && awarder.id) // Filter out invalid awarders
+        .map((awarder: any, index: number) => ({
+          id: (index + 1).toString(),
+          name: awarder.name || 'Unknown',
+          principal: awarder.id?.toString ? awarder.id.toString() : (awarder.id || 'Unknown'),
+          status: 'active' as const,
+          joinDate: new Date().toLocaleDateString(), // Could be enhanced with actual join dates
+          totalAwarded: 0, // Could be calculated from transaction history
+          lastActive: new Date().toLocaleDateString()
+        }));
 
       setAwarders(transformedAwarders);
       console.log('Transformed awarders:', transformedAwarders);
@@ -139,8 +166,12 @@ const ManageAwarders: React.FC = () => {
         throw new Error('Failed to connect to blockchain');
       }
 
-      console.log('Adding trusted awarder:', { principal: principal.toString(), name: newAwarderName.trim() });
-      const result = await plugActor.addTrustedAwarder(principal, newAwarderName.trim());
+      if (!orgId) {
+        throw new Error('Organization ID not found');
+      }
+
+      console.log('Adding trusted awarder:', { orgId, principal: principal.toString(), name: newAwarderName.trim() });
+      const result = await plugActor.addTrustedAwarder(orgId, principal, newAwarderName.trim());
       console.log('Add awarder result:', result);
 
       if (result.includes('Success')) {
@@ -180,9 +211,13 @@ const ManageAwarders: React.FC = () => {
         throw new Error('Failed to connect to blockchain');
       }
 
+      if (!orgId) {
+        throw new Error('Organization ID not found');
+      }
+
       const principal = Principal.fromText(awarder.principal);
-      console.log('Removing trusted awarder:', principal.toString());
-      const result = await plugActor.removeTrustedAwarder(principal);
+      console.log('Removing trusted awarder:', { orgId, principal: principal.toString() });
+      const result = await plugActor.removeTrustedAwarder(orgId, principal);
       console.log('Remove awarder result:', result);
 
       if (result.includes('Success')) {
