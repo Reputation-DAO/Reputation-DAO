@@ -72,23 +72,20 @@ const HeroSection: FC = () => {
               href="https://patreon.com/yourpage"
               target="_blank"
             >
-              Help Us on Patreon
+              Fund Us on Gitcoin
             </Button>
-            <Button
-              variant="outlined"
-              sx={{
-                borderColor: "white",
-                color: "white",
-                fontWeight: 600,
-                px: 3,
-                py: 1.2,
-                "&:hover": {
-                  borderColor: "hsl(var(--primary))",
-                  color: "hsl(var(--primary))",
-                },
-              }}
-              href="/blog"
-            >
+            <Button variant="outlined" sx={{
+              textTransform: 'none',
+              px: 4, py: 1.2, fontSize: 13,
+              borderRadius: 'var(--radius)',
+              borderColor: 'hsl(var(--border))',
+              color: 'white',
+              '&:hover': {
+                bgcolor: 'rgba(255,255,255,0.1)',
+                borderColor: 'hsl(var(--border))',
+              },
+              transition: 'var(--transition-smooth)',
+            }}>
               Read Our Latest Post
             </Button>
           </Box>

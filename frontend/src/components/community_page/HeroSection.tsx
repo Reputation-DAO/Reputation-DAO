@@ -1,11 +1,11 @@
-import { Box, Paper, Typography, Button } from '@mui/material';
+import { Box, Paper, Typography, Button, Link as MuiLink } from '@mui/material';
 
 export default function HeroSection() {
   return (
     <Paper
       sx={{
         borderRadius: '0',
-        border: 'none', // remove MUI's outlined border
+        border: 'none',
         borderBottom: '1px solid hsl(var(--border))',
         overflow: 'hidden',
         mb: 0,
@@ -47,18 +47,38 @@ export default function HeroSection() {
             Contribute, collaborate, and shape the future of decentralized reputation.
           </Typography>
           <Box sx={{ display: 'flex', gap: 2, mt: 4, justifyContent: 'center' }}>
-            <Button variant="contained" sx={{ bgcolor: 'hsl(var(--primary))', color: 'white' }}>
+            <Button
+              component={MuiLink}
+              href="https://t.me/reputationdao"
+              target="_blank"
+              rel="noopener noreferrer"
+              variant="contained"
+              sx={{
+                bgcolor: 'hsl(var(--primary))',
+                color: 'white',
+                textDecoration: 'none'
+              }}
+            >
               Join Telegram
             </Button>
             <Button
+              component={MuiLink}
+              href="https://x.com/Reputation_Dao"
+              target="_blank"
+              rel="noopener noreferrer"
               variant="outlined"
               sx={{
-                borderColor: 'white',
+                textTransform: 'none',
+                px: 4, py: 1.2, fontSize: 13,
+                borderRadius: 'var(--radius)',
+                borderColor: 'hsl(var(--border))',
                 color: 'white',
+                textDecoration: 'none',
                 '&:hover': {
-                  borderColor: 'hsl(var(--primary))',
-                  color: 'hsl(var(--primary))',
+                  bgcolor: 'rgba(255,255,255,0.1)',
+                  borderColor: 'hsl(var(--border))',
                 },
+                transition: 'var(--transition-smooth)',
               }}
             >
               Follow on X (Twitter)
