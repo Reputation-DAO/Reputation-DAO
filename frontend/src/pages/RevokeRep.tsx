@@ -204,19 +204,14 @@ const RevokeRep: React.FC = () => {
       const recipientPrincipal = Principal.fromText(recipient);
       const numAmount = parseInt(amount);
 
-      if (!orgId) {
-        throw new Error('Organization ID not found');
-      }
-
       console.log('Revoking reputation:', {
-        orgId,
         to: recipientPrincipal.toString(),
         amount: numAmount,
         reason: reason
       });
 
-      // Call the revoke function on the blockchain
-      await actor.revokeRep(orgId, recipientPrincipal, BigInt(numAmount), [reason]);
+      // Call the auto-inject revoke function on the blockchain
+      await actor.autoRevokeRep(recipientPrincipal, BigInt(numAmount), [reason]);
 
       setSnackbar({
         open: true,

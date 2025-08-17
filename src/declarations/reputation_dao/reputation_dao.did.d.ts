@@ -40,6 +40,8 @@ export interface _SERVICE {
   'addOrgTrustedAwarder' : ActorMethod<[OrgID, Principal, string], string>,
   'addTrustedAwarder' : ActorMethod<[OrgID, Principal, string], string>,
   'applyDecayToSpecificUser' : ActorMethod<[Principal], string>,
+  'autoAwardRep' : ActorMethod<[Principal, bigint, [] | [string]], string>,
+  'autoRevokeRep' : ActorMethod<[Principal, bigint, [] | [string]], string>,
   'awardOrgRep' : ActorMethod<
     [OrgID, Principal, bigint, [] | [string]],
     string
@@ -69,6 +71,13 @@ export interface _SERVICE {
       'totalDecayedPoints' : bigint,
     }
   >,
+  'getMyBalance' : ActorMethod<[], [] | [bigint]>,
+  'getMyOrgTransactions' : ActorMethod<[], [] | [Array<Transaction>]>,
+  'getMyOrganization' : ActorMethod<[], [] | [string]>,
+  'getMyTransactionsByUser' : ActorMethod<
+    [Principal],
+    [] | [Array<Transaction>]
+  >,
   'getOrgAdmin' : ActorMethod<[OrgID], [] | [Principal]>,
   'getOrgBalance' : ActorMethod<[OrgID, Principal], [] | [bigint]>,
   'getOrgStats' : ActorMethod<[OrgID], [] | [OrgStats]>,
@@ -84,6 +93,7 @@ export interface _SERVICE {
   >,
   'getTrustedAwarders' : ActorMethod<[OrgID], [] | [Array<Awarder>]>,
   'getUserDecayInfo' : ActorMethod<[Principal], [] | [UserDecayInfo]>,
+  'isMyOrgAdmin' : ActorMethod<[], boolean>,
   'isOrgTrustedAwarderQuery' : ActorMethod<[OrgID, Principal], [] | [boolean]>,
   'previewDecayAmount' : ActorMethod<[Principal], bigint>,
   'processBatchDecay' : ActorMethod<[], string>,

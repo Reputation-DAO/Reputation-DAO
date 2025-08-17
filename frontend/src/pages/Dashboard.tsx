@@ -79,8 +79,8 @@ interface ChartData {
 const Dashboard: React.FC = React.memo(() => {
   const navigate = useNavigate();
   
-  // Use role context instead of local state
-  const { userName, userRole, currentPrincipal } = useRole();
+  // Get role information from context
+  const { userRole, userName, isAdmin, isAwarder, loading: roleLoading, currentPrincipal } = useRole();
   
   // Get organization ID from localStorage
   const [orgId, setOrgId] = useState<string | null>(null);
@@ -185,6 +185,15 @@ const Dashboard: React.FC = React.memo(() => {
       const actor = await getPlugActor();
       if (!actor) {
         throw new Error('Failed to connect to blockchain');
+      }
+
+      // Verify that the user belongs to this organization
+      const userOrg = await actor.getMyOrganization();
+      const userOrgId = Array.isArray(userOrg) ? userOrg[0] : userOrg;
+      
+      if (!userOrgId || userOrgId !== orgId) {
+        console.warn('User does not belong to the selected organization:', { userOrgId, selectedOrgId: orgId });
+        throw new Error('Access denied: You do not belong to this organization');
       }
 
       // Fetch all data in parallel with orgId parameter
@@ -322,18 +331,38 @@ const Dashboard: React.FC = React.memo(() => {
           >
             Welcome, {userName || 'User'}
           </Typography>
-          <IconButton
-            onClick={handleRefresh}
-            disabled={refreshing}
-            sx={{
-              color: 'hsl(var(--primary))',
-              '&:hover': {
-                backgroundColor: 'hsl(var(--muted))',
-              },
-            }}
-          >
-            {refreshing ? <CircularProgress size={20} /> : <Refresh />}
-          </IconButton>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            {/* Active Organization Indicator */}
+            {orgId && (
+              <Chip
+                label={`Active Org: ${orgId}`}
+                variant="outlined"
+                size="small"
+                sx={{
+                  backgroundColor: 'hsl(var(--accent))',
+                  color: 'hsl(var(--accent-foreground))',
+                  border: '1px solid hsl(var(--border))',
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                  '& .MuiChip-label': {
+                    px: 1.5,
+                  },
+                }}
+              />
+            )}
+            <IconButton
+              onClick={handleRefresh}
+              disabled={refreshing}
+              sx={{
+                color: 'hsl(var(--primary))',
+                '&:hover': {
+                  backgroundColor: 'hsl(var(--muted))',
+                },
+              }}
+            >
+              {refreshing ? <CircularProgress size={20} /> : <Refresh />}
+            </IconButton>
+          </Box>
         </Box>
         <Typography
           variant="body1"

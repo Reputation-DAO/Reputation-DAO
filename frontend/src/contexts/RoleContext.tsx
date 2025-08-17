@@ -37,19 +37,9 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   const [userName, setUserName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isCheckingRole, setIsCheckingRole] = useState(false);
-
-  // Owner principal - replace with your actual owner principal
-  const OWNER_PRINCIPAL = 'ofkbl-m6bgx-xlgm3-ko4y6-mh7i4-kp6b4-sojbh-wyy2r-aznnp-gmqtb-xqe';
 
   const determineUserRole = async (): Promise<void> => {
-    if (isCheckingRole) {
-      console.log('⏳ Role check already in progress, skipping...');
-      return;
-    }
-
     console.log('🔍 Starting role determination...');
-    setIsCheckingRole(true);
     setError(null);
     setLoading(true);
 
@@ -68,125 +58,56 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
 
       setCurrentPrincipal(principal);
       const principalText = principal.toString();
+      setUserName(`${principalText.slice(0, 5)}...${principalText.slice(-3)}`);
 
-      // Check if owner/admin
-      if (principalText === OWNER_PRINCIPAL) {
-        console.log('👑 User is Admin/Owner - IMMEDIATE RETURN');
-        setUserRole('Admin');
-        setUserName('Admin');
-        setLoading(false);
-        setIsCheckingRole(false);
-        return; // Exit early for admin, don't continue to check awarders
-      }
-
-      // Get actor to check if user is a trusted awarder
-      console.log('🔗 Getting actor to check awarders...');
+      // Get actor to check user's organization role
+      console.log('🔗 Getting actor to check organization role...');
       const actor = await getPlugActor();
       if (!actor) {
         console.log('❌ Failed to connect to canister, setting as User');
         setUserRole('User');
-        setUserName(`${principalText.slice(0, 5)}...${principalText.slice(-3)}`);
         return;
       }
 
-      // Get trusted awarders
-      console.log('📋 Fetching trusted awarders...');
-      const awarders = await actor.getTrustedAwarders();
-      console.log('📋 Found awarders:', awarders);
-      
-      const awarder = awarders.find((a: any) => a.id.toString() === principalText);
+      // Use new backend functions to check role
+      console.log('🏢 Checking if user is admin of their organization...');
+      const isOrgAdmin = await actor.isMyOrgAdmin();
+      console.log('👑 Is org admin:', isOrgAdmin);
 
-      if (awarder) {
-        console.log('⭐ User is a trusted awarder:', awarder.name);
-        setUserRole('Awarder');
-        setUserName(awarder.name);
-      } else {
-        console.log('👤 User is regular user');
-        setUserRole('User');
-        setUserName(`${principalText.slice(0, 5)}...${principalText.slice(-3)}`);
+      if (isOrgAdmin) {
+        console.log('✅ User is Admin of their organization');
+        setUserRole('Admin');
+        return;
       }
 
-    } catch (err) {
-      console.error('❌ Error determining user role:', err);
-      setError(err instanceof Error ? err.message : 'Failed to determine user role');
+      // Check if user has an organization (trusted awarder)
+      console.log('🔍 Checking user organization...');
+      const myOrg = await actor.getMyOrganization();
+      console.log('🏢 User organization:', myOrg);
+
+      if (myOrg && myOrg.length > 0) {
+        console.log('✅ User is Awarder (has organization association)');
+        setUserRole('Awarder');
+      } else {
+        console.log('👤 User is regular User (no organization association)');
+        setUserRole('User');
+      }
+
+    } catch (error: any) {
+      console.error('❌ Error determining role:', error);
+      setError(`Failed to determine role: ${error.message}`);
       setUserRole('User');
-      setUserName('');
     } finally {
-      console.log('✅ Role determination complete, setting loading to false');
       setLoading(false);
-      setIsCheckingRole(false);
     }
   };
 
-  // Monitor wallet connection changes
+  // Initial role determination
   useEffect(() => {
     determineUserRole();
+  }, []);
 
-    // Use Plug wallet events instead of polling for instant detection
-    const handleAccountsChanged = async () => {
-      console.log('🔄 Plug wallet account changed, updating role...');
-      await determineUserRole();
-    };
-
-    const handleConnect = async () => {
-      console.log('🔌 Plug wallet connected, updating role...');
-      await determineUserRole();
-    };
-
-    const handleDisconnect = () => {
-      console.log('🔌 Plug wallet disconnected, setting as User');
-      setCurrentPrincipal(null);
-      setUserRole('User');
-      setUserName('');
-      setLoading(false);
-    };
-
-    // Listen to Plug wallet events for instant detection
-    if (window.ic?.plug) {
-      // These are the standard wallet events - check if Plug supports them
-      try {
-        window.addEventListener('ic-agent-update', handleAccountsChanged);
-        window.addEventListener('plug-connect', handleConnect);
-        window.addEventListener('plug-disconnect', handleDisconnect);
-      } catch (error) {
-        console.log('Event listeners not supported, using minimal polling...');
-        
-        // Fallback to very light polling only if events don't work
-        const intervalId = setInterval(async () => {
-          try {
-            const newPrincipal = await getCurrentPrincipal();
-            const newPrincipalText = newPrincipal?.toString() || '';
-            const currentPrincipalText = currentPrincipal?.toString() || '';
-
-            if (newPrincipalText !== currentPrincipalText) {
-              console.log('🔄 Principal changed, updating role...');
-              await determineUserRole();
-            }
-          } catch (error) {
-            // Silently handle errors to prevent console spam
-          }
-        }, 10000); // Much longer interval - 10 seconds
-
-        return () => clearInterval(intervalId);
-      }
-    }
-
-    // Cleanup event listeners
-    return () => {
-      try {
-        window.removeEventListener('ic-agent-update', handleAccountsChanged);
-        window.removeEventListener('plug-connect', handleConnect);
-        window.removeEventListener('plug-disconnect', handleDisconnect);
-      } catch (error) {
-        // Ignore cleanup errors
-      }
-    };
-  }, []); // Empty dependency array to run only once
-
-  const refreshRole = async (): Promise<void> => {
-    await determineUserRole();
-  };
-
+  // Context value
   const contextValue: RoleContextType = {
     currentPrincipal,
     userRole,
@@ -196,7 +117,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     isUser: userRole === 'User',
     loading,
     error,
-    refreshRole,
+    refreshRole: determineUserRole,
   };
 
   return (

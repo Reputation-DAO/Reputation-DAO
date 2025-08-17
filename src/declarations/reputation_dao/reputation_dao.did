@@ -49,6 +49,8 @@ service : {
    (text);
   addTrustedAwarder: (orgId: OrgID, p: principal, name: text) -> (text);
   applyDecayToSpecificUser: (p: principal) -> (text);
+  autoAwardRep: (to: principal, amount: nat, reason: opt text) -> (text);
+  autoRevokeRep: (from: principal, amount: nat, reason: opt text) -> (text);
   /// Award reputation to a user in an organization
   awardOrgRep: (orgId: OrgID, to: principal, amount: nat, reason:
    opt text) -> (text);
@@ -73,6 +75,10 @@ service : {
       lastGlobalDecayProcess: nat;
       totalDecayedPoints: nat;
     }) query;
+  getMyBalance: () -> (opt nat);
+  getMyOrgTransactions: () -> (opt vec Transaction);
+  getMyOrganization: () -> (opt text);
+  getMyTransactionsByUser: (user: principal) -> (opt vec Transaction);
   /// Get organization admin
   getOrgAdmin: (orgId: OrgID) -> (opt principal) query;
   /// Get user balance in an organization
@@ -91,6 +97,7 @@ service : {
    (opt vec Transaction) query;
   getTrustedAwarders: (orgId: OrgID) -> (opt vec Awarder) query;
   getUserDecayInfo: (p: principal) -> (opt UserDecayInfo) query;
+  isMyOrgAdmin: () -> (bool);
   /// Check if user is a trusted awarder in an organization
   isOrgTrustedAwarderQuery: (orgId: OrgID, user: principal) ->
    (opt bool) query;

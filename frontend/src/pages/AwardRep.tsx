@@ -230,12 +230,8 @@ const AwardRep: React.FC = () => {
       const currentPrincipal = await window.ic.plug.agent.getPrincipal();
       console.log('� Current user principal:', currentPrincipal.toString());
       
-      if (!orgId) {
-        throw new Error('Organization ID not found');
-      }
-      
-      console.log('�📞 Calling awardRep() with orgId:', orgId);
-      const result = await actor.awardRep(orgId, recipientPrincipal, amountBigInt, [reason]);
+      console.log('�📞 Calling autoAwardRep() - auto-injecting orgId...');
+      const result = await actor.autoAwardRep(recipientPrincipal, amountBigInt, [reason]);
       console.log('✅ Award result:', result);
       
       // Check if the result indicates an error

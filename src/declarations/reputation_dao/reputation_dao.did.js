@@ -13,13 +13,6 @@ export const idlFactory = ({ IDL }) => {
     'decayInterval' : IDL.Nat,
     'decayRate' : IDL.Nat,
   });
-  const OrgStats = IDL.Record({
-    'admin' : IDL.Principal,
-    'totalPoints' : IDL.Nat,
-    'awarderCount' : IDL.Nat,
-    'userCount' : IDL.Nat,
-    'totalTransactions' : IDL.Nat,
-  });
   const TransactionType = IDL.Variant({
     'Revoke' : IDL.Null,
     'Decay' : IDL.Null,
@@ -34,6 +27,13 @@ export const idlFactory = ({ IDL }) => {
     'amount' : IDL.Nat,
     'reason' : IDL.Opt(IDL.Text),
   });
+  const OrgStats = IDL.Record({
+    'admin' : IDL.Principal,
+    'totalPoints' : IDL.Nat,
+    'awarderCount' : IDL.Nat,
+    'userCount' : IDL.Nat,
+    'totalTransactions' : IDL.Nat,
+  });
   const Awarder = IDL.Record({ 'id' : IDL.Principal, 'name' : IDL.Text });
   return IDL.Service({
     'addOrgTrustedAwarder' : IDL.Func(
@@ -47,6 +47,16 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'applyDecayToSpecificUser' : IDL.Func([IDL.Principal], [IDL.Text], []),
+    'autoAwardRep' : IDL.Func(
+        [IDL.Principal, IDL.Nat, IDL.Opt(IDL.Text)],
+        [IDL.Text],
+        [],
+      ),
+    'autoRevokeRep' : IDL.Func(
+        [IDL.Principal, IDL.Nat, IDL.Opt(IDL.Text)],
+        [IDL.Text],
+        [],
+      ),
     'awardOrgRep' : IDL.Func(
         [OrgID, IDL.Principal, IDL.Nat, IDL.Opt(IDL.Text)],
         [IDL.Text],
@@ -92,6 +102,14 @@ export const idlFactory = ({ IDL }) => {
         ],
         ['query'],
       ),
+    'getMyBalance' : IDL.Func([], [IDL.Opt(IDL.Nat)], []),
+    'getMyOrgTransactions' : IDL.Func([], [IDL.Opt(IDL.Vec(Transaction))], []),
+    'getMyOrganization' : IDL.Func([], [IDL.Opt(IDL.Text)], []),
+    'getMyTransactionsByUser' : IDL.Func(
+        [IDL.Principal],
+        [IDL.Opt(IDL.Vec(Transaction))],
+        [],
+      ),
     'getOrgAdmin' : IDL.Func([OrgID], [IDL.Opt(IDL.Principal)], ['query']),
     'getOrgBalance' : IDL.Func(
         [OrgID, IDL.Principal],
@@ -136,6 +154,7 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Opt(UserDecayInfo)],
         ['query'],
       ),
+    'isMyOrgAdmin' : IDL.Func([], [IDL.Bool], []),
     'isOrgTrustedAwarderQuery' : IDL.Func(
         [OrgID, IDL.Principal],
         [IDL.Opt(IDL.Bool)],

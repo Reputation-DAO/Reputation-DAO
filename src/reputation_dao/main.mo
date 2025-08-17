@@ -234,6 +234,21 @@ persistent actor ReputationDAO {
         }
     };
     
+    // Helper: Find organization that user belongs to (as admin or trusted awarder)
+    private func getUserOrganization(user: Principal) : ?Text {
+        for ((orgId, orgData) in Trie.iter(organizations)) {
+            // Check if user is admin
+            if (Principal.equal(orgData.admin, user)) {
+                return ?orgId;
+            };
+            // Check if user is trusted awarder
+            if (isOrgTrustedAwarder(orgData, user)) {
+                return ?orgId;
+            };
+        };
+        null
+    };
+    
     // Helper: Update user balance in organization
     private func updateOrgUserBalance(orgData: OrgData, user: Principal, newBalance: Nat) : OrgData {
         let updatedBalances = Array.map<(Principal, Nat), (Principal, Nat)>(
@@ -428,14 +443,14 @@ public shared({caller}) func awardRep(orgId: OrgID, to: Principal, amount: Nat, 
                 return "Error: Caller is not a trusted awarder";
             };
 
-            // Check: cannot mint to self
+            // Check: cannot award to self (this is valid - awarders can award to others)
             if (Principal.equal(caller, to)) {
-                return "Error: Cannot award rep to yourself.";
+                return "Error: Cannot award reputation to yourself";
             };
 
             // Check daily mint limit
             let currentTime = now();
-            let dailyLimit: Nat = 100;
+            let dailyLimit: Nat = 50; // Standardized daily limit
             
             let lastMintTime = switch (Array.find<(Principal, Nat)>(
                 orgData.lastMintTimestamp,
@@ -541,11 +556,18 @@ public shared({caller}) func revokeRep(orgId: OrgID, from: Principal, amount: Na
             };
 
             let currentBalance = getOrgUserBalance(orgData, from);
-            let newBalance = if (currentBalance >= amount) {
-                Nat.sub(currentBalance, amount)
-            } else {
-                0
+            
+            // Check if user has enough reputation to revoke
+            if (currentBalance < amount) {
+                return "Error: User does not have enough reputation points (has " # Nat.toText(currentBalance) # ", trying to revoke " # Nat.toText(amount) # ")";
             };
+            
+            // Only revoke if user has sufficient balance
+            if (currentBalance == 0) {
+                return "Error: User has no reputation points to revoke";
+            };
+            
+            let newBalance = Nat.sub(currentBalance, amount);
 
             let updatedOrgData = updateOrgUserBalance(orgData, from, newBalance);
             
@@ -999,11 +1021,18 @@ public shared({caller}) func removeTrustedAwarder(orgId: OrgID, p: Principal) : 
                 };
 
                 let currentBalance = getOrgUserBalance(orgData, from);
-                let newBalance = if (currentBalance >= amount) {
-                    Nat.sub(currentBalance, amount)
-                } else {
-                    0
+                
+                // Check if user has enough reputation to revoke
+                if (currentBalance < amount) {
+                    return "Error: User does not have enough reputation points (has " # Nat.toText(currentBalance) # ", trying to revoke " # Nat.toText(amount) # ")";
                 };
+                
+                // Only revoke if user has sufficient balance
+                if (currentBalance == 0) {
+                    return "Error: User has no reputation points to revoke";
+                };
+                
+                let newBalance = Nat.sub(currentBalance, amount);
 
                 let updatedOrgData = updateOrgUserBalance(orgData, from, newBalance);
                 
@@ -1182,6 +1211,75 @@ public shared({caller}) func removeTrustedAwarder(orgId: OrgID, p: Principal) : 
             currentBalance = currentBalance;
             pendingDecay = pendingDecay;
             decayInfo = decayInfo;
+        }
+    };
+
+    // --- AUTO-INJECT ORGANIZATION FUNCTIONS ---
+    // These functions automatically determine the caller's organization
+    
+    // Auto-inject awardRep - automatically uses caller's organization
+    public shared({caller}) func autoAwardRep(to: Principal, amount: Nat, reason: ?Text) : async Text {
+        switch (getUserOrganization(caller)) {
+            case null { return "Error: Caller is not associated with any organization" };
+            case (?orgId) { 
+                Debug.print("Auto-injecting orgId: " # orgId # " for caller: " # Principal.toText(caller));
+                await awardRep(orgId, to, amount, reason)
+            };
+        }
+    };
+    
+    // Auto-inject revokeRep - automatically uses caller's organization  
+    public shared({caller}) func autoRevokeRep(from: Principal, amount: Nat, reason: ?Text) : async Text {
+        switch (getUserOrganization(caller)) {
+            case null { return "Error: Caller is not associated with any organization" };
+            case (?orgId) { 
+                Debug.print("Auto-injecting orgId: " # orgId # " for caller: " # Principal.toText(caller));
+                await revokeRep(orgId, from, amount, reason)
+            };
+        }
+    };
+    
+    // Get caller's organization ID
+    public shared({caller}) func getMyOrganization() : async ?Text {
+        getUserOrganization(caller)
+    };
+    
+    // Check if caller is admin of their organization
+    public shared({caller}) func isMyOrgAdmin() : async Bool {
+        switch (getUserOrganization(caller)) {
+            case null { false };
+            case (?orgId) {
+                switch (validateOrgExists(orgId)) {
+                    case null { false };
+                    case (?orgData) { Principal.equal(orgData.admin, caller) };
+                }
+            };
+        }
+    };
+    
+    // Auto-inject functions for transaction queries
+    
+    // Get transactions for caller's organization
+    public shared({caller}) func getMyOrgTransactions() : async ?[Transaction] {
+        switch (getUserOrganization(caller)) {
+            case null { null };
+            case (?orgId) { await getTransactionHistory(orgId) };
+        }
+    };
+    
+    // Get caller's balance in their organization
+    public shared({caller}) func getMyBalance() : async ?Nat {
+        switch (getUserOrganization(caller)) {
+            case null { null };
+            case (?orgId) { await getBalance(orgId, caller) };
+        }
+    };
+    
+    // Get transactions by user in caller's organization
+    public shared({caller}) func getMyTransactionsByUser(user: Principal) : async ?[Transaction] {
+        switch (getUserOrganization(caller)) {
+            case null { null };
+            case (?orgId) { await getTransactionsByUser(orgId, user) };
         }
     };
 
