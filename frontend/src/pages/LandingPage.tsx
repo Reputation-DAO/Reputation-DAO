@@ -53,7 +53,7 @@ export default function LandingPage() {
           width: '100px',
           height: '100%',
           background: 'hsl(var(--primary))',
-          animation: `${heartbeatGlow} 20s ease-in-out infinite`,
+          animation: `${heartbeatGlow} 10s ease-in-out infinite`,
           zIndex: 0,
           pointerEvents: 'none',
           mixBlendMode: 'screen',
@@ -61,7 +61,7 @@ export default function LandingPage() {
         }}
       />
 
-     
+
       <Box
         sx={{
           position: 'absolute',
@@ -70,7 +70,7 @@ export default function LandingPage() {
           width: '100px',
           height: '100%',
           background: 'hsl(var(--primary))',
-          animation: `${heartbeatGlow} 20s ease-in-out infinite`,
+          animation: `${heartbeatGlow} 10s ease-in-out infinite`,
           zIndex: 0,
           pointerEvents: 'none',
           mixBlendMode: 'screen',

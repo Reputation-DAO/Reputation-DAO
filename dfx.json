@@ -2,9 +2,11 @@
   "canisters": {
     "reputation_dao": {
       "main": "src/reputation_dao/main.mo",
+
       "type": "motoko"
-  
+
     }
+
   },
   "dfx": "0.27.0",
   "networks": {
