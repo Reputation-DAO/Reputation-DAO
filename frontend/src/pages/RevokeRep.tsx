@@ -211,7 +211,31 @@ const RevokeRep: React.FC = () => {
       });
 
       // Call the auto-inject revoke function on the blockchain
-      await actor.autoRevokeRep(recipientPrincipal, BigInt(numAmount), [reason]);
+
+
+      const orgId = localStorage.getItem("selectedOrgId")?.trim();
+
+      if (!orgId) {
+        throw new Error("No orgId found in localStorage");
+      }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      //PROBLEM IS HERE
+      await actor.revokeRep(orgId,recipientPrincipal, BigInt(numAmount), [reason]);
 
       setSnackbar({
         open: true,

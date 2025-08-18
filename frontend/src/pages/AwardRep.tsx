@@ -231,7 +231,37 @@ const AwardRep: React.FC = () => {
       console.log('� Current user principal:', currentPrincipal.toString());
       
       console.log('�📞 Calling autoAwardRep() - auto-injecting orgId...');
-      const result = await actor.autoAwardRep(recipientPrincipal, amountBigInt, [reason]);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      const orgId = localStorage.getItem("selectedOrgId")?.trim();
+
+      if (!orgId) {
+        throw new Error("No orgId found in localStorage");
+      }
+
+
+
+
+      // PROBLEM IS HERE
+      const result = await actor.awardRep(orgId,recipientPrincipal, amountBigInt, [reason]);
       console.log('✅ Award result:', result);
       
       // Check if the result indicates an error
