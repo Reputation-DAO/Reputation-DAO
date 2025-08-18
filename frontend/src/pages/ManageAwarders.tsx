@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ProtectedPage from '../components/layout/ProtectedPage';
 import { Principal } from '@dfinity/principal';
 import {
   Box,
@@ -799,4 +800,12 @@ const ManageAwarders: React.FC = () => {
   );
 };
 
-export default ManageAwarders;
+const ManageAwardersWithProtection: React.FC = () => {
+  return (
+    <ProtectedPage>
+      <ManageAwarders />
+    </ProtectedPage>
+  );
+};
+
+export default ManageAwardersWithProtection;

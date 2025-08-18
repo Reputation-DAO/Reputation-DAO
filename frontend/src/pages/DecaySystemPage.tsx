@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ProtectedPage from '../components/layout/ProtectedPage';
 import {
   Box,
   Typography,
@@ -440,4 +441,12 @@ const DecaySystemPage: React.FC = () => {
   );
 };
 
-export default DecaySystemPage;
+const DecaySystemPageWithProtection: React.FC = () => {
+  return (
+    <ProtectedPage>
+      <DecaySystemPage />
+    </ProtectedPage>
+  );
+};
+
+export default DecaySystemPageWithProtection;

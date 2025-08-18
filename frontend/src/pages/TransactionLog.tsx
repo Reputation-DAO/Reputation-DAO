@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ProtectedPage from '../components/layout/ProtectedPage';
 import {
   Container,
   Typography,
@@ -77,29 +78,44 @@ const TransactionLog: React.FC = () => {
       try {
         setLoading(true);
 
-        const orgId = localStorage.getItem("selectedOrgId")?.trim();
+        // Get orgId from localStorage (same approach as AwardRep page)
+        const orgId = localStorage.getItem('selectedOrgId');
         if (!orgId) {
-          throw new Error("No orgId found in localStorage");
+          setError('No organization selected');
+          setTransactions([]);
+          return;
         }
 
-        const result = await actor.getTransactionHistory(orgId) 
-
-        if (!result || result.length === 0) {
+        console.log('📞 Fetching transactions for orgId:', orgId);
+        const result = await actor.getTransactionHistory(orgId);
+        
+        console.log('🔍 Raw result from backend:', result);
+        
+        // Handle Motoko optional array the same way as AwardRep page
+        const transactions = Array.isArray(result) ? result[0] || [] : result || [];
+        console.log('📋 Processed transactions:', transactions);
+        console.log('📋 Transactions count:', transactions.length);
+        
+        if (!Array.isArray(transactions) || transactions.length === 0) {
+          console.log('❌ No transactions found');
           setTransactions([]);
           setError(null);
           return;
         }
 
         // Convert raw canister data to UI-friendly type
-        const processedTransactions: Transaction[] = result.map((tx) => ({
+        const processedTransactions: Transaction[] = transactions.map((tx) => ({
           id: Number(tx.id),
           transactionType: tx.transactionType,
           from: tx.from.toString(),
           to: tx.to.toString(),
           amount: Number(tx.amount),
           timestamp: Number(tx.timestamp) * 1000, // seconds → ms for JS Date
-          reason: tx.reason.length > 0 ? tx.reason[0] : null
+          reason: tx.reason.length > 0 ? (tx.reason[0] ?? null) : null
         }));
+
+        console.log('🔄 Processed transactions:', processedTransactions);
+        console.log('🔄 Processed transactions count:', processedTransactions.length);
 
         setTransactions(processedTransactions);
         setError(null);
@@ -377,4 +393,12 @@ const TransactionLog: React.FC = () => {
   );
 };
 
-export default TransactionLog;
+const TransactionLogWithProtection: React.FC = () => {
+  return (
+    <ProtectedPage>
+      <TransactionLog />
+    </ProtectedPage>
+  );
+};
+
+export default TransactionLogWithProtection;

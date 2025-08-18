@@ -44,16 +44,10 @@ type Awarder =
    name: text;
  };
 service : {
-  /// Add a trusted awarder (only admin can call this)
-  addOrgTrustedAwarder: (orgId: OrgID, awarder: principal, name: text) ->
-   (text);
   addTrustedAwarder: (orgId: OrgID, p: principal, name: text) -> (text);
   applyDecayToSpecificUser: (p: principal) -> (text);
   autoAwardRep: (to: principal, amount: nat, reason: opt text) -> (text);
   autoRevokeRep: (from: principal, amount: nat, reason: opt text) -> (text);
-  /// Award reputation to a user in an organization
-  awardOrgRep: (orgId: OrgID, to: principal, amount: nat, reason:
-   opt text) -> (text);
   awardRep: (orgId: OrgID, to: principal, amount: nat, reason: opt text) ->
    (text);
   configureDecay: (decayRate: nat, decayInterval: nat, minThreshold: 
@@ -106,9 +100,6 @@ service : {
   /// Register a new organization
   registerOrg: (orgId: OrgID) -> (text);
   removeTrustedAwarder: (orgId: OrgID, p: principal) -> (text);
-  /// Revoke reputation from a user in an organization (only admin)
-  revokeOrgRep: (orgId: OrgID, from: principal, amount: nat, reason:
-   opt text) -> (text);
   revokeRep: (orgId: OrgID, from: principal, amount: nat, reason:
    opt text) -> (text);
 }

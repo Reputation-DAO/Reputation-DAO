@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import ProtectedPage from '../components/layout/ProtectedPage';
 import { Principal } from '@dfinity/principal';
 import {
   Box,
@@ -724,4 +725,12 @@ const ViewBalances: React.FC = () => {
   );
 };
 
-export default ViewBalances;
+const ViewBalancesWithProtection: React.FC = () => {
+  return (
+    <ProtectedPage>
+      <ViewBalances />
+    </ProtectedPage>
+  );
+};
+
+export default ViewBalancesWithProtection;

@@ -36,11 +36,6 @@ export const idlFactory = ({ IDL }) => {
   });
   const Awarder = IDL.Record({ 'id' : IDL.Principal, 'name' : IDL.Text });
   return IDL.Service({
-    'addOrgTrustedAwarder' : IDL.Func(
-        [OrgID, IDL.Principal, IDL.Text],
-        [IDL.Text],
-        [],
-      ),
     'addTrustedAwarder' : IDL.Func(
         [OrgID, IDL.Principal, IDL.Text],
         [IDL.Text],
@@ -54,11 +49,6 @@ export const idlFactory = ({ IDL }) => {
       ),
     'autoRevokeRep' : IDL.Func(
         [IDL.Principal, IDL.Nat, IDL.Opt(IDL.Text)],
-        [IDL.Text],
-        [],
-      ),
-    'awardOrgRep' : IDL.Func(
-        [OrgID, IDL.Principal, IDL.Nat, IDL.Opt(IDL.Text)],
         [IDL.Text],
         [],
       ),
@@ -164,11 +154,6 @@ export const idlFactory = ({ IDL }) => {
     'processBatchDecay' : IDL.Func([], [IDL.Text], []),
     'registerOrg' : IDL.Func([OrgID], [IDL.Text], []),
     'removeTrustedAwarder' : IDL.Func([OrgID, IDL.Principal], [IDL.Text], []),
-    'revokeOrgRep' : IDL.Func(
-        [OrgID, IDL.Principal, IDL.Nat, IDL.Opt(IDL.Text)],
-        [IDL.Text],
-        [],
-      ),
     'revokeRep' : IDL.Func(
         [OrgID, IDL.Principal, IDL.Nat, IDL.Opt(IDL.Text)],
         [IDL.Text],

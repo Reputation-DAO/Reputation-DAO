@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ProtectedPage from '../components/layout/ProtectedPage';
 import { Principal } from '@dfinity/principal';
 import {
   Box,
@@ -806,4 +807,12 @@ const RevokeRep: React.FC = () => {
   );
 };
 
-export default RevokeRep;
+const RevokeRepWithProtection: React.FC = () => {
+  return (
+    <ProtectedPage>
+      <RevokeRep />
+    </ProtectedPage>
+  );
+};
+
+export default RevokeRepWithProtection;

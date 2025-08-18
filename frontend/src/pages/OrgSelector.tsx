@@ -155,6 +155,9 @@ const OrgSelector: React.FC = () => {
           localStorage.setItem('selectedOrgId', orgId.trim());
           localStorage.setItem('userRole', 'Admin');
           
+          // Notify role context about organization change
+          window.dispatchEvent(new CustomEvent('orgChanged'));
+          
           // Redirect to dashboard after a brief delay
           setTimeout(() => {
             navigate('/dashboard');
@@ -236,6 +239,9 @@ const OrgSelector: React.FC = () => {
       // Store org info in localStorage
       localStorage.setItem('selectedOrgId', orgId.trim());
       localStorage.setItem('userRole', userRole);
+      
+      // Notify role context about organization change
+      window.dispatchEvent(new CustomEvent('orgChanged'));
       
       // Redirect to dashboard after a brief delay
       setTimeout(() => {

@@ -37,15 +37,10 @@ export interface UserDecayInfo {
   'registrationTime' : bigint,
 }
 export interface _SERVICE {
-  'addOrgTrustedAwarder' : ActorMethod<[OrgID, Principal, string], string>,
   'addTrustedAwarder' : ActorMethod<[OrgID, Principal, string], string>,
   'applyDecayToSpecificUser' : ActorMethod<[Principal], string>,
   'autoAwardRep' : ActorMethod<[Principal, bigint, [] | [string]], string>,
   'autoRevokeRep' : ActorMethod<[Principal, bigint, [] | [string]], string>,
-  'awardOrgRep' : ActorMethod<
-    [OrgID, Principal, bigint, [] | [string]],
-    string
-  >,
   'awardRep' : ActorMethod<[OrgID, Principal, bigint, [] | [string]], string>,
   'configureDecay' : ActorMethod<
     [bigint, bigint, bigint, bigint, boolean],
@@ -99,10 +94,6 @@ export interface _SERVICE {
   'processBatchDecay' : ActorMethod<[], string>,
   'registerOrg' : ActorMethod<[OrgID], string>,
   'removeTrustedAwarder' : ActorMethod<[OrgID, Principal], string>,
-  'revokeOrgRep' : ActorMethod<
-    [OrgID, Principal, bigint, [] | [string]],
-    string
-  >,
   'revokeRep' : ActorMethod<[OrgID, Principal, bigint, [] | [string]], string>,
 }
 export declare const idlFactory: IDL.InterfaceFactory;

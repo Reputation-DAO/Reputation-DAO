@@ -39,6 +39,7 @@ import {
 } from 'recharts';
 import { getPlugActor } from '../components/canister/reputationDao';
 import { useRole } from '../contexts/RoleContext';
+import ProtectedPage from '../components/layout/ProtectedPage';
 
 interface Transaction {
   id: number;
@@ -89,6 +90,8 @@ const Dashboard: React.FC = React.memo(() => {
     const storedOrgId = localStorage.getItem('selectedOrgId');
     if (storedOrgId) {
       setOrgId(storedOrgId);
+      // Trigger role refresh when organization changes
+      window.dispatchEvent(new CustomEvent('orgChanged'));
     } else {
       // Redirect to org selector if no org selected
       navigate('/org-selector');
@@ -187,13 +190,18 @@ const Dashboard: React.FC = React.memo(() => {
         throw new Error('Failed to connect to blockchain');
       }
 
-      // Verify that the user belongs to this organization
-      const userOrg = await actor.getMyOrganization();
-      const userOrgId = Array.isArray(userOrg) ? userOrg[0] : userOrg;
-      
-      if (!userOrgId || userOrgId !== orgId) {
-        console.warn('User does not belong to the selected organization:', { userOrgId, selectedOrgId: orgId });
-        throw new Error('Access denied: You do not belong to this organization');
+      // Simply verify the organization exists - don't restrict access
+      // The role-based UI will handle what data to show based on user permissions
+      try {
+        const orgCheckResult = await actor.getTransactionCount(orgId);
+        const orgExists = Array.isArray(orgCheckResult) ? orgCheckResult[0] !== null : orgCheckResult !== null;
+        
+        if (!orgExists) {
+          throw new Error('Organization does not exist');
+        }
+      } catch (error) {
+        console.warn('Organization verification failed:', error);
+        throw new Error('Access denied: Organization does not exist or is not accessible');
       }
 
       // Fetch all data in parallel with orgId parameter
@@ -850,4 +858,12 @@ const Dashboard: React.FC = React.memo(() => {
   );
 });
 
-export default Dashboard;
+const DashboardWithProtection: React.FC = () => {
+  return (
+    <ProtectedPage>
+      <Dashboard />
+    </ProtectedPage>
+  );
+};
+
+export default DashboardWithProtection;

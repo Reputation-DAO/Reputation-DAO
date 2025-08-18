@@ -3,6 +3,7 @@ import { Box, CssBaseline, Drawer } from '@mui/material';
 import AppBarHeader from './AppBarHeader';
 import DrawerContent from './DrawerContent';
 import { RoleProvider } from '../../contexts/RoleContext';
+
 const drawerWidth = 220;
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {

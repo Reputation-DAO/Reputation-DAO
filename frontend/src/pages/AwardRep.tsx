@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ProtectedPage from '../components/layout/ProtectedPage';
 import {
   Box,
   Card,
@@ -820,4 +821,12 @@ const AwardRep: React.FC = () => {
   );
 };
 
-export default AwardRep;
+const AwardRepWithProtection: React.FC = () => {
+  return (
+    <ProtectedPage>
+      <AwardRep />
+    </ProtectedPage>
+  );
+};
+
+export default AwardRepWithProtection;

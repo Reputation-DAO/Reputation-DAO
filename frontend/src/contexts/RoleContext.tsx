@@ -60,7 +60,17 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       const principalText = principal.toString();
       setUserName(`${principalText.slice(0, 5)}...${principalText.slice(-3)}`);
 
-      // Get actor to check user's organization role
+      // Get currently selected organization from localStorage
+      const selectedOrgId = localStorage.getItem('selectedOrgId');
+      if (!selectedOrgId) {
+        console.log('❌ No organization selected, setting as User');
+        setUserRole('User');
+        return;
+      }
+
+      console.log('🏢 Selected organization:', selectedOrgId);
+
+      // Get actor to check user's role in the selected organization
       console.log('🔗 Getting actor to check organization role...');
       const actor = await getPlugActor();
       if (!actor) {
@@ -69,27 +79,27 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
         return;
       }
 
-      // Use new backend functions to check role
-      console.log('🏢 Checking if user is admin of their organization...');
-      const isOrgAdmin = await actor.isMyOrgAdmin();
-      console.log('👑 Is org admin:', isOrgAdmin);
-
-      if (isOrgAdmin) {
-        console.log('✅ User is Admin of their organization');
+      // Check if user is admin of the currently selected organization
+      console.log('👑 Checking if user is admin of selected organization...');
+      const orgAdmin = await actor.getOrgAdmin(selectedOrgId);
+      const adminPrincipal = Array.isArray(orgAdmin) ? orgAdmin[0] : orgAdmin;
+      
+      if (adminPrincipal && adminPrincipal.toString() === principalText) {
+        console.log('✅ User is Admin of the selected organization');
         setUserRole('Admin');
         return;
       }
 
-      // Check if user has an organization (trusted awarder)
-      console.log('🔍 Checking user organization...');
-      const myOrg = await actor.getMyOrganization();
-      console.log('🏢 User organization:', myOrg);
+      // Check if user is a trusted awarder in the selected organization
+      console.log('🔍 Checking if user is trusted awarder in selected organization...');
+      const isOrgAwarder = await actor.isOrgTrustedAwarderQuery(selectedOrgId, principal);
+      const isAwarder = Array.isArray(isOrgAwarder) ? isOrgAwarder[0] : isOrgAwarder;
 
-      if (myOrg && myOrg.length > 0) {
-        console.log('✅ User is Awarder (has organization association)');
+      if (isAwarder) {
+        console.log('✅ User is Awarder in the selected organization');
         setUserRole('Awarder');
       } else {
-        console.log('👤 User is regular User (no organization association)');
+        console.log('👤 User is regular User in the selected organization');
         setUserRole('User');
       }
 
@@ -105,6 +115,25 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   // Initial role determination
   useEffect(() => {
     determineUserRole();
+  }, []);
+
+  // Listen for organization changes in localStorage
+  useEffect(() => {
+    const handleStorageChange = () => {
+      console.log('🔄 Organization changed in localStorage, refreshing role...');
+      determineUserRole();
+    };
+
+    // Listen for storage changes
+    window.addEventListener('storage', handleStorageChange);
+
+    // Also listen for custom events when org changes within the same tab
+    window.addEventListener('orgChanged', handleStorageChange as EventListener);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('orgChanged', handleStorageChange as EventListener);
+    };
   }, []);
 
   // Context value
