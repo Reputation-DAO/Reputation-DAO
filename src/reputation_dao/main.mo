@@ -724,7 +724,21 @@ public shared({caller}) func removeTrustedAwarder(orgId: OrgID, p: Principal) : 
         };
     };
 
-
+    // basically to get already registered awarders for an organization
+    public query func getTrustedAwarders(orgId: OrgID) : async ?[Awarder] {
+        switch (validateOrgExists(orgId)) {
+            case null { null };
+            case (?orgData) {
+                let awarders = Array.map<(Principal, Text), Awarder>(
+                    orgData.trustedAwarders,
+                    func((p: Principal, name: Text)) : Awarder {
+                        { id = p; name = name }
+                    }
+                );
+                ?awarders
+            };
+        };
+    };
 
 
 
@@ -783,21 +797,7 @@ public shared({caller}) func removeTrustedAwarder(orgId: OrgID, p: Principal) : 
         };
     };
 
-    // basically to get already registered awarders for an organization
-    public query func getTrustedAwarders(orgId: OrgID) : async ?[Awarder] {
-        switch (validateOrgExists(orgId)) {
-            case null { null };
-            case (?orgData) {
-                let awarders = Array.map<(Principal, Text), Awarder>(
-                    orgData.trustedAwarders,
-                    func((p: Principal, name: Text)) : Awarder {
-                        { id = p; name = name }
-                    }
-                );
-                ?awarders
-            };
-        };
-    };
+ 
 
     // --- DECAY SYSTEM PUBLIC FUNCTIONS ---
 
