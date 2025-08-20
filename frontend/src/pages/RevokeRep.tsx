@@ -138,7 +138,7 @@ const RevokeRep: React.FC = () => {
             amount: Number(tx.amount),
             reason: (tx.reason && tx.reason.length > 0) ? tx.reason[0]! : 'No reason provided',
             date,
-            status: 'completed',
+            status: 'completed' as const,
             revokedBy: tx.from.toString()
           };
         })

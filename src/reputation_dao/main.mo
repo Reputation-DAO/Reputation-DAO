@@ -134,25 +134,41 @@ persistent actor ReputationDAO {
     // --- AUTOMATIC DECAY TIMER ---
 
 
-    // Automatic decay processing function
+    // Automatic decay processing function - now processes all organizations
     private func processAutomaticDecay() : async () {
         if (not decayConfig.enabled) return;
 
-        Debug.print("Processing automatic decay...");
+        Debug.print("Processing automatic decay for all organizations...");
 
-        var processedUsers = 0;
+        var totalProcessedUsers = 0;
         var totalDecayed = 0;
 
-        for ((user, _) in Trie.iter(_balances)) {
-            let decayAmount = applyDecayToUser(user);
-            if (decayAmount > 0) {
-                processedUsers += 1;
-                totalDecayed += decayAmount;
+        // Process each organization
+        for ((orgId, orgData) in Trie.iter(organizations)) {
+            var orgProcessedUsers = 0;
+            var orgTotalDecayed = 0;
+
+            // Process each user in this organization
+            for ((user, balance) in orgData.userBalances.vals()) {
+                if (balance > 0) {
+                    let decayAmount = applyDecayToUserInOrg(orgId, user);
+                    if (decayAmount > 0) {
+                        orgProcessedUsers += 1;
+                        orgTotalDecayed += decayAmount;
+                    };
+                };
+            };
+
+            totalProcessedUsers += orgProcessedUsers;
+            totalDecayed += orgTotalDecayed;
+            
+            if (orgProcessedUsers > 0) {
+                Debug.print("Org " # orgId # ": processed " # debug_show(orgProcessedUsers) # " users, decayed " # debug_show(orgTotalDecayed) # " points");
             };
         };
 
         lastGlobalDecayProcess := now();
-        Debug.print("Automatic decay processed " # debug_show(processedUsers) # " users, total decayed: " # debug_show(totalDecayed));
+        Debug.print("Automatic decay processed " # debug_show(totalProcessedUsers) # " users across all orgs, total decayed: " # debug_show(totalDecayed));
     };
 
     // Heartbeat throttle: only process when full interval elapsed
@@ -425,6 +441,208 @@ persistent actor ReputationDAO {
         Debug.print("Applied decay: " # Nat.toText(decayAmount) # " points to user " # Principal.toText(user));
         
         decayAmount
+    };
+
+    // Apply decay to a user within a specific organization
+    private func applyDecayToUserInOrg(orgId: OrgID, user: Principal) : Nat {
+        switch (validateOrgExists(orgId)) {
+            case null { return 0; }; // Organization doesn't exist
+            case (?orgData) {
+                // Get user's balance in this organization
+                let userBalance = switch (Array.find<(Principal, Nat)>(orgData.userBalances, func(entry) = Principal.equal(entry.0, user))) {
+                    case null { 0 };
+                    case (?(_, balance)) { balance };
+                };
+
+                if (userBalance == 0) return 0;
+
+                let decayAmount = calculateDecayAmountInOrg(orgId, user, userBalance);
+                if (decayAmount == 0) return 0;
+
+                let newBalance = if (userBalance >= decayAmount) {
+                    Nat.sub(userBalance, decayAmount)
+                } else {
+                    0
+                };
+
+                // Update the user's balance in the organization
+                let updatedUserBalances = Array.map<(Principal, Nat), (Principal, Nat)>(
+                    orgData.userBalances,
+                    func(entry: (Principal, Nat)) : (Principal, Nat) {
+                        if (Principal.equal(entry.0, user)) {
+                            (user, newBalance)
+                        } else {
+                            entry
+                        }
+                    }
+                );
+
+                // Update user decay info in the organization
+                let currentTime = now();
+                let info = getOrInitUserDecayInfoInOrg(orgId, user);
+                
+                // Calculate how many complete intervals have passed
+                let timeSinceLastDecay = if (currentTime >= info.lastDecayTime) {
+                    Nat.sub(currentTime, info.lastDecayTime)
+                } else { 0 };
+                
+                let intervalsElapsed = if (decayConfig.decayInterval > 0) {
+                    timeSinceLastDecay / decayConfig.decayInterval
+                } else { 1 };
+                
+                // Roll lastDecayTime forward by complete intervals to prevent drift
+                let newLastDecayTime = info.lastDecayTime + (intervalsElapsed * decayConfig.decayInterval);
+                
+                let updatedDecayInfo = {
+                    lastDecayTime = newLastDecayTime;
+                    registrationTime = info.registrationTime;
+                    lastActivityTime = info.lastActivityTime;
+                    totalDecayed = info.totalDecayed + decayAmount;
+                };
+
+                let updatedUserDecayInfo = Array.map<(Principal, UserDecayInfo), (Principal, UserDecayInfo)>(
+                    orgData.userDecayInfo,
+                    func(entry: (Principal, UserDecayInfo)) : (Principal, UserDecayInfo) {
+                        if (Principal.equal(entry.0, user)) {
+                            (user, updatedDecayInfo)
+                        } else {
+                            entry
+                        }
+                    }
+                );
+
+                // Add decay transaction to organization's history
+                let decayTransaction : Transaction = {
+                    id = orgData.nextTransactionId;
+                    transactionType = #Decay;
+                    from = user;
+                    to = user;
+                    amount = decayAmount;
+                    timestamp = now();
+                    reason = ?"Automatic point decay";
+                };
+
+                let updatedTransactionHistory = Array.append(orgData.transactionHistory, [decayTransaction]);
+
+                // Update organization data
+                let updatedOrgData: OrgData = {
+                    admin = orgData.admin;
+                    trustedAwarders = orgData.trustedAwarders;
+                    userBalances = updatedUserBalances;
+                    dailyMinted = orgData.dailyMinted;
+                    lastMintTimestamp = orgData.lastMintTimestamp;
+                    userDecayInfo = updatedUserDecayInfo;
+                    transactionHistory = updatedTransactionHistory;
+                    nextTransactionId = orgData.nextTransactionId + 1;
+                    totalDecayedPoints = orgData.totalDecayedPoints + decayAmount;
+                    lastGlobalDecayProcess = orgData.lastGlobalDecayProcess;
+                };
+
+                organizations := Trie.put<OrgID, OrgData>(organizations, textKey(orgId), Text.equal, updatedOrgData).0;
+
+                Debug.print("Applied decay in org " # orgId # ": " # Nat.toText(decayAmount) # " points to user " # Principal.toText(user));
+                
+                decayAmount
+            };
+        };
+    };
+
+    // Calculate decay amount for a user within a specific organization
+    private func calculateDecayAmountInOrg(orgId: OrgID, user: Principal, currentBalance: Nat) : Nat {
+        if (not decayConfig.enabled) return 0;
+        if (currentBalance < decayConfig.minThreshold) return 0;
+
+        let info = getOrInitUserDecayInfoInOrg(orgId, user);
+        let currentTime = now();
+
+        // Check grace period
+        if (currentTime < info.registrationTime + decayConfig.gracePeriod) {
+            return 0;
+        };
+
+        // Check if decay interval has passed
+        if (currentTime < info.lastDecayTime + decayConfig.decayInterval) {
+            return 0;
+        };
+
+        // Calculate number of decay periods passed
+        let timeSinceLastDecay = if (currentTime >= info.lastDecayTime) {
+            Nat.sub(currentTime, info.lastDecayTime)
+        } else {
+            0
+        };
+        let decayPeriods = timeSinceLastDecay / decayConfig.decayInterval;
+        
+        if (decayPeriods == 0) return 0;
+
+        // Calculate simple decay amount
+        let decayAmount = (currentBalance * decayConfig.decayRate * decayPeriods) / 10000;
+        
+        // Ensure we don't decay below minimum threshold
+        if (currentBalance >= decayAmount) {
+            let newBalance = Nat.sub(currentBalance, decayAmount);
+            if (newBalance < decayConfig.minThreshold and currentBalance >= decayConfig.minThreshold) {
+                return Nat.sub(currentBalance, decayConfig.minThreshold);
+            } else {
+                return decayAmount;
+            };
+        } else {
+            // If decay would take balance to 0, decay to minimum threshold instead
+            if (currentBalance > decayConfig.minThreshold) {
+                return Nat.sub(currentBalance, decayConfig.minThreshold);
+            } else {
+                return 0;
+            };
+        };
+    };
+
+    // Get or initialize user decay info within a specific organization
+    private func getOrInitUserDecayInfoInOrg(orgId: OrgID, user: Principal) : UserDecayInfo {
+        switch (validateOrgExists(orgId)) {
+            case null {
+                // Return default if org doesn't exist
+                let currentTime = now();
+                {
+                    lastDecayTime = currentTime;
+                    registrationTime = currentTime;
+                    lastActivityTime = currentTime;
+                    totalDecayed = 0;
+                }
+            };
+            case (?orgData) {
+                switch (Array.find<(Principal, UserDecayInfo)>(orgData.userDecayInfo, func(entry) = Principal.equal(entry.0, user))) {
+                    case (?(_, info)) { info };
+                    case null {
+                        // Initialize new decay info for this user in this org
+                        let currentTime = now();
+                        let newInfo : UserDecayInfo = {
+                            lastDecayTime = currentTime;
+                            registrationTime = currentTime;
+                            lastActivityTime = currentTime;
+                            totalDecayed = 0;
+                        };
+                        
+                        // Add to organization's userDecayInfo
+                        let updatedUserDecayInfo = Array.append(orgData.userDecayInfo, [(user, newInfo)]);
+                        let updatedOrgData: OrgData = {
+                            admin = orgData.admin;
+                            trustedAwarders = orgData.trustedAwarders;
+                            userBalances = orgData.userBalances;
+                            dailyMinted = orgData.dailyMinted;
+                            lastMintTimestamp = orgData.lastMintTimestamp;
+                            userDecayInfo = updatedUserDecayInfo;
+                            transactionHistory = orgData.transactionHistory;
+                            nextTransactionId = orgData.nextTransactionId;
+                            totalDecayedPoints = orgData.totalDecayedPoints;
+                            lastGlobalDecayProcess = orgData.lastGlobalDecayProcess;
+                        };
+                        organizations := Trie.put<OrgID, OrgData>(organizations, textKey(orgId), Text.equal, updatedOrgData).0;
+                        
+                        newInfo
+                    };
+                };
+            };
+        };
     };
 
  /// Register a new organization
@@ -797,7 +1015,133 @@ public shared({caller}) func removeTrustedAwarder(orgId: OrgID, p: Principal) : 
         };
     };
 
+    // --- GLOBAL TRANSACTION FUNCTIONS (for decay system compatibility) ---
+
+    // Get all transactions from all organizations (for decay system)
+    public query func getAllTransactions() : async [Transaction] {
+        var allTransactions : [Transaction] = [];
+        
+        for ((orgId, orgData) in Trie.iter(organizations)) {
+            allTransactions := Array.append(allTransactions, orgData.transactionHistory);
+        };
+        
+        // Sort by timestamp (newest first)
+        Array.sort<Transaction>(allTransactions, func(a: Transaction, b: Transaction) : {#less; #equal; #greater} {
+            if (a.timestamp > b.timestamp) { #less }
+            else if (a.timestamp < b.timestamp) { #greater }
+            else { #equal }
+        })
+    };
+
  
+
+    // --- ORGANIZATION-SPECIFIC DECAY FUNCTIONS ---
+
+    // Get decay statistics for a specific organization
+    public query func getOrgDecayStatistics(orgId: OrgID) : async ?{
+        totalDecayedPoints: Nat;
+        lastGlobalDecayProcess: Nat;
+        configEnabled: Bool;
+        userCount: Nat;
+        totalPoints: Nat;
+    } {
+        switch (validateOrgExists(orgId)) {
+            case null { null };
+            case (?orgData) {
+                let userCount = orgData.userBalances.size();
+                var totalPoints = 0;
+                
+                for ((user, balance) in orgData.userBalances.vals()) {
+                    totalPoints += balance;
+                };
+                
+                ?{
+                    totalDecayedPoints = orgData.totalDecayedPoints;
+                    lastGlobalDecayProcess = orgData.lastGlobalDecayProcess;
+                    configEnabled = decayConfig.enabled;
+                    userCount = userCount;
+                    totalPoints = totalPoints;
+                }
+            };
+        };
+    };
+
+    // Get transaction history for a specific organization (including decay transactions)
+    public query func getOrgTransactionHistory(orgId: OrgID) : async ?[Transaction] {
+        switch (validateOrgExists(orgId)) {
+            case null { null };
+            case (?orgData) { 
+                // Sort by timestamp (newest first)
+                let sorted = Array.sort<Transaction>(orgData.transactionHistory, func(a: Transaction, b: Transaction) : {#less; #equal; #greater} {
+                    if (a.timestamp > b.timestamp) { #less }
+                    else if (a.timestamp < b.timestamp) { #greater }
+                    else { #equal }
+                });
+                ?sorted 
+            };
+        };
+    };
+
+    // Get user balances for a specific organization
+    public query func getOrgUserBalances(orgId: OrgID) : async ?[(Principal, Nat)] {
+        switch (validateOrgExists(orgId)) {
+            case null { null };
+            case (?orgData) { ?orgData.userBalances };
+        };
+    };
+
+    // Get decay analytics for a specific organization
+    public query func getOrgDecayAnalytics(orgId: OrgID) : async ?{
+        totalUsers: Nat;
+        usersWithDecay: Nat;
+        totalPointsDecayed: Nat;
+        averageDecayPerUser: Nat;
+        recentDecayTransactions: [Transaction];
+    } {
+        switch (validateOrgExists(orgId)) {
+            case null { null };
+            case (?orgData) {
+                let totalUsers = orgData.userBalances.size();
+                var usersWithDecay = 0;
+                
+                // Count users who have had decay applied
+                for ((user, decayInfo) in orgData.userDecayInfo.vals()) {
+                    if (decayInfo.totalDecayed > 0) {
+                        usersWithDecay += 1;
+                    };
+                };
+                
+                let averageDecay = if (totalUsers > 0) {
+                    orgData.totalDecayedPoints / totalUsers
+                } else { 0 };
+                
+                // Get recent decay transactions (last 10)
+                let decayTransactions = Array.filter<Transaction>(orgData.transactionHistory, func(tx: Transaction) : Bool {
+                    switch (tx.transactionType) {
+                        case (#Decay) { true };
+                        case (_) { false };
+                    }
+                });
+                
+                let recentDecayTxs = if (decayTransactions.size() > 10) {
+                    let sorted = Array.sort<Transaction>(decayTransactions, func(a: Transaction, b: Transaction) : {#less; #equal; #greater} {
+                        if (a.timestamp > b.timestamp) { #less }
+                        else if (a.timestamp < b.timestamp) { #greater }
+                        else { #equal }
+                    });
+                    Array.subArray<Transaction>(sorted, 0, 10)
+                } else { decayTransactions };
+                
+                ?{
+                    totalUsers = totalUsers;
+                    usersWithDecay = usersWithDecay;
+                    totalPointsDecayed = orgData.totalDecayedPoints;
+                    averageDecayPerUser = averageDecay;
+                    recentDecayTransactions = recentDecayTxs;
+                }
+            };
+        };
+    };
 
     // --- DECAY SYSTEM PUBLIC FUNCTIONS ---
 
@@ -1001,14 +1345,21 @@ public shared({caller}) func removeTrustedAwarder(orgId: OrgID, p: Principal) : 
         return "Success: Processed " # Nat.toText(usersProcessed) # " users with total decay of " # Nat.toText(totalDecayApplied) # " points.";
     };
 
-    // 1️⃣7️⃣ Get decay statistics
+    // 1️⃣7️⃣ Get decay statistics - aggregated from all organizations
     public query func getDecayStatistics() : async {
         totalDecayedPoints: Nat;
         lastGlobalDecayProcess: Nat;
         configEnabled: Bool;
     } {
+        var totalDecayed = 0;
+        
+        // Aggregate decay statistics from all organizations
+        for ((orgId, orgData) in Trie.iter(organizations)) {
+            totalDecayed += orgData.totalDecayedPoints;
+        };
+        
         {
-            totalDecayedPoints = totalDecayedPoints;
+            totalDecayedPoints = totalDecayed;
             lastGlobalDecayProcess = lastGlobalDecayProcess;
             configEnabled = decayConfig.enabled;
         }
@@ -1042,6 +1393,16 @@ public shared({caller}) func removeTrustedAwarder(orgId: OrgID, p: Principal) : 
             pendingDecay = pendingDecay;
             decayInfo = decayInfo;
         }
+    };
+
+    // 1️⃣9️⃣ Manual decay trigger (for testing) - Owner only
+    public shared({caller}) func triggerManualDecay() : async Text {
+        if (not Principal.equal(caller, owner)) {
+            return "Error: Only owner can trigger manual decay.";
+        };
+        
+        await processAutomaticDecay();
+        return "Success: Manual decay processing completed.";
     };
 
     // --- AUTO-INJECT ORGANIZATION FUNCTIONS ---

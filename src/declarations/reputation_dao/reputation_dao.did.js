@@ -1,18 +1,5 @@
 export const idlFactory = ({ IDL }) => {
   const OrgID = IDL.Text;
-  const UserDecayInfo = IDL.Record({
-    'lastActivityTime' : IDL.Nat,
-    'totalDecayed' : IDL.Nat,
-    'lastDecayTime' : IDL.Nat,
-    'registrationTime' : IDL.Nat,
-  });
-  const DecayConfig = IDL.Record({
-    'minThreshold' : IDL.Nat,
-    'gracePeriod' : IDL.Nat,
-    'enabled' : IDL.Bool,
-    'decayInterval' : IDL.Nat,
-    'decayRate' : IDL.Nat,
-  });
   const TransactionType = IDL.Variant({
     'Revoke' : IDL.Null,
     'Decay' : IDL.Null,
@@ -26,6 +13,19 @@ export const idlFactory = ({ IDL }) => {
     'timestamp' : IDL.Nat,
     'amount' : IDL.Nat,
     'reason' : IDL.Opt(IDL.Text),
+  });
+  const UserDecayInfo = IDL.Record({
+    'lastActivityTime' : IDL.Nat,
+    'totalDecayed' : IDL.Nat,
+    'lastDecayTime' : IDL.Nat,
+    'registrationTime' : IDL.Nat,
+  });
+  const DecayConfig = IDL.Record({
+    'minThreshold' : IDL.Nat,
+    'gracePeriod' : IDL.Nat,
+    'enabled' : IDL.Bool,
+    'decayInterval' : IDL.Nat,
+    'decayRate' : IDL.Nat,
   });
   const OrgStats = IDL.Record({
     'admin' : IDL.Principal,
@@ -63,6 +63,7 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'getAllOrgs' : IDL.Func([], [IDL.Vec(OrgID)], ['query']),
+    'getAllTransactions' : IDL.Func([], [IDL.Vec(Transaction)], ['query']),
     'getBalance' : IDL.Func(
         [OrgID, IDL.Principal],
         [IDL.Opt(IDL.Nat)],
@@ -106,7 +107,42 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Opt(IDL.Nat)],
         ['query'],
       ),
+    'getOrgDecayAnalytics' : IDL.Func(
+        [OrgID],
+        [
+          IDL.Opt(
+            IDL.Record({
+              'usersWithDecay' : IDL.Nat,
+              'recentDecayTransactions' : IDL.Vec(Transaction),
+              'totalUsers' : IDL.Nat,
+              'totalPointsDecayed' : IDL.Nat,
+              'averageDecayPerUser' : IDL.Nat,
+            })
+          ),
+        ],
+        ['query'],
+      ),
+    'getOrgDecayStatistics' : IDL.Func(
+        [OrgID],
+        [
+          IDL.Opt(
+            IDL.Record({
+              'lastGlobalDecayProcess' : IDL.Nat,
+              'configEnabled' : IDL.Bool,
+              'totalPoints' : IDL.Nat,
+              'totalDecayedPoints' : IDL.Nat,
+              'userCount' : IDL.Nat,
+            })
+          ),
+        ],
+        ['query'],
+      ),
     'getOrgStats' : IDL.Func([OrgID], [IDL.Opt(OrgStats)], ['query']),
+    'getOrgTransactionHistory' : IDL.Func(
+        [OrgID],
+        [IDL.Opt(IDL.Vec(Transaction))],
+        ['query'],
+      ),
     'getOrgTransactions' : IDL.Func(
         [OrgID],
         [IDL.Opt(IDL.Vec(Transaction))],
@@ -115,6 +151,11 @@ export const idlFactory = ({ IDL }) => {
     'getOrgTrustedAwarders' : IDL.Func(
         [OrgID],
         [IDL.Opt(IDL.Vec(Awarder))],
+        ['query'],
+      ),
+    'getOrgUserBalances' : IDL.Func(
+        [OrgID],
+        [IDL.Opt(IDL.Vec(IDL.Tuple(IDL.Principal, IDL.Nat)))],
         ['query'],
       ),
     'getRawBalance' : IDL.Func([IDL.Principal], [IDL.Nat], ['query']),
@@ -159,6 +200,7 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Text],
         [],
       ),
+    'triggerManualDecay' : IDL.Func([], [IDL.Text], []),
   });
 };
 export const init = ({ IDL }) => { return []; };

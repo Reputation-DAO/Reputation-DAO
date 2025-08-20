@@ -33,7 +33,7 @@ import {
 } from '@mui/icons-material';
 import { useRole } from '../../contexts/RoleContext';
 import {
-  getTransactionHistory,
+  getOrgTransactionHistory,
   getTransactionsByUser,
   type Transaction,
   type TransactionType,
@@ -55,21 +55,34 @@ const DecayTransactionFilter: React.FC<DecayTransactionFilterProps> = ({
   const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [orgId, setOrgId] = useState<string | null>(null);
   
   // Filter states
   const [typeFilter, setTypeFilter] = useState<TransactionType | 'All'>('All');
   const [dateRange, setDateRange] = useState<string>('all'); // 'day', 'week', 'month', 'all'
   const [searchTerm, setSearchTerm] = useState<string>('');
 
+  // Get orgId from localStorage
   useEffect(() => {
-    fetchTransactions();
-  }, [currentPrincipal, userId]);
+    const storedOrgId = localStorage.getItem('selectedOrgId');
+    if (storedOrgId) {
+      setOrgId(storedOrgId);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (orgId) {
+      fetchTransactions();
+    }
+  }, [currentPrincipal, userId, orgId]);
 
   useEffect(() => {
     applyFilters();
   }, [transactions, typeFilter, dateRange, searchTerm, showOnlyDecay]);
 
   const fetchTransactions = async () => {
+    if (!orgId) return;
+    
     setLoading(true);
     setError(null);
 
@@ -79,9 +92,9 @@ const DecayTransactionFilter: React.FC<DecayTransactionFilterProps> = ({
       if (userId && currentPrincipal) {
         // Get specific user's transactions
         txs = await getTransactionsByUser(currentPrincipal);
-      } else if (isAdmin) {
-        // Admin can see all transactions
-        txs = await getTransactionHistory();
+      } else if (isAdmin && orgId) {
+        // Admin can see all transactions for the organization
+        txs = await getOrgTransactionHistory(orgId);
       } else if (currentPrincipal) {
         // Regular users see only their own transactions
         txs = await getTransactionsByUser(currentPrincipal);
@@ -199,6 +212,19 @@ const DecayTransactionFilter: React.FC<DecayTransactionFilterProps> = ({
   const totalDecayAmount = transactions
     .filter(tx => tx.transactionType === 'Decay')
     .reduce((sum, tx) => sum + tx.amount, 0);
+
+  // Show loading message if orgId is not available
+  if (!orgId) {
+    return (
+      <Card className={className}>
+        <CardContent>
+          <Alert severity="info">
+            Please select an organization to view transaction history.
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className={className}>

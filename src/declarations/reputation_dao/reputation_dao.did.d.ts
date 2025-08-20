@@ -47,6 +47,7 @@ export interface _SERVICE {
     string
   >,
   'getAllOrgs' : ActorMethod<[], Array<OrgID>>,
+  'getAllTransactions' : ActorMethod<[], Array<Transaction>>,
   'getBalance' : ActorMethod<[OrgID, Principal], [] | [bigint]>,
   'getBalanceWithDetails' : ActorMethod<
     [Principal],
@@ -75,9 +76,38 @@ export interface _SERVICE {
   >,
   'getOrgAdmin' : ActorMethod<[OrgID], [] | [Principal]>,
   'getOrgBalance' : ActorMethod<[OrgID, Principal], [] | [bigint]>,
+  'getOrgDecayAnalytics' : ActorMethod<
+    [OrgID],
+    [] | [
+      {
+        'usersWithDecay' : bigint,
+        'recentDecayTransactions' : Array<Transaction>,
+        'totalUsers' : bigint,
+        'totalPointsDecayed' : bigint,
+        'averageDecayPerUser' : bigint,
+      }
+    ]
+  >,
+  'getOrgDecayStatistics' : ActorMethod<
+    [OrgID],
+    [] | [
+      {
+        'lastGlobalDecayProcess' : bigint,
+        'configEnabled' : boolean,
+        'totalPoints' : bigint,
+        'totalDecayedPoints' : bigint,
+        'userCount' : bigint,
+      }
+    ]
+  >,
   'getOrgStats' : ActorMethod<[OrgID], [] | [OrgStats]>,
+  'getOrgTransactionHistory' : ActorMethod<[OrgID], [] | [Array<Transaction>]>,
   'getOrgTransactions' : ActorMethod<[OrgID], [] | [Array<Transaction>]>,
   'getOrgTrustedAwarders' : ActorMethod<[OrgID], [] | [Array<Awarder>]>,
+  'getOrgUserBalances' : ActorMethod<
+    [OrgID],
+    [] | [Array<[Principal, bigint]>]
+  >,
   'getRawBalance' : ActorMethod<[Principal], bigint>,
   'getTransactionById' : ActorMethod<[OrgID, bigint], [] | [Transaction]>,
   'getTransactionCount' : ActorMethod<[OrgID], [] | [bigint]>,
@@ -95,6 +125,7 @@ export interface _SERVICE {
   'registerOrg' : ActorMethod<[OrgID], string>,
   'removeTrustedAwarder' : ActorMethod<[OrgID, Principal], string>,
   'revokeRep' : ActorMethod<[OrgID, Principal, bigint, [] | [string]], string>,
+  'triggerManualDecay' : ActorMethod<[], string>,
 }
 export declare const idlFactory: IDL.InterfaceFactory;
 export declare const init: (args: { IDL: typeof IDL }) => IDL.Type[];
