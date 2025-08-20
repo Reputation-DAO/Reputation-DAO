@@ -7,7 +7,6 @@
     --background: 0 0% 98%;
     --foreground: 222 47% 11%;
 
-
     --primary: 220 90% 56%;
     --primary-foreground: 0 0% 100%;
 
@@ -16,7 +15,6 @@
 
     --accent: 200 90% 55%;
     --accent-foreground: 0 0% 100%;
-
 
     --muted: 222 16% 92%;
     --muted-foreground: 220 10% 40%;
@@ -39,7 +37,10 @@
 
     --radius: 0.5rem;
 
+    /* Shadow variants */
     --shadow-lg: 0 6px 20px rgba(0, 0, 0, 0.1);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+
     --glass-blur: blur(14px);
     --glass-border: 1px solid rgba(0, 0, 0, 0.08);
     --transition-fast: 150ms ease-in-out;
@@ -52,7 +53,6 @@
     --background: 222 50% 3%;
     --foreground: 0 0% 98%;
 
-
     --primary: 220 90% 66%;
     --primary-foreground: 0 0% 100%;
 
@@ -63,7 +63,6 @@
     --accent-foreground: 0 0% 100%;
 
     --muted: 222 30% 17%;
-
     --muted-foreground: 220 10% 65%;
 
     --info: 210 100% 60%;
@@ -85,6 +84,8 @@
     --radius: 0.5rem;
 
     --shadow-lg: 0 6px 20px rgba(0, 0, 0, 0.25);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.15);
+
     --glass-blur: blur(14px);
     --glass-border: 1px solid rgba(255, 255, 255, 0.1);
     --transition-fast: 150ms ease-in-out;
@@ -104,7 +105,8 @@
     font-family: system-ui, sans-serif;
   }
 
-  html, body {
+  html,
+  body {
     overflow: auto;
     scrollbar-width: none;
     -ms-overflow-style: none;

@@ -3,6 +3,8 @@ import { Box, CssBaseline, Drawer } from '@mui/material';
 import AppBarHeader from './AppBarHeader';
 import DrawerContent from './DrawerContent';
 import { RoleProvider } from '../../contexts/RoleContext';
+import Sidebar from './Sidebar';
+
 const drawerWidth = 220;
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -22,55 +24,36 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   return (
     <RoleProvider>
-    <Box sx={{ display: 'flex' }}>
-      <CssBaseline />
-      <AppBarHeader onMenuClick={handleDrawerToggle} />
+      <Box sx={{ display: 'flex' }}>
+        <CssBaseline />
+        <AppBarHeader onMenuClick={handleDrawerToggle} />
 
-      {/* Sidebar Navigation */}
-      <Box component="nav" sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}>
-        {/* Mobile Drawer */}
-        <Drawer
-          variant="temporary"
-          open={mobileOpen}
-          onClose={handleDrawerToggle}
-          ModalProps={{ keepMounted: true }}
+        {/* Sidebar Navigation */}
+        
+
+        <Sidebar
+          mobileOpen={mobileOpen}
+          handleDrawerToggle={handleDrawerToggle}
+          drawerWidth={drawerWidth}
+        />
+
+
+        {/* Main Content */}
+        <Box
+          component="main"
           sx={{
-            display: { xs: 'block', sm: 'none' },
-            '& .MuiDrawer-paper': drawerPaperStyles,
+            flexGrow: 1,
+            width: { sm: `calc(100% - ${drawerWidth}px)` },
+            backgroundColor: 'hsl(var(--background))',
+            color: 'hsl(var(--foreground))',
+            minHeight: '100vh',
+            transition: 'background-color var(--transition-smooth), color var(--transition-smooth)',
+            pt: '50px', // <-- Add padding-top equal to AppBar height
           }}
         >
-          <DrawerContent />
-        </Drawer>
-
-        {/* Desktop Drawer */}
-        <Drawer
-          variant="permanent"
-          open
-          sx={{
-            display: { xs: 'none', sm: 'block' },
-            '& .MuiDrawer-paper': drawerPaperStyles,
-          }}
-        >
-          <DrawerContent />
-        </Drawer>
+          {children}
+        </Box>
       </Box>
-
-      {/* Main Content */}
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          backgroundColor: 'hsl(var(--background))',
-          color: 'hsl(var(--foreground))',
-          minHeight: '100vh',
-          transition: 'background-color var(--transition-smooth), color var(--transition-smooth)',
-        }}
-      >
-        {children}
-      </Box>
-
-    </Box>
     </RoleProvider>
   );
 };

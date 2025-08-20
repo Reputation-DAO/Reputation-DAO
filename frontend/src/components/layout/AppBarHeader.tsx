@@ -4,9 +4,9 @@ import {
   Toolbar,
   Typography,
   IconButton,
-  useTheme,
   Box,
   Tooltip,
+  useTheme,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import Brightness4Icon from '@mui/icons-material/Brightness4';
@@ -20,7 +20,9 @@ interface AppBarHeaderProps {
 const AppBarHeader: React.FC<AppBarHeaderProps> = ({ onMenuClick }) => {
   const theme = useTheme();
   const [mode, setMode] = useState<'light' | 'dark'>(
-    typeof window !== 'undefined' && localStorage.getItem('theme') === 'light' ? 'light' : 'dark'
+    typeof window !== 'undefined' && localStorage.getItem('theme') === 'light'
+      ? 'light'
+      : 'dark'
   );
 
   useEffect(() => {
@@ -36,21 +38,23 @@ const AppBarHeader: React.FC<AppBarHeaderProps> = ({ onMenuClick }) => {
       elevation={0}
       sx={{
         zIndex: theme.zIndex.drawer + 1,
+        height: '50px',
         backgroundImage: 'var(--gradient-header)',
         backdropFilter: 'var(--glass-blur)',
         WebkitBackdropFilter: 'var(--glass-blur)',
-        boxShadow: 'var(--shadow-lg)',
+        boxShadow: 'inset -8px 0 8px -5px hsl(var(--primary))',
         borderBottom: 'var(--glass-border)',
         transition: 'var(--transition-smooth)',
         color: 'hsl(var(--foreground))',
+        border: '1px solid hsl(var(--border))'
       }}
     >
       <Toolbar
         sx={{
           display: 'flex',
-          alignItems: 'center',
           justifyContent: 'space-between',
-          minHeight: '60px !important',
+          alignItems: 'center',
+          minHeight: '50px !important',
           px: { xs: 1, sm: 2 },
         }}
       >
@@ -62,27 +66,28 @@ const AppBarHeader: React.FC<AppBarHeaderProps> = ({ onMenuClick }) => {
             sx={{
               display: { sm: 'none' },
               color: 'hsl(var(--foreground))',
-              backgroundColor: 'rgba(255,255,255,0.07)',
-              borderRadius: '10px',
+              bgcolor: 'rgba(255,255,255,0.06)',
+              borderRadius: 1.2,
               transition: 'var(--transition-fast)',
               '&:hover': {
-                backgroundColor: 'rgba(255,255,255,0.2)',
-                transform: 'scale(1.08)',
+                bgcolor: 'rgba(255,255,255,0.18)',
+                transform: 'scale(1.06)',
               },
+              p: 0.5,
             }}
           >
-            <MenuIcon />
+            <MenuIcon fontSize="small" />
           </IconButton>
 
           <Typography
             variant="h6"
             noWrap
             sx={{
-              fontWeight: 700,
-              fontSize: '1.3rem',
-              letterSpacing: '0.05rem',
+              fontWeight: 600,
+              fontSize: '1.1rem',
+              letterSpacing: 0.3,
               color: 'hsl(var(--foreground))',
-              textShadow: '0 1px 3px rgba(0,0,0,0.25)',
+              textShadow: '0 1px 2px rgba(0,0,0,0.15)',
             }}
           >
             Reputation DAO
@@ -97,16 +102,15 @@ const AppBarHeader: React.FC<AppBarHeaderProps> = ({ onMenuClick }) => {
               sx={{
                 color: 'hsl(var(--foreground))',
                 transition: 'var(--transition-fast)',
-                '&:hover': {
-                  transform: 'rotate(20deg) scale(1.1)',
-                },
+                '&:hover': { transform: 'rotate(15deg) scale(1.05)' },
+                p: 0.5,
               }}
             >
-              {mode === 'dark' ? <Brightness7Icon /> : <Brightness4Icon />}
+              {mode === 'dark' ? <Brightness7Icon fontSize="small" /> : <Brightness4Icon fontSize="small" />}
             </IconButton>
           </Tooltip>
 
-          <WalletConnectButton />
+          <WalletConnectButton sx={{ minHeight: '32px', fontSize: '0.8rem' }} />
         </Box>
       </Toolbar>
     </AppBar>

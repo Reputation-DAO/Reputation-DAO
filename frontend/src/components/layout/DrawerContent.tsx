@@ -1,3 +1,4 @@
+// DrawerContent.tsx
 import React from 'react';
 import {
   Box,
@@ -24,22 +25,10 @@ const DrawerContent: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { userRole, userName, isAdmin, isAwarder } = useRole();
-
-  // Get filtered navigation items based on user role
   const availableNavItems = getFilteredNavItems(userRole as any);
 
-  const getRoleDisplayName = () => {
-    if (isAdmin) return 'Admin';
-    if (isAwarder) return 'Trusted Awarder';
-    return 'Member';
-  };
-
-  const getUserInitials = () => {
-    if (userName && userName !== '') {
-      return userName.slice(0, 2).toUpperCase();
-    }
-    return 'U';
-  };
+  const getRoleDisplayName = () => (isAdmin ? 'Admin' : isAwarder ? 'Trusted Awarder' : 'Member');
+  const getUserInitials = () => (userName ? userName.slice(0, 2).toUpperCase() : 'U');
 
   return (
     <Box
@@ -48,82 +37,71 @@ const DrawerContent: React.FC = () => {
         display: 'flex',
         flexDirection: 'column',
         flex: 1,
-        py: 2,
+        py: 1,
         overflowY: 'auto',
-        scrollbarWidth: 'none', // Firefox
-        '&::-webkit-scrollbar': {
-          display: 'none', // Chrome, Safari, Edge
-        },
+        scrollbarWidth: 'none',
+        '&::-webkit-scrollbar': { display: 'none' },
       }}
     >
       {/* Profile Section */}
       <Box
         sx={{
           p: 3,
-          mt: 8,
-          borderBottom: '1px solid hsl(var(--border))',
+          mt: 6,
+          borderBottom: '1px solid hsl(var(--border) / 0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2,
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Avatar
-            sx={{
-              width: 40,
-              height: 40,
-              backgroundColor: isAdmin ? 'hsl(var(--warning))' : isAwarder ? 'hsl(var(--success))' : 'hsl(var(--primary))',
-              color: 'white',
-            }}
+        <Avatar
+          sx={{
+            width: 40,
+            height: 40,
+            backgroundColor: isAdmin
+              ? 'hsl(var(--warning))'
+              : isAwarder
+              ? 'hsl(var(--success))'
+              : 'hsl(var(--primary))',
+            color: 'white',
+          }}
+        >
+          {getUserInitials()}
+        </Avatar>
+
+        <Box sx={{ flex: 1 }}>
+          <Typography
+            variant="body1"
+            sx={{ fontWeight: 600, fontSize: '0.85rem', color: 'hsl(var(--foreground))' }}
           >
-            {getUserInitials()}
-          </Avatar>
-          <Box sx={{ flex: 1 }}>
-            <Typography
-              variant="body1"
-              sx={{
-                color: 'hsl(var(--foreground))',
-                fontWeight: 600,
-                fontSize: '0.875rem',
-              }}
-            >
-              {userName || 'Unknown User'}
+            {userName || 'Unknown User'}
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+            <Typography variant="body2" sx={{ fontSize: '0.72rem', color: 'hsl(var(--muted-foreground))' }}>
+              {getRoleDisplayName()}
             </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-              <Typography
-                variant="body2"
+            {(isAdmin || isAwarder) && (
+              <Chip
+                label={isAdmin ? 'Admin' : 'Awarder'}
+                size="small"
                 sx={{
-                  color: 'hsl(var(--muted-foreground))',
-                  fontSize: '0.75rem',
+                  height: 18,
+                  fontSize: '0.65rem',
+                  backgroundColor: isAdmin ? 'hsl(var(--warning))' : 'hsl(var(--success))',
+                  color: 'white',
+                  '& .MuiChip-label': { px: 0.75 },
                 }}
-              >
-                {getRoleDisplayName()}
-              </Typography>
-              {(isAdmin || isAwarder) && (
-                <Chip
-                  label={isAdmin ? 'Admin' : 'Awarder'}
-                  size="small"
-                  sx={{
-                    height: 16,
-                    fontSize: '0.65rem',
-                    backgroundColor: isAdmin ? 'hsl(var(--warning))' : 'hsl(var(--success))',
-                    color: 'white',
-                    '& .MuiChip-label': { px: 0.75 }
-                  }}
-                />
-              )}
-            </Box>
+              />
+            )}
           </Box>
-          <IconButton
-            sx={{
-              color: 'hsl(var(--muted-foreground))',
-              '&:hover': { color: 'hsl(var(--foreground))' },
-              p: 0.5,
-            }}
-          >
-            <SettingsIcon sx={{ fontSize: '18px' }} />
-          </IconButton>
         </Box>
+
+        <IconButton sx={{ color: 'hsl(var(--muted-foreground))', '&:hover': { color: 'hsl(var(--foreground))' }, p: 0.5 }}>
+          <SettingsIcon sx={{ fontSize: 18 }} />
+        </IconButton>
       </Box>
 
-      {/* Navigation */}
+      {/* Navigation Section */}
       <Box sx={{ flex: 1, py: 2 }}>
         <List sx={{ p: 0 }}>
           {availableNavItems.map((item) => {
@@ -133,17 +111,18 @@ const DrawerContent: React.FC = () => {
                 <ListItemButton
                   onClick={() => navigate(item.path)}
                   sx={{
-                    borderRadius: 2,
+                    borderRadius: 0.5,
                     py: 1.5,
                     px: 2,
                     minHeight: 'unset',
+                    transition: 'background-color var(--transition-smooth), border var(--transition-smooth)',
                     backgroundColor: isActive ? 'hsl(var(--primary) / 0.1)' : 'transparent',
                     border: isActive ? '1px solid hsl(var(--primary) / 0.3)' : '1px solid transparent',
                     '&:hover': {
-                      backgroundColor: isActive
-                        ? 'hsl(var(--primary) / 0.15)'
-                        : 'hsl(var(--muted) / 0.5)',
-                      border: '1px solid hsl(var(--primary) / 0.2)',
+                    background: "hsl(var(--background))",
+                    boxShadow: "0 8px 24px hsl(var(--primary) / 0.2)",
+                
+                    border: "1px solid hsl(var(--primary))",
                     },
                   }}
                 >
@@ -151,9 +130,7 @@ const DrawerContent: React.FC = () => {
                     sx={{
                       minWidth: 36,
                       color: isActive ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))',
-                      '& .MuiSvgIcon-root': {
-                        fontSize: '20px',
-                      },
+                      '& .MuiSvgIcon-root': { fontSize: 20 },
                     }}
                   >
                     {item.icon}
@@ -162,7 +139,7 @@ const DrawerContent: React.FC = () => {
                     primary={item.label}
                     primaryTypographyProps={{
                       sx: {
-                        fontSize: '0.875rem',
+                        fontSize: '0.85rem',
                         fontWeight: isActive ? 600 : 500,
                         color: isActive ? 'hsl(var(--foreground))' : 'hsl(var(--foreground) / 0.8)',
                       },
@@ -175,96 +152,47 @@ const DrawerContent: React.FC = () => {
         </List>
       </Box>
 
-      {/* Help & FAQs Section */}
-      <Box
-        sx={{
-          borderTop: '1px solid hsl(var(--border))',
-          p: 2,
-        }}
-      >
+      {/* Help & FAQ Section */}
+      <Box sx={{ borderTop: '1px solid hsl(var(--border) / 0.3)', p: 2 }}>
         <Typography
           variant="overline"
-          sx={{
-            color: 'hsl(var(--muted-foreground))',
-            fontSize: '0.7rem',
-            fontWeight: 600,
-            letterSpacing: '0.05em',
-            px: 2,
-            mb: 1,
-            display: 'block',
-          }}
+          sx={{ fontSize: '0.7rem', fontWeight: 600, color: 'hsl(var(--muted-foreground))', px: 2, mb: 1 }}
         >
           SUPPORT
         </Typography>
         <List sx={{ p: 0 }}>
-          <ListItem disablePadding sx={{ mb: 0.5 }}>
-            <ListItemButton
-              sx={{
-                borderRadius: 2,
-                py: 1,
-                px: 2,
-                minHeight: 'unset',
-                '&:hover': {
-                  backgroundColor: 'hsl(var(--muted) / 0.5)',
-                },
-              }}
-            >
-              <ListItemIcon
-                sx={{
-                  minWidth: 32,
-                  color: 'hsl(var(--muted-foreground))',
-                  '& .MuiSvgIcon-root': {
-                    fontSize: '18px',
-                  },
-                }}
-              >
-                <HelpIcon />
-              </ListItemIcon>
-              <ListItemText
-                primary="Help Center"
-                primaryTypographyProps={{
-                  sx: {
-                    fontSize: '0.8rem',
-                    color: 'hsl(var(--foreground) / 0.8)',
-                  },
-                }}
-              />
-            </ListItemButton>
-          </ListItem>
-          <ListItem disablePadding>
-            <ListItemButton
-              sx={{
-                borderRadius: 2,
-                py: 1,
-                px: 2,
-                minHeight: 'unset',
-                '&:hover': {
-                  backgroundColor: 'hsl(var(--muted) / 0.5)',
-                },
-              }}
-            >
-              <ListItemIcon
-                sx={{
-                  minWidth: 32,
-                  color: 'hsl(var(--muted-foreground))',
-                  '& .MuiSvgIcon-root': {
-                    fontSize: '18px',
-                  },
-                }}
-              >
-                <FAQIcon />
-              </ListItemIcon>
-              <ListItemText
-                primary="FAQs"
-                primaryTypographyProps={{
-                  sx: {
-                    fontSize: '0.8rem',
-                    color: 'hsl(var(--foreground) / 0.8)',
-                  },
-                }}
-              />
-            </ListItemButton>
-          </ListItem>
+          {[{ icon: <HelpIcon />, label: 'Help Center' }, { icon: <FAQIcon />, label: 'FAQs' }].map(
+            (item, idx) => (
+              <ListItem key={idx} disablePadding sx={{ mb: 0.5 }}>
+                <ListItemButton
+                  sx={{
+                    borderRadius: 1.5,
+                    py: 1,
+                    px: 2,
+                    minHeight: 'unset',
+                    transition: 'background-color var(--transition-smooth)',
+                    '&:hover': { backgroundColor: 'hsl(var(--muted) / 0.4)' },
+                  }}
+                >
+                  <ListItemIcon
+                    sx={{
+                      minWidth: 32,
+                      color: 'hsl(var(--muted-foreground))',
+                      '& .MuiSvgIcon-root': { fontSize: 18 },
+                    }}
+                  >
+                    {item.icon}
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={item.label}
+                    primaryTypographyProps={{
+                      sx: { fontSize: '0.8rem', color: 'hsl(var(--foreground) / 0.8)' },
+                    }}
+                  />
+                </ListItemButton>
+              </ListItem>
+            )
+          )}
         </List>
       </Box>
     </Box>

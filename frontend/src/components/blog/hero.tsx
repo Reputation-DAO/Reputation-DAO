@@ -69,10 +69,10 @@ const HeroSection: FC = () => {
                 px: 3,
                 py: 1.2,
               }}
-              href="https://patreon.com/yourpage"
+              href="https://opencollective.com/reputation-dao"
               target="_blank"
             >
-              Fund Us on Gitcoin
+              Donate Us
             </Button>
             <Button variant="outlined" sx={{
               textTransform: 'none',

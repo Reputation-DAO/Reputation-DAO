@@ -30,7 +30,7 @@ const resources = [
   },
   {
     label: 'Presentation',
-    href: 'https://www.canva.com/design/DAGt5PFilsg/SE7k5cKSesAPZNCN7EikaQ/edit',
+    href: 'https://drive.google.com/file/d/18A6LH4TseJolKCbDPOf7et7IXwCj2fs0/view?usp=sharing',
     icon: <SlideshowIcon fontSize="medium" />,
   },
   {
