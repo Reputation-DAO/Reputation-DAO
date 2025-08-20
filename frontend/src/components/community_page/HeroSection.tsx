@@ -1,3 +1,4 @@
+
 import { Box, Paper, Typography, Button, Link as MuiLink } from '@mui/material';
 
 export default function HeroSection() {
@@ -12,6 +13,7 @@ export default function HeroSection() {
         bgcolor: 'hsl(var(--background))',
       }}
     >
+
       <Box
         sx={{
           position: 'relative',
@@ -47,6 +49,7 @@ export default function HeroSection() {
             Contribute, collaborate, and shape the future of decentralized reputation.
           </Typography>
           <Box sx={{ display: 'flex', gap: 2, mt: 4, justifyContent: 'center' }}>
+
             <Button
               component={MuiLink}
               href="https://t.me/reputationdao"
@@ -79,6 +82,7 @@ export default function HeroSection() {
                   borderColor: 'hsl(var(--border))',
                 },
                 transition: 'var(--transition-smooth)',
+
               }}
             >
               Follow on X (Twitter)

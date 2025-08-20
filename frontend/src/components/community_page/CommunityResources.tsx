@@ -1,3 +1,4 @@
+
 import { GridLegacy as Grid, Paper, Typography, Box } from "@mui/material";
 import GitHubIcon from "@mui/icons-material/GitHub";
 import LightbulbIcon from "@mui/icons-material/Lightbulb";
@@ -55,6 +56,7 @@ const CommunityResources: FC = () => {
       >
         Community Resources
       </Typography>
+
 
       <Grid container spacing={3} justifyContent="center" sx={{ mb: 14 }}>
         {linkItems.map((item, idx) => (

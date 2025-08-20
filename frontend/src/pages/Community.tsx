@@ -1,13 +1,17 @@
 // @ts-nocheck (remove once you add proper types to all sections)
+
 import { Box, Container, keyframes } from '@mui/material';
+
 import HeroSection from '../components/community_page/HeroSection';
 import CommunityResources from '../components/community_page/CommunityResources';
 import ContributionSection from '../components/community_page/ContributionSection';
 import NewsletterSection from '../components/community_page/NewsSection';
 
+
 import SpotlightContributors from '../components/community_page/SpotlightContributors';
 import EventsSection from '../components/community_page/EventsSection';
 import InteractivePoll from '../components/community_page/Interactivepoll';
+
 
 // Heartbeat glow animation
 const heartbeatGlow = keyframes`
@@ -33,6 +37,7 @@ const heartbeatGlow = keyframes`
   }
 `;
 
+
 export default function CommunityPage(): JSX.Element {
   return (
     <Box
@@ -40,6 +45,7 @@ export default function CommunityPage(): JSX.Element {
         bgcolor: 'hsl(var(--background))',
         color: 'hsl(var(--foreground))',
         py: 0,
+
         minHeight: '100vh',
         position: 'relative', // needed for absolute glow positioning
         overflow: 'hidden', // prevent glow overflow
@@ -91,6 +97,7 @@ export default function CommunityPage(): JSX.Element {
           <NewsletterSection />
         </Container>
       </Box>
+
     </Box>
   );
 }

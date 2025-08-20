@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ProtectedPage from '../components/layout/ProtectedPage';
 import { Principal } from '@dfinity/principal';
 import {
   Box,
@@ -70,70 +71,101 @@ const RevokeRep: React.FC = () => {
   const [confirmDialog, setConfirmDialog] = useState(false);
   const [totalPointsRevoked , setTotalPointsRevoked] = useState(0);
   const [totalRevocations, setTotalRevocations] = useState(0);
-  const [recentRevocations, setRecentRevocations] = useState<RevokeTransaction[]>([
-    
-  ]);
+  const [recentRevocations, setRecentRevocations] = useState<RevokeTransaction[]>([]);
+  const [orgId, setOrgId] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
     severity: 'success' | 'error' | 'warning' | 'info';
   }>({ open: false, message: '', severity: 'success' });
 
+  // Get orgId from localStorage
+  useEffect(() => {
+    const storedOrgId = localStorage.getItem('selectedOrgId');
+    if (storedOrgId) {
+      setOrgId(storedOrgId);
+    }
+  }, []);
+
+  // Load recent revocations when orgId is available
+  useEffect(() => {
+    if (orgId) {
+      loadRecentRevocations();
+    }
+  }, [orgId]);
+
   // Load recent revocations from blockchain
   const loadRecentRevocations = async () => {
+    if (!orgId) return;
     try {
+      console.log('🔄 Loading recent revoke transactions...');
       console.log('🔗 Getting Plug actor connection...');
       const actor = await getPlugActor();
       console.log('✅ Actor connected:', !!actor);
 
-      console.log('📞 Calling getTransactionHistory()...');
-      const transactions = await actor.getTransactionHistory() as BackendTransaction[];
-      console.log('📊 Raw transactions for revocations:', transactions);
+      console.log('📞 Calling getTransactionHistory() with orgId:', orgId);
+      const transactionsResult = await actor.getTransactionHistory(orgId);
 
-      if (!transactions || transactions.length === 0) {
-        console.log('No transactions found from blockchain');
+      // Handle Motoko optional array (? [Transaction]) exactly like AwardRep
+      const transactions: BackendTransaction[] = Array.isArray(transactionsResult)
+        ? (transactionsResult[0] || [])
+        : (transactionsResult || []);
+
+      console.log('📊 Raw transactions for revocations:', transactions);
+      console.log('📊 Total transactions count:', transactions.length);
+
+      if (!Array.isArray(transactions)) {
+        console.warn('⚠️ Transactions is not an array:', transactions);
+        setRecentRevocations([]);
+        setTotalPointsRevoked(0);
+        setTotalRevocations(0);
         return;
       }
 
-      // Filter and convert revoke transactions
-      const revokeTransactions = transactions
-        .filter(tx => 'Revoke' in tx.transactionType)
-        .slice(0, 10) // Get latest 10 revocations
-        .map((tx, index) => ({
-          id: index.toString(),
-          recipient: tx.to.toString(),
-          amount: Number(tx.amount),
-          reason: tx.reason.length > 0 ? tx.reason[0]! : 'No reason provided',
-          date: new Date(Number(tx.timestamp) / 1000000).toLocaleDateString(),
-          status: 'completed' as const,
-          revokedBy: tx.from.toString().slice(0, 8) + '...'
-        }));
+      // Filter and convert revoke transactions (last 10, newest first)
+      const revokeTransactions: RevokeTransaction[] = transactions
+        .filter(tx => tx.transactionType && 'Revoke' in tx.transactionType)
+        .slice(-10)
+        .map(tx => {
+          const timestamp = Number(tx.timestamp);
+          const date = timestamp > 0
+            ? new Date(timestamp * 1000).toISOString().split('T')[0] // seconds → ms
+            : new Date().toISOString().split('T')[0];
 
-      console.log('Processed revoke transactions:', revokeTransactions);
+          return {
+            id: tx.id.toString(),
+            recipient: tx.to.toString(),
+            amount: Number(tx.amount),
+            reason: (tx.reason && tx.reason.length > 0) ? tx.reason[0]! : 'No reason provided',
+            date,
+            status: 'completed' as const,
+            revokedBy: tx.from.toString()
+          };
+        })
+        .reverse();
 
-      if (revokeTransactions.length > 0) {
-        setRecentRevocations(revokeTransactions);
-      }
+      console.log('🎯 Processed revoke transactions:', revokeTransactions);
+      console.log('🎯 Revoke transactions count:', revokeTransactions.length);
 
-      // Calculate total points revoked
+      setRecentRevocations(revokeTransactions);
+
+      // Totals
       const totalPointsRevoked = revokeTransactions.reduce((sum, tx) => sum + tx.amount, 0);
-      console.log('Total points revoked:', totalPointsRevoked);
-
-      // Update state or perform actions based on totalPointsRevoked
       setTotalPointsRevoked(totalPointsRevoked);
-
-      const totalRevocations = revokeTransactions.length;
-      setTotalRevocations(totalRevocations);
+      setTotalRevocations(revokeTransactions.length);
 
     } catch (error) {
-      console.error('Error loading recent revocations:', error);
+      console.error('❌ Error loading recent revocations:', error);
+      setRecentRevocations([]);
+      setTotalPointsRevoked(0);
+      setTotalRevocations(0);
+      setSnackbar({
+        open: true,
+        message: 'Failed to load recent revocations from blockchain. The canister may be empty or connection failed.',
+        severity: 'warning'
+      });
     }
   };
-
-  // Load recent revocations on component mount
-  useEffect(() => {
-    loadRecentRevocations();
-  }, []);
 
   const handleRevokeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,7 +182,7 @@ const RevokeRep: React.FC = () => {
     // Validate Principal ID format
     try {
       Principal.fromText(recipient);
-    } catch (error) {
+    } catch {
       setSnackbar({
         open: true,
         message: 'Invalid Principal ID format',
@@ -192,8 +224,25 @@ const RevokeRep: React.FC = () => {
         reason: reason
       });
 
-      // Call the revoke function on the blockchain
-      await actor.revokeRep(recipientPrincipal, BigInt(numAmount), [reason]);
+      const orgId = localStorage.getItem('selectedOrgId')?.trim();
+      if (!orgId) {
+        throw new Error('No orgId found in localStorage');
+      }
+
+      console.log('📞 Calling revokeRep() - auto-injecting orgId...');
+      const result = await actor.revokeRep(orgId, recipientPrincipal, BigInt(numAmount), [reason]);
+      console.log('✅ Revoke result:', result);
+
+      // Backend string error pattern handling (mirrors Award)
+      if (typeof result === 'string' && result.startsWith('Error:')) {
+        console.error('❌ Backend returned error:', result);
+        setSnackbar({
+          open: true,
+          message: result,
+          severity: 'error'
+        });
+        return;
+      }
 
       setSnackbar({
         open: true,
@@ -207,16 +256,27 @@ const RevokeRep: React.FC = () => {
       setReason('');
       setCategory('');
 
-      // Reload recent revocations
-      setTimeout(() => {
-        loadRecentRevocations();
-      }, 1000);
+      // Reload recent revocations immediately (no setTimeout needed)
+      await loadRecentRevocations();
 
-    } catch (error) {
-      console.error('Error revoking reputation:', error);
+    } catch (error: any) {
+      console.error('❌ Error revoking reputation:', error);
+      let errorMessage = 'Failed to revoke reputation. Please try again.';
+      if (error?.message) {
+        // mirror Award-style surface of backend reasons
+        if (error.message.includes('Not a trusted awarder')) {
+          errorMessage = 'You are not authorized to revoke reputation points.';
+        } else if (error.message.includes('Daily mint cap exceeded')) {
+          errorMessage = 'Daily limit exceeded.';
+        } else if (error.message.includes('Cannot revoke from yourself')) {
+          errorMessage = 'You cannot revoke reputation points from yourself.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
       setSnackbar({
         open: true,
-        message: 'Failed to revoke reputation: ' + (error as Error).message,
+        message: errorMessage,
         severity: 'error'
       });
     } finally {
@@ -236,7 +296,6 @@ const RevokeRep: React.FC = () => {
       default: return 'default';
     }
   };
-
   return (
     <Box sx={{ 
       p: 3, 
@@ -764,4 +823,12 @@ const RevokeRep: React.FC = () => {
   );
 };
 
-export default RevokeRep;
+const RevokeRepWithProtection: React.FC = () => {
+  return (
+    <ProtectedPage>
+      <RevokeRep />
+    </ProtectedPage>
+  );
+};
+
+export default RevokeRepWithProtection;

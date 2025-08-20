@@ -24,8 +24,16 @@ import {
 const DrawerContent: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { userRole, userName, isAdmin, isAwarder } = useRole();
-  const availableNavItems = getFilteredNavItems(userRole as any);
+
+  const { userRole, userName, isAdmin, isAwarder, loading } = useRole();
+
+  // Get filtered navigation items based on user role (exclude Loading state)
+  const availableNavItems = userRole !== 'Loading' 
+    ? getFilteredNavItems(userRole) 
+    : [];
+
+  console.log('🔍 DrawerContent - UserRole:', userRole, 'AvailableNavItems:', availableNavItems.length);
+
 
   const getRoleDisplayName = () => (isAdmin ? 'Admin' : isAwarder ? 'Trusted Awarder' : 'Member');
   const getUserInitials = () => (userName ? userName.slice(0, 2).toUpperCase() : 'U');

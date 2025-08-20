@@ -237,7 +237,9 @@ export default function AuthPage() {
               <Stack spacing={1}>
                 <Button
                   component={MuiLink}
-                  href="/dashboard"
+
+                  href="/org-selector" // Update this to your desired route
+
                   variant="outlined"
                   startIcon={<CreditCard />}
                   fullWidth

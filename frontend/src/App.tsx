@@ -18,6 +18,7 @@ import Blog from './pages/Blog';
 import Auth from './pages/Auth';
 import Test from './pages/test'; 
 import PostDetailPage from './pages/PostDetailPost';
+import OrgSelector from './pages/OrgSelector';
 
 
 function App() {
@@ -86,6 +87,14 @@ function App() {
             </HomeLayout>
             }
           />
+          <Route
+            path="/org-selector"
+            element={
+              
+                <OrgSelector />
+              
+            }
+          />
 
           {/* Protected Routes */}
           {/* Dashboard - All roles can access */}
@@ -99,6 +108,7 @@ function App() {
               </Layout>
             }
           />
+         
 
           {/* Award Reputation - Admin and Awarder only */}
           <Route

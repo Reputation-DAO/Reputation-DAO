@@ -48,8 +48,10 @@ export interface Awarder {
   name: string;
 }
 
+
 // Modify this canisterID based on where the dfx playground hosts your backend
 const canisterId = 'owyeu-jiaaa-aaaam-qdvwq-cai';
+
 
 // === CACHED ACTOR ===
 let cachedActor: _SERVICE | null = null;
@@ -298,12 +300,14 @@ export const getDecayStatistics = async (): Promise<DecayStatistics | null> => {
   }
 };
 
-// === TRANSACTION FUNCTIONS ===
 
+// Enhanced transaction fetching with proper type handling - now gets all transactions from all orgs
 export const getTransactionHistory = async (): Promise<Transaction[]> => {
   try {
     const actor = await getPlugActor();
-    const transactions = await actor.getTransactionHistory();
+    const transactions = await actor.getAllTransactions();
+    
+
     return transactions.map((tx: any) => ({
       id: Number(tx.id),
       transactionType: Object.keys(tx.transactionType)[0] as TransactionType,
@@ -401,5 +405,111 @@ export const getBalance = async (principal: Principal): Promise<number> => {
   } catch (error) {
     console.error('Error fetching balance:', error);
     return 0;
+  }
+};
+
+// Trigger manual decay for testing (Owner only)
+export const triggerManualDecay = async (): Promise<string> => {
+  try {
+    const actor = await getPlugActor();
+    return await actor.triggerManualDecay();
+  } catch (error) {
+    console.error('Error triggering manual decay:', error);
+    throw error;
+  }
+};
+
+// === ORGANIZATION-SPECIFIC DECAY FUNCTIONS ===
+
+// Get decay statistics for a specific organization
+export const getOrgDecayStatistics = async (orgId: string): Promise<DecayStatistics & {userCount: number; totalPoints: number} | null> => {
+  try {
+    const actor = await getPlugActor();
+    const stats = await actor.getOrgDecayStatistics(orgId);
+    
+    if (!stats || stats.length === 0) return null;
+    
+    const orgStats = stats[0];
+    return {
+      totalDecayedPoints: Number(orgStats.totalDecayedPoints),
+      lastGlobalDecayProcess: Number(orgStats.lastGlobalDecayProcess),
+      configEnabled: orgStats.configEnabled,
+      userCount: Number(orgStats.userCount),
+      totalPoints: Number(orgStats.totalPoints),
+    };
+  } catch (error) {
+    console.error('Error fetching org decay statistics:', error);
+    return null;
+  }
+};
+
+// Get transaction history for a specific organization
+export const getOrgTransactionHistory = async (orgId: string): Promise<Transaction[]> => {
+  try {
+    const actor = await getPlugActor();
+    const transactions = await actor.getOrgTransactionHistory(orgId);
+    
+    if (!transactions || transactions.length === 0) return [];
+    
+    return transactions[0].map((tx: any) => ({
+      id: Number(tx.id),
+      transactionType: Object.keys(tx.transactionType)[0] as TransactionType,
+      from: tx.from,
+      to: tx.to,
+      amount: Number(tx.amount),
+      timestamp: Number(tx.timestamp),
+      reason: tx.reason && tx.reason.length > 0 ? tx.reason[0] : undefined,
+    }));
+  } catch (error) {
+    console.error('Error fetching org transaction history:', error);
+    return [];
+  }
+};
+
+// Get user balances for a specific organization
+export const getOrgUserBalances = async (orgId: string): Promise<{ userId: Principal; balance: number }[]> => {
+  try {
+    const actor = await getPlugActor();
+    const balances = await actor.getOrgUserBalances(orgId);
+    
+    if (!balances || balances.length === 0) return [];
+    
+    return balances[0].map(([userId, balance]: [Principal, any]) => ({
+      userId,
+      balance: Number(balance),
+    }));
+  } catch (error) {
+    console.error('Error fetching org user balances:', error);
+    return [];
+  }
+};
+
+// Get decay analytics for a specific organization
+export const getOrgDecayAnalytics = async (orgId: string): Promise<any> => {
+  try {
+    const actor = await getPlugActor();
+    const analytics = await actor.getOrgDecayAnalytics(orgId);
+    
+    if (!analytics || analytics.length === 0) return null;
+    
+    const orgAnalytics = analytics[0];
+    return {
+      totalUsers: Number(orgAnalytics.totalUsers),
+      usersWithDecay: Number(orgAnalytics.usersWithDecay),
+      totalPointsDecayed: Number(orgAnalytics.totalPointsDecayed),
+      averageDecayPerUser: Number(orgAnalytics.averageDecayPerUser),
+      recentDecayTransactions: orgAnalytics.recentDecayTransactions.map((tx: any) => ({
+        id: Number(tx.id),
+        transactionType: Object.keys(tx.transactionType)[0] as TransactionType,
+        from: tx.from,
+        to: tx.to,
+        amount: Number(tx.amount),
+        timestamp: Number(tx.timestamp),
+        reason: tx.reason && tx.reason.length > 0 ? tx.reason[0] : undefined,
+      })),
+    };
+  } catch (error) {
+    console.error('Error fetching org decay analytics:', error);
+    return null;
   }
 };

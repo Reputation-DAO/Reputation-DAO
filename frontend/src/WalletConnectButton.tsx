@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 import { getCurrentPrincipal, getPlugActor, isPlugConnected } from './components/canister/reputationDao';
 
 const WalletConnectButton: React.FC = () => {
+  const navigate = useNavigate();
   const [isConnected, setIsConnected] = useState(false);
   const [principal, setPrincipal] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -43,10 +45,22 @@ const WalletConnectButton: React.FC = () => {
 
   const handleDisconnect = async () => {
     try {
+      console.log('🔌 Manual wallet disconnect initiated');
+      
       if (window.ic?.plug) {
         await window.ic.plug.disconnect();
         setIsConnected(false);
         setPrincipal(null);
+        
+        // Clear all stored organization data
+        localStorage.removeItem('selectedOrgId');
+        localStorage.removeItem('userRole');
+        localStorage.removeItem('userName');
+        console.log('🧹 Cleared localStorage data');
+        
+        // Redirect to auth page
+        navigate('/auth', { replace: true });
+        console.log('🔄 Redirected to auth page');
       }
     } catch (error) {
       console.error('Disconnect failed:', error);

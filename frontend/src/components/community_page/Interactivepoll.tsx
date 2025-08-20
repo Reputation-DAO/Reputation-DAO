@@ -1,7 +1,9 @@
 import { useState, useCallback } from 'react';
 import { Box, Typography, Paper, Button, LinearProgress } from '@mui/material';
 
+
 export default function InteractivePoll() {
+
   const [votes, setVotes] = useState({ icpOnly: 2, multiCrypto: 0 });
   const [userVote, setUserVote] = useState<'icpOnly' | 'multiCrypto' | null>(null);
 
@@ -64,7 +66,9 @@ export default function InteractivePoll() {
           p: 10,
           display: 'flex',
           gap: 3,
+
           borderRadius: '10px',
+
           background: 'hsl(var(--background))',
           border: `1.5px solid hsl(var(--border))`,
           flexWrap: 'wrap',
@@ -193,6 +197,7 @@ export default function InteractivePoll() {
         </Typography>
       )}
       <Box
+
         sx={{
           width: '100%',
           height: '1px',
@@ -200,6 +205,7 @@ export default function InteractivePoll() {
           background: 'linear-gradient(to right, transparent, hsl(var(--border)), transparent)',
         }}
       />
+
     </Box>
   );
 }

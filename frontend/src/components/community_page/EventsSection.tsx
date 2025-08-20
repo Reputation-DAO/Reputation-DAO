@@ -1,3 +1,4 @@
+
 import { Box, Typography, Paper, Button } from "@mui/material";
 import { CalendarDays } from "lucide-react";
 import type { FC } from "react";
@@ -41,21 +42,25 @@ const events = [
 ];
 
 const EventsSection: FC = () => {
+
   return (
     <Box sx={{ mb: 14 }}>
       <Typography
         variant="h2"
         sx={{
           fontWeight: 700,
+
           textAlign: "center",
           mb: 2,
           color: "hsl(var(--foreground))",
+
         }}
       >
         Events & Webinars
       </Typography>
       <Typography
         sx={{
+
           textAlign: "center",
           color: "hsl(var(--muted-foreground))",
           maxWidth: 600,
@@ -65,11 +70,13 @@ const EventsSection: FC = () => {
       >
         Join our upcoming events to connect, learn, and share with other
         members of the DAO.
+
       </Typography>
 
       {/* Horizontal scroll container */}
       <Box
         sx={{
+
           display: "flex",
           gap: 3,
           overflowX: "auto",
@@ -81,6 +88,7 @@ const EventsSection: FC = () => {
           },
           "&::-webkit-scrollbar-thumb": {
             background: "hsl(var(--primary) / 0.4)",
+
             borderRadius: 4,
           },
         }}
@@ -89,6 +97,7 @@ const EventsSection: FC = () => {
           <Paper
             key={idx}
             sx={{
+
               flex: "0 0 auto",
               width: 360,
               height: 260,
@@ -113,20 +122,25 @@ const EventsSection: FC = () => {
                   "radial-gradient(hsl(var(--primary) / 0.08) 1px, transparent 1px)",
                 backgroundSize: "18px 18px",
                 background: "hsl(var(--background))",
+
               },
             }}
           >
             {/* Date badge */}
+
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+
               <Box
                 sx={{
                   width: 32,
                   height: 32,
+
                   borderRadius: "50%",
                   background: "hsl(var(--primary) / 0.15)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
+
                 }}
               >
                 <CalendarDays size={16} color="hsl(var(--primary))" />
@@ -135,9 +149,11 @@ const EventsSection: FC = () => {
                 sx={{
                   fontSize: 14,
                   fontWeight: 600,
+
                   background: "hsl(var(--primary))",
                   WebkitBackgroundClip: "text",
                   WebkitTextFillColor: "transparent",
+
                 }}
               >
                 {event.date}
@@ -145,6 +161,7 @@ const EventsSection: FC = () => {
             </Box>
 
             {/* Title */}
+
             <Typography sx={{ fontWeight: 600, fontSize: 18 }}>
               {event.title}
             </Typography>
@@ -152,6 +169,7 @@ const EventsSection: FC = () => {
             {/* Description */}
             <Typography
               sx={{
+
                 color: "hsl(var(--muted-foreground))",
                 fontSize: 13,
                 flexGrow: 1,
@@ -160,6 +178,7 @@ const EventsSection: FC = () => {
                 display: "-webkit-box",
                 WebkitLineClamp: 3,
                 WebkitBoxOrient: "vertical",
+
               }}
             >
               {event.description}
@@ -170,6 +189,7 @@ const EventsSection: FC = () => {
               variant="outlined"
               href={event.link}
               sx={{
+
                 borderColor: "hsl(var(--primary))",
                 color: "hsl(var(--primary))",
                 mt: 2,
@@ -178,6 +198,7 @@ const EventsSection: FC = () => {
                 fontSize: 13,
                 "&:hover": {
                   background: "hsl(var(--primary) / 0.08)",
+
                 },
               }}
             >
@@ -190,15 +211,18 @@ const EventsSection: FC = () => {
       {/* Divider */}
       <Box
         sx={{
+
           width: "100%",
           height: "1px",
           my: 8,
           background:
             "linear-gradient(to right, transparent, hsl(var(--border)), transparent)",
+
         }}
       />
     </Box>
   );
+
 };
 
 export default EventsSection;

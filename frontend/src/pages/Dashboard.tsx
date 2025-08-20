@@ -17,12 +17,16 @@ import {
 } from '@mui/icons-material';
 import { getPlugActor } from '../components/canister/reputationDao';
 import { useRole } from '../contexts/RoleContext';
+
 import StatCard from '../components/Dashboard/statscard';
 import ActivityCard from '../components/Dashboard/cards/ActivityCard';
 import ActivityChartCard from '../components/Dashboard/cards/ActivityChartCard';
 import SystemFeaturesCard from '../components/Dashboard/cards/SystemFeaturesCard';
 import TopMembersCard from '../components/Dashboard/cards/TopMemberCard';
 import TrustedAwardersCard from '../components/Dashboard/cards/TrustedAwarderCard';
+
+import ProtectedPage from '../components/layout/ProtectedPage';
+
 
 interface Transaction {
   id: number;
@@ -62,7 +66,26 @@ interface ChartData {
 
 const Dashboard: React.FC = React.memo(() => {
   const navigate = useNavigate();
-  const { userName, userRole, currentPrincipal } = useRole();
+
+  
+  // Get role information from context
+  const { userRole, userName, isAdmin, isAwarder, loading: roleLoading, currentPrincipal } = useRole();
+  
+  // Get organization ID from localStorage
+  const [orgId, setOrgId] = useState<string | null>(null);
+  
+  useEffect(() => {
+    const storedOrgId = localStorage.getItem('selectedOrgId');
+    if (storedOrgId) {
+      setOrgId(storedOrgId);
+      // Trigger role refresh when organization changes
+      window.dispatchEvent(new CustomEvent('orgChanged'));
+    } else {
+      // Redirect to org selector if no org selected
+      navigate('/org-selector');
+    }
+  }, [navigate]);
+  
 
   const [data, setData] = useState<DashboardData>({
     transactions: [],
@@ -130,18 +153,48 @@ const Dashboard: React.FC = React.memo(() => {
   };
 
   const loadDashboardData = async () => {
-    if (isLoadingData) return;
+
+    if (isLoadingData || !orgId) return; // Prevent multiple simultaneous loads and ensure orgId exists
+    
+
     try {
       setIsLoadingData(true);
       setError(null);
       const actor = await getPlugActor();
       if (!actor) throw new Error('Failed to connect to blockchain');
 
-      const [transactions, transactionCount, awarders] = await Promise.all([
-        actor.getTransactionHistory(),
-        actor.getTransactionCount(),
-        actor.getTrustedAwarders(),
+
+      // Simply verify the organization exists - don't restrict access
+      // The role-based UI will handle what data to show based on user permissions
+      try {
+        const orgCheckResult = await actor.getTransactionCount(orgId);
+        const orgExists = Array.isArray(orgCheckResult) ? orgCheckResult[0] !== null : orgCheckResult !== null;
+        
+        if (!orgExists) {
+          throw new Error('Organization does not exist');
+        }
+      } catch (error) {
+        console.warn('Organization verification failed:', error);
+        throw new Error('Access denied: Organization does not exist or is not accessible');
+      }
+
+      // Fetch all data in parallel with orgId parameter
+      const [
+        transactionsResult,
+        transactionCountResult,
+        awardersResult,
+      ] = await Promise.all([
+        actor.getTransactionHistory(orgId),
+        actor.getTransactionCount(orgId),
+        actor.getTrustedAwarders(orgId),
       ]);
+
+      // Handle optional array results from Motoko
+      const transactions = Array.isArray(transactionsResult) ? transactionsResult[0] || [] : transactionsResult || [];
+      const transactionCount = Array.isArray(transactionCountResult) ? transactionCountResult[0] || 0 : transactionCountResult || 0;
+      const awarders = Array.isArray(awardersResult) ? awardersResult[0] || [] : awardersResult || [];
+
+      // Get balances by fetching transaction history and calculating
 
       const balanceMap = new Map<string, number>();
       transactions.forEach((tx: any) => {
@@ -192,7 +245,21 @@ const Dashboard: React.FC = React.memo(() => {
     }
   };
 
-  useEffect(() => { loadDashboardData(); }, []);
+
+  // Load data on component mount and when orgId changes
+  useEffect(() => {
+    if (orgId) {
+      loadDashboardData();
+    }
+  }, [orgId]); // Run when orgId is set
+
+  // Refresh data
+  const handleRefresh = () => {
+    if (isLoadingData) return; // Prevent refresh while loading
+    setRefreshing(true);
+    loadDashboardData();
+  };
+
 
   if (loading) {
     return (
@@ -204,6 +271,7 @@ const Dashboard: React.FC = React.memo(() => {
 
   return (
     <Box
+
   sx={{
     minHeight: '100vh',
     px: { xs: 2, md: 3 },
@@ -212,6 +280,7 @@ const Dashboard: React.FC = React.memo(() => {
   }}
 >
   {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+
 
   <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', lg: 'row' } }}>
     {/* Main */}
@@ -289,4 +358,12 @@ const Dashboard: React.FC = React.memo(() => {
   );
 });
 
-export default Dashboard;
+const DashboardWithProtection: React.FC = () => {
+  return (
+    <ProtectedPage>
+      <Dashboard />
+    </ProtectedPage>
+  );
+};
+
+export default DashboardWithProtection;

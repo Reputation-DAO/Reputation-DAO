@@ -1,7 +1,9 @@
+
 import { Box, Typography, Paper } from "@mui/material";
 import type { FC } from "react";
 
 const ContributionSection: FC = () => {
+
   return (
     <Box sx={{ mb: 14 }}>
       {/* Section Heading */}
@@ -9,10 +11,12 @@ const ContributionSection: FC = () => {
         variant="h2"
         sx={{
           fontWeight: 700,
+
           textAlign: "center",
           mb: 2,
           color: "hsl(var(--foreground))",
           py: 3,
+
         }}
       >
         Contributing to Reputation DAO
@@ -21,8 +25,10 @@ const ContributionSection: FC = () => {
       {/* Contribution Cards */}
       <Box
         sx={{
+
           display: "grid",
           gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+
           gap: 4,
         }}
       >
@@ -30,6 +36,7 @@ const ContributionSection: FC = () => {
         <Paper
           sx={{
             p: 4,
+
             background: "hsl(var(--muted) / 0.5)",
             border: "var(--glass-border)",
             borderRadius: "var(--radius)",
@@ -40,12 +47,14 @@ const ContributionSection: FC = () => {
               transform: "translateY(-4px)",
               boxShadow: "0 8px 24px hsl(var(--primary) / 0.2)",
               border: "1px solid hsl(var(--primary))",
+
             },
           }}
         >
           <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
             Community Contributions
           </Typography>
+
           <Typography
             sx={{
               color: "hsl(var(--muted-foreground))",
@@ -61,6 +70,7 @@ const ContributionSection: FC = () => {
             channels, or promoting our mission on social media to reach a wider
             audience. Every contribution, no matter the size, plays a role in
             moving the DAO forward.
+
           </Typography>
         </Paper>
 
@@ -68,6 +78,7 @@ const ContributionSection: FC = () => {
         <Paper
           sx={{
             p: 4,
+
             background: "hsl(var(--muted) / 0.5)",
             border: "var(--glass-border)",
             borderRadius: "var(--radius)",
@@ -78,12 +89,14 @@ const ContributionSection: FC = () => {
               transform: "translateY(-4px)",
               boxShadow: "0 8px 24px hsl(var(--primary) / 0.2)",
               border: "1px solid hsl(var(--primary))",
+
             },
           }}
         >
           <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
             Open Source Ethos
           </Typography>
+
           <Typography
             sx={{
               color: "hsl(var(--muted-foreground))",

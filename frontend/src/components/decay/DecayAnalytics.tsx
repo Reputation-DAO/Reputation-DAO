@@ -29,14 +29,13 @@ import {
   Timeline as TimelineIcon,
 } from '@mui/icons-material';
 import {
-  // @ts-ignore - Type definitions will be updated after interface regeneration
-  getAllUserBalances,
-  getTransactionHistory,
-  // @ts-ignore - Type definitions will be updated after interface regeneration
-  getDecayAnalytics,
-  // @ts-ignore - Type definitions will be updated after interface regeneration
-  getDecayStatistics,
+  // Organization-specific decay functions
+  getOrgDecayStatistics,
+  getOrgTransactionHistory,
+  getOrgDecayAnalytics,
+  getOrgUserBalances,
 } from '../canister/reputationDao';
+import { useRole } from '../../contexts/RoleContext';
 
 // Temporary type definitions until interface regeneration
 interface UserBalance {
@@ -69,29 +68,39 @@ interface UserDecayRisk {
 }
 
 const DecayAnalytics: React.FC<DecayAnalyticsProps> = ({ className }) => {
-  // @ts-ignore - Temporary until RoleContext is updated
-  const isAdmin = true; // Temporary admin check
-  const [stats, setStats] = useState<DecayStats | null>(null);
-  const [riskUsers, setRiskUsers] = useState<UserDecayRisk[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { isAdmin } = useRole();
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState<any>(null);
+  const [riskUsers, setRiskUsers] = useState<any[]>([]);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [orgId, setOrgId] = useState<string | null>(null);
+
+  // Get orgId from localStorage
+  useEffect(() => {
+    const storedOrgId = localStorage.getItem('selectedOrgId');
+    if (storedOrgId) {
+      setOrgId(storedOrgId);
+    }
+  }, []);
 
   useEffect(() => {
-    if (isAdmin) {
+    if (orgId && isAdmin) {
       fetchAnalytics();
     }
-  }, [isAdmin]);
+  }, [isAdmin, orgId]);
 
   const fetchAnalytics = async () => {
+    if (!orgId) return;
+    
     setLoading(true);
     setError(null);
 
     try {
-      // Fetch all necessary data
+      // Fetch organization-specific data
       const [userBalances, transactions] = await Promise.all([
-        getAllUserBalances(),
-        getTransactionHistory(),
+        getOrgUserBalances(orgId),
+        getOrgTransactionHistory(orgId),
       ]);
 
       // Calculate decay statistics

@@ -42,7 +42,7 @@ import {
   Cell,
 } from 'recharts';
 import {
-  getTransactionHistory,
+  getOrgTransactionHistory,
   // @ts-ignore - Type definitions will be updated after interface regeneration
   getDecayAnalytics,
 } from '../canister/reputationDao';
@@ -76,20 +76,33 @@ const DecayHistoryChart: React.FC<DecayHistoryChartProps> = ({ className }) => {
   const [timeRange, setTimeRange] = useState<string>('30d');
   const [chartType, setChartType] = useState<'line' | 'bar' | 'pie'>('line');
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [orgId, setOrgId] = useState<string | null>(null);
+
+  // Get orgId from localStorage
+  useEffect(() => {
+    const storedOrgId = localStorage.getItem('selectedOrgId');
+    if (storedOrgId) {
+      setOrgId(storedOrgId);
+    }
+  }, []);
 
   // Color scheme for charts
   const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#8dd1e1'];
 
   useEffect(() => {
-    fetchDecayHistory();
-  }, [timeRange]);
+    if (orgId) {
+      fetchDecayHistory();
+    }
+  }, [timeRange, orgId]);
 
   const fetchDecayHistory = async () => {
+    if (!orgId) return;
+    
     setLoading(true);
     setError(null);
 
     try {
-      const allTransactions = await getTransactionHistory();
+      const allTransactions = await getOrgTransactionHistory(orgId);
       const decayTransactions = allTransactions.filter((tx: any) => tx.transactionType === 'Decay');
       
       setTransactions(decayTransactions);
@@ -362,6 +375,19 @@ const DecayHistoryChart: React.FC<DecayHistoryChartProps> = ({ className }) => {
         return null;
     }
   };
+
+  // Show loading message if orgId is not available
+  if (!orgId) {
+    return (
+      <Card className={className}>
+        <CardContent>
+          <Alert severity="info">
+            Please select an organization to view decay history and trends.
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className={className}>

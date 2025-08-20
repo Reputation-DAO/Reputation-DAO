@@ -6,7 +6,9 @@ import {
   TextField,
   Button,
   Typography,
+
   Box,
+
 } from '@mui/material';
 import { useState } from 'react';
 
@@ -15,7 +17,9 @@ interface NewsletterDialogProps {
   onClose: () => void;
 }
 
+
 export default function NewsletterDialog({ open, onClose }: NewsletterDialogProps) {
+
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
@@ -48,10 +52,12 @@ export default function NewsletterDialog({ open, onClose }: NewsletterDialogProp
           border: '1.5px solid hsl(var(--border))',
           boxShadow: 'var(--shadow-lg)',
           overflow: 'hidden',
+
         },
       }}
       aria-labelledby="newsletter-dialog-title"
     >
+
       <Box
         sx={{
           background: 'hsl(var(--primary))',
@@ -100,10 +106,12 @@ export default function NewsletterDialog({ open, onClose }: NewsletterDialogProp
             },
           }}
         />
+
       </DialogContent>
 
       <DialogActions
         sx={{
+
           px: 4,
           py: 3,
           display: 'flex',
@@ -141,6 +149,7 @@ export default function NewsletterDialog({ open, onClose }: NewsletterDialogProp
           {submitted ? 'Subscribed!' : 'Subscribe'}
         </Button>
       </DialogActions>
+
     </Dialog>
   );
 }

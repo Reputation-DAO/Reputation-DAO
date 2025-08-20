@@ -1,4 +1,6 @@
+
 import { Box, Typography, GridLegacy as Grid, Avatar, Paper } from '@mui/material';
+
 
 const contributors = [
   {
@@ -17,7 +19,9 @@ const contributors = [
   },
 ];
 
+
 export default function SpotlightContributors() {
+
   return (
     <Box sx={{ mb: 14 }}>
       <Typography
@@ -59,7 +63,9 @@ export default function SpotlightContributors() {
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center',
+
                 color: 'hsl(var(--foreground))',
+
                 '&:hover': {
                   transform: 'translateY(-4px)',
                   boxShadow: '0 8px 24px hsl(var(--primary) / 0.2)',
@@ -97,6 +103,7 @@ export default function SpotlightContributors() {
         ))}
       </Grid>
       <Box
+
         sx={{
           width: '100%',
           height: '1px',
@@ -104,6 +111,7 @@ export default function SpotlightContributors() {
           background: 'linear-gradient(to right, transparent, hsl(var(--border)), transparent)',
         }}
       />
+
     </Box>
   );
 }

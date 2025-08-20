@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ProtectedPage from '../components/layout/ProtectedPage';
 import {
   Box,
   Card,
@@ -67,18 +68,31 @@ const AwardRep: React.FC = () => {
   const [totalRepAwarded , setTotalRepAwarded] = useState(0);
   const [recentAwards, setRecentAwards] = useState<AwardTransaction[]>([]);
   const [loadingAwards, setLoadingAwards] = useState(false);
+  const [orgId, setOrgId] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
     severity: 'success' | 'error' | 'warning' | 'info';
   }>({ open: false, message: '', severity: 'success' });
 
-  // Load recent transactions on component mount
+  // Get orgId from localStorage
   useEffect(() => {
-    loadRecentAwards();
+    const storedOrgId = localStorage.getItem('selectedOrgId');
+    if (storedOrgId) {
+      setOrgId(storedOrgId);
+    }
   }, []);
 
+  // Load recent transactions when orgId is available
+  useEffect(() => {
+    if (orgId) {
+      loadRecentAwards();
+    }
+  }, [orgId]);
+
   const loadRecentAwards = async () => {
+    if (!orgId) return;
+    
     setLoadingAwards(true);
     try {
       console.log('🔄 Loading recent award transactions...');
@@ -86,8 +100,11 @@ const AwardRep: React.FC = () => {
       const actor = await getPlugActor();
       console.log('✅ Actor connected:', !!actor);
       
-      console.log('📞 Calling getTransactionHistory()...');
-      const transactions = await actor.getTransactionHistory() as BackendTransaction[];
+      console.log('📞 Calling getTransactionHistory() with orgId:', orgId);
+      const transactionsResult = await actor.getTransactionHistory(orgId);
+      
+      // Handle optional array result from Motoko
+      const transactions = Array.isArray(transactionsResult) ? transactionsResult[0] || [] : transactionsResult || [];
       console.log('📊 Raw transactions received:', transactions);
       console.log('📊 Total transactions count:', transactions.length);
       
@@ -214,8 +231,38 @@ const AwardRep: React.FC = () => {
       const currentPrincipal = await window.ic.plug.agent.getPrincipal();
       console.log('� Current user principal:', currentPrincipal.toString());
       
-      console.log('�📞 Calling awardRep()...');
-      const result = await actor.awardRep(recipientPrincipal, amountBigInt, [reason]);
+      console.log('�📞 Calling autoAwardRep() - auto-injecting orgId...');
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      const orgId = localStorage.getItem("selectedOrgId")?.trim();
+
+      if (!orgId) {
+        throw new Error("No orgId found in localStorage");
+      }
+
+
+
+
+      // PROBLEM IS HERE
+      const result = await actor.awardRep(orgId,recipientPrincipal, amountBigInt, [reason]);
       console.log('✅ Award result:', result);
       
       // Check if the result indicates an error
@@ -774,4 +821,12 @@ const AwardRep: React.FC = () => {
   );
 };
 
-export default AwardRep;
+const AwardRepWithProtection: React.FC = () => {
+  return (
+    <ProtectedPage>
+      <AwardRep />
+    </ProtectedPage>
+  );
+};
+
+export default AwardRepWithProtection;

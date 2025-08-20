@@ -1,8 +1,10 @@
 import { useState } from 'react';
+
 import {  Button, Typography, Paper } from '@mui/material';
 import NewsletterDialog from './NewsDialog';
 
 export default function NewsletterSection() {
+
   const [open, setOpen] = useState(false);
 
   return (
@@ -18,10 +20,12 @@ export default function NewsletterSection() {
         maxWidth: 900,
         mx: 'auto',
         mb: 14,
+
         '&:hover': {
           boxShadow: '0 8px 30px hsl(var(--primary) / 0.15)',
           border: '1px solid hsl(var(--primary))',
         },
+
       }}
     >
       <Typography
