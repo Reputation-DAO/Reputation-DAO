@@ -90,9 +90,9 @@ function App() {
           <Route
             path="/org-selector"
             element={
-              
+              <HomeLayout>
                 <OrgSelector />
-              
+              </HomeLayout>
             }
           />
 

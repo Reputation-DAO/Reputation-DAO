@@ -35,6 +35,10 @@ import {
   FilterList
 } from '@mui/icons-material';
 import { getPlugActor } from '../components/canister/reputationDao';
+import UserBalanceSearchCard from '../components/Dashboard/ViewBalances/BalanceCard';
+
+import OverviewCard from '../components/Dashboard/ViewBalances/statscard';
+import TopUsersCard from '../components/Dashboard/ViewBalances/TopUser';
 
 interface UserBalance {
   id: string;
@@ -307,406 +311,34 @@ const ViewBalances: React.FC = () => {
       <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', lg: 'row' } }}>
         {/* Search Section */}
         <Box sx={{ flex: 1 }}>
-          <Card sx={{ 
-            backgroundColor: 'hsl(var(--card))',
-            border: '1px solid hsl(var(--border))',
-            borderRadius: 2,
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-            mb: 3
-          }}>
-            <CardContent sx={{ p: 3 }}>
-              <Typography 
-                variant="h6" 
-                sx={{ 
-                  mb: 3, 
-                  color: 'hsl(var(--foreground))',
-                  fontWeight: 600,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1
-                }}
-              >
-                <Search sx={{ color: 'hsl(var(--primary))' }} />
-                Search User Balance
-              </Typography>
-
-              <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
-                <TextField
-                  fullWidth
-                  label="Enter Address or Username"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="e.g. rdmx6-jaaaa-aaaah-qcaiq-cai"
-                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <Person sx={{ color: 'hsl(var(--muted-foreground))' }} />
-                      </InputAdornment>
-                    ),
-                  }}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      backgroundColor: 'hsl(var(--background))',
-                      '& fieldset': {
-                        borderColor: 'hsl(var(--border))',
-                      },
-                      '&:hover fieldset': {
-                        borderColor: 'hsl(var(--primary))',
-                      },
-                      '&.Mui-focused fieldset': {
-                        borderColor: 'hsl(var(--primary))',
-                      },
-                    },
-                    '& .MuiInputLabel-root': {
-                      color: 'hsl(var(--muted-foreground))',
-                    },
-                    '& .MuiInputBase-input': {
-                      color: 'hsl(var(--foreground))',
-                    },
-                  }}
-                />
-
-                <Button
-                  variant="contained"
-                  disabled={isLoading}
-                  onClick={handleSearch}
-                  startIcon={isLoading ? <CircularProgress size={16} /> : <Search />}
-                  sx={{
-                    backgroundColor: 'hsl(var(--primary))',
-                    color: 'hsl(var(--primary-foreground))',
-                    px: 3,
-                    py: 1.5,
-                    borderRadius: 2,
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    minWidth: 120,
-                    '&:hover': {
-                      backgroundColor: 'hsl(var(--primary))/90',
-                    },
-                    '&:disabled': {
-                      backgroundColor: 'hsl(var(--muted))',
-                    },
-                  }}
-                >
-                  {isLoading ? 'Searching...' : 'Search'}
-                </Button>
-              </Box>
-
-              {selectedBalance !== null && (
-                <Box sx={{ 
-                  mt: 3,
-                  p: 3,
-                  backgroundColor: 'hsl(var(--muted))',
-                  borderRadius: 2,
-                  border: '1px solid hsl(var(--border))',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexDirection: 'column',
-                  gap: 1
-                }}>
-                  <Typography variant="h3" sx={{ 
-                    color: 'hsl(var(--primary))',
-                    fontWeight: 700
-                  }}>
-                    {selectedBalance}
-                  </Typography>
-                  <Typography variant="body1" sx={{ 
-                    color: 'hsl(var(--muted-foreground))'
-                  }}>
-                    Reputation Points
-                  </Typography>
-                  <Typography variant="body2" sx={{ 
-                    color: 'hsl(var(--muted-foreground))'
-                  }}>
-                    for {searchTerm}
-                  </Typography>
-                </Box>
-              )}
-            </CardContent>
-          </Card>
-        </Box>
+        <UserBalanceSearchCard
+          fetchBalance={async (principalString: string) => {
+            if (!orgId) throw new Error('Org ID missing');
+            const principal = Principal.fromText(principalString);
+            const plugActor = await getPlugActor();
+            if (!plugActor) throw new Error('Actor not connected');
+            const balance = await plugActor.getBalance(orgId, principal);
+            return Number(balance);
+          }}
+        />
+      </Box>
 
         {/* Statistics */}
-        <Box sx={{ width: { xs: '100%', lg: '300px' } }}>
-          <Card sx={{ 
-            backgroundColor: 'hsl(var(--card))',
-            border: '1px solid hsl(var(--border))',
-            borderRadius: 2,
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-            mb: 3
-          }}>
-            <CardContent sx={{ p: 3 }}>
-              <Box sx={{ 
-                display: 'flex', 
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                mb: 3 
-              }}>
-                <Typography 
-                  variant="h6" 
-                  sx={{ 
-                    color: 'hsl(var(--foreground))',
-                    fontWeight: 600,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1
-                  }}
-                >
-                  <TrendingUp sx={{ color: 'hsl(var(--primary))' }} />
-                  Overview
-                </Typography>
-                <IconButton 
-                  size="small" 
-                  onClick={handleRefresh}
-                  disabled={refreshing}
-                  sx={{ color: 'hsl(var(--muted-foreground))' }}
-                >
-                  {refreshing ? <CircularProgress size={16} /> : <Refresh />}
-                </IconButton>
-              </Box>
-
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <Box sx={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  p: 2,
-                  backgroundColor: 'hsl(var(--muted))',
-                  borderRadius: 1,
-                  border: '1px solid hsl(var(--border))'
-                }}>
-                  <Typography sx={{ color: 'hsl(var(--muted-foreground))' }}>
-                    Total Users
-                  </Typography>
-                  <Typography sx={{ 
-                    color: 'hsl(var(--foreground))', 
-                    fontWeight: 600 
-                  }}>
-                    {userBalances.length}
-                  </Typography>
-                </Box>
-
-                <Box sx={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  p: 2,
-                  backgroundColor: 'hsl(var(--muted))',
-                  borderRadius: 1,
-                  border: '1px solid hsl(var(--border))'
-                }}>
-                  <Typography sx={{ color: 'hsl(var(--muted-foreground))' }}>
-                    Active Users
-                  </Typography>
-                  <Typography sx={{ 
-                    color: 'hsl(var(--primary))', 
-                    fontWeight: 600 
-                  }}>
-                    {activeUsers}
-                  </Typography>
-                </Box>
-
-                <Box sx={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  p: 2,
-                  backgroundColor: 'hsl(var(--muted))',
-                  borderRadius: 1,
-                  border: '1px solid hsl(var(--border))'
-                }}>
-                  <Typography sx={{ color: 'hsl(var(--muted-foreground))' }}>
-                    Total Reputation
-                  </Typography>
-                  <Typography sx={{ 
-                    color: 'hsl(var(--foreground))', 
-                    fontWeight: 600 
-                  }}>
-                    {totalReputation.toLocaleString()} REP
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Box>
+        <OverviewCard
+          totalUsers={userBalances.length}
+          activeUsers={activeUsers}
+          totalReputation={totalReputation}
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+        />
       </Box>
 
       {/* User Balances Table */}
-      <Card sx={{ 
-        backgroundColor: 'hsl(var(--card))',
-        border: '1px solid hsl(var(--border))',
-        borderRadius: 2,
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
-      }}>
-        <CardContent sx={{ p: 3 }}>
-          <Box sx={{ 
-            display: 'flex', 
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            mb: 3 
-          }}>
-            <Typography 
-              variant="h6" 
-              sx={{ 
-                color: 'hsl(var(--foreground))',
-                fontWeight: 600,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1
-              }}
-            >
-              <History sx={{ color: 'hsl(var(--primary))' }} />
-              Top Users ({filteredBalances.length})
-            </Typography>
-            
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Tooltip title="Filter">
-                <IconButton size="small" sx={{ color: 'hsl(var(--muted-foreground))' }}>
-                  <FilterList />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Export">
-                <IconButton size="small" sx={{ color: 'hsl(var(--muted-foreground))' }}>
-                  <Download />
-                </IconButton>
-              </Tooltip>
-            </Box>
-          </Box>
-
-          <TableContainer component={Paper} sx={{ 
-            backgroundColor: 'hsl(var(--muted))',
-            boxShadow: 'none',
-            border: '1px solid hsl(var(--border))'
-          }}>
-            <Table>
-              <TableHead>
-                <TableRow sx={{ backgroundColor: 'hsl(var(--card))' }}>
-                  <TableCell sx={{ 
-                    color: 'hsl(var(--foreground))', 
-                    fontWeight: 600,
-                    borderBottom: '1px solid hsl(var(--border))'
-                  }}>
-                    Rank
-                  </TableCell>
-                  <TableCell sx={{ 
-                    color: 'hsl(var(--foreground))', 
-                    fontWeight: 600,
-                    borderBottom: '1px solid hsl(var(--border))'
-                  }}>
-                    User
-                  </TableCell>
-                  <TableCell sx={{ 
-                    color: 'hsl(var(--foreground))', 
-                    fontWeight: 600,
-                    borderBottom: '1px solid hsl(var(--border))'
-                  }}>
-                    Reputation
-                  </TableCell>
-                  <TableCell sx={{ 
-                    color: 'hsl(var(--foreground))', 
-                    fontWeight: 600,
-                    borderBottom: '1px solid hsl(var(--border))'
-                  }}>
-                    Change
-                  </TableCell>
-                  <TableCell sx={{ 
-                    color: 'hsl(var(--foreground))', 
-                    fontWeight: 600,
-                    borderBottom: '1px solid hsl(var(--border))'
-                  }}>
-                    Last Activity
-                  </TableCell>
-                  <TableCell sx={{ 
-                    color: 'hsl(var(--foreground))', 
-                    fontWeight: 600,
-                    borderBottom: '1px solid hsl(var(--border))'
-                  }}>
-                    Status
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredBalances.map((user) => (
-                  <TableRow 
-                    key={user.id}
-                    sx={{ 
-                      '&:hover': { 
-                        backgroundColor: 'hsl(var(--card))' 
-                      } 
-                    }}
-                  >
-                    <TableCell sx={{ 
-                      color: 'hsl(var(--foreground))',
-                      fontWeight: 600,
-                      borderBottom: '1px solid hsl(var(--border))'
-                    }}>
-                      #{user.rank}
-                    </TableCell>
-                    <TableCell sx={{ 
-                      borderBottom: '1px solid hsl(var(--border))'
-                    }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Avatar sx={{ 
-                          backgroundColor: 'hsl(var(--primary))',
-                          color: 'hsl(var(--primary-foreground))',
-                          width: 32,
-                          height: 32
-                        }}>
-                          {user.name.charAt(0)}
-                        </Avatar>
-                        <Box>
-                          <Typography sx={{ 
-                            color: 'hsl(var(--foreground))',
-                            fontWeight: 600
-                          }}>
-                            {user.name}
-                          </Typography>
-                          <Typography sx={{ 
-                            color: 'hsl(var(--muted-foreground))',
-                            fontSize: '0.875rem'
-                          }}>
-                            {user.address}
-                          </Typography>
-                        </Box>
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={{ 
-                      color: 'hsl(var(--primary))', 
-                      fontWeight: 600,
-                      borderBottom: '1px solid hsl(var(--border))'
-                    }}>
-                      {user.reputation.toLocaleString()} REP
-                    </TableCell>
-                    <TableCell sx={{ 
-                      borderBottom: '1px solid hsl(var(--border))'
-                    }}>
-                      <Typography sx={{ 
-                        color: getChangeColor(user.change),
-                        fontWeight: 600
-                      }}>
-                        {user.change}
-                      </Typography>
-                    </TableCell>
-                    <TableCell sx={{ 
-                      color: 'hsl(var(--muted-foreground))',
-                      borderBottom: '1px solid hsl(var(--border))'
-                    }}>
-                      {user.lastActivity}
-                    </TableCell>
-                    <TableCell sx={{ borderBottom: '1px solid hsl(var(--border))' }}>
-                      <Chip
-                        label={user.status}
-                        color={getStatusColor(user.status) as any}
-                        size="small"
-                        sx={{ textTransform: 'capitalize' }}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </CardContent>
-      </Card>
+      <TopUsersCard
+      filteredBalances={filteredBalances}
+      getChangeColor={getChangeColor}
+      getStatusColor={getStatusColor}
+    />
 
       <Snackbar
         open={snackbar.open}

@@ -5,6 +5,13 @@ import { Principal } from '@dfinity/principal';
 import {
   Container,
   Typography,
+  Box,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Chip,
   Table,
   TableBody,
   TableCell,
@@ -12,44 +19,32 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Chip,
-  TextField,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Box,
   TableSortLabel,
-  Pagination,
   CircularProgress,
-  Alert
+  Pagination,
+  Alert,
 } from '@mui/material';
 import { getPlugActor } from '../components/canister/reputationDao';
 
-/** Backend shape coming from the canister (Motoko) */
 interface BackendTransaction {
   id: bigint;
   transactionType: { Award: null } | { Revoke: null } | { Decay: null };
   from: Principal;
   to: Principal;
   amount: bigint;
-  timestamp: bigint; // seconds (Motoko Nat)
+  timestamp: bigint;
   reason: [] | [string];
 }
 
-/** UI-friendly transaction */
 interface TransactionUI {
-  id: string; // use string (toString on bigint) to avoid numeric-safety issues
+  id: string;
   transactionType: { Award: null } | { Revoke: null } | { Decay: null };
   from: string;
   to: string;
-  amount: number; // kept as number (mirrors your RevokeRep style)
-  timestamp: number; // ms (JS)
+  amount: number;
+  timestamp: number;
   reason: string | null;
 }
-
-type SortField = 'id' | 'timestamp' | 'amount';
-type SortDirection = 'asc' | 'desc';
 
 const TransactionLog: React.FC = () => {
   const [transactions, setTransactions] = useState<TransactionUI[]>([]);
@@ -57,85 +52,46 @@ const TransactionLog: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // filters + sort + pagination
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
-  const [sortField, setSortField] = useState<SortField>('id');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [page, setPage] = useState(1);
-  const [itemsPerPage] = useState(10);
-
+  const itemsPerPage = 10;
   const [orgId, setOrgId] = useState<string | null>(null);
 
-  // read orgId from localStorage (same pattern as RevokeRep)
+  // load orgId
   useEffect(() => {
     const stored = localStorage.getItem('selectedOrgId');
     if (stored) setOrgId(stored);
   }, []);
 
-  // load transactions whenever orgId is available
   useEffect(() => {
-    if (!orgId) {
-      setLoading(false);
-      return;
-    }
-    loadTransactions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (orgId) loadTransactions();
+    else setLoading(false);
   }, [orgId]);
 
   const loadTransactions = async () => {
     if (!orgId) return;
     try {
       setLoading(true);
-      console.log('🔄 Loading transaction history...');
-      console.log('🔗 Getting Plug actor connection...');
       const actor = await getPlugActor();
-      console.log('✅ Actor connected:', !!actor);
+      const result = await actor.getTransactionHistory(orgId);
+      const rawTransactions: BackendTransaction[] = Array.isArray(result) ? (result[0] || []) : (result || []);
 
-      console.log('📞 Calling getTransactionHistory() with orgId:', orgId);
-      const transactionsResult = await actor.getTransactionHistory(orgId);
+      const processed: TransactionUI[] = rawTransactions.map(tx => ({
+        id: tx.id.toString(),
+        transactionType: tx.transactionType,
+        from: tx.from.toString(),
+        to: tx.to.toString(),
+        amount: Number(tx.amount),
+        timestamp: Number(tx.timestamp) * 1000,
+        reason: tx.reason?.[0] || null,
+      }));
 
-      // **Mimic RevokeRep optional-unwrapping** exactly:
-      // If Motoko returned ? [Transaction], it appears here as an array where index 0 is the vec.
-      const rawTransactions: BackendTransaction[] = Array.isArray(transactionsResult)
-        ? (transactionsResult[0] || [])
-        : (transactionsResult || []);
-
-      console.log('📊 Raw transactions:', rawTransactions);
-      console.log('📊 Raw transactions count:', rawTransactions.length);
-
-      if (!Array.isArray(rawTransactions) || rawTransactions.length === 0) {
-        console.log('ℹ️ No transactions found in canister');
-        setTransactions([]);
-        setFilteredTransactions([]);
-        setError(null);
-        return;
-      }
-
-      // Convert to UI-friendly type (mirrors RevokeRep conversions)
-      const processed: TransactionUI[] = rawTransactions.map(tx => {
-        const tsSec = Number(tx.timestamp); // seconds
-        const tsMs = tsSec > 0 ? tsSec * 1000 : Date.now();
-
-        return {
-          id: tx.id.toString(),
-          transactionType: tx.transactionType,
-          from: tx.from.toString(),
-          to: tx.to.toString(),
-          amount: Number(tx.amount), // keep same approach as RevokeRep
-          timestamp: tsMs,
-          reason: (tx.reason && tx.reason.length > 0) ? tx.reason[0]! : null
-        };
-      });
-
-      // sort newest first by timestamp (same approach as suggested earlier)
       processed.sort((a, b) => b.timestamp - a.timestamp);
-
-      console.log('🎯 Processed transactions:', processed);
       setTransactions(processed);
       setError(null);
     } catch (err: any) {
-      console.error('❌ Error loading transactions:', err);
+      console.error(err);
       setError('Failed to load transaction history: ' + (err?.message ?? String(err)));
       setTransactions([]);
     } finally {
@@ -143,7 +99,7 @@ const TransactionLog: React.FC = () => {
     }
   };
 
-  // apply filters + sorting (keeps same behavior as your original, but uses the processed list)
+  // filtering
   useEffect(() => {
     let filtered = [...transactions];
 
@@ -166,137 +122,60 @@ const TransactionLog: React.FC = () => {
       });
     }
 
-    // sort
-    filtered.sort((a, b) => {
-      let aValue: number, bValue: number;
-      switch (sortField) {
-        case 'id':
-          // compare numeric if possible, else fallback to string compare
-          aValue = parseInt(a.id) || 0;
-          bValue = parseInt(b.id) || 0;
-          break;
-        case 'timestamp':
-          aValue = a.timestamp;
-          bValue = b.timestamp;
-          break;
-        case 'amount':
-          aValue = a.amount;
-          bValue = b.amount;
-          break;
-        default:
-          aValue = a.timestamp;
-          bValue = b.timestamp;
-      }
-      return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
-    });
-
     setFilteredTransactions(filtered);
-    setPage(1); // reset to first page on filter change
-  }, [transactions, searchTerm, typeFilter, sortField, sortDirection]);
+    setPage(1);
+  }, [transactions, searchTerm, typeFilter]);
 
-  // pagination
-  const startIndex = (page - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedTransactions = filteredTransactions.slice(startIndex, endIndex);
+  const paginatedTransactions = filteredTransactions.slice((page - 1) * itemsPerPage, page * itemsPerPage);
   const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / itemsPerPage));
 
-  // helpers for UI
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
-    }
+  const getTransactionTypeText = (type: TransactionUI['transactionType']) => {
+    if ('Award' in type) return 'Award';
+    if ('Revoke' in type) return 'Revoke';
+    if ('Decay' in type) return 'Decay';
+    return 'Unknown';
   };
 
-  const getTransactionTypeText = (type: TransactionUI["transactionType"]) => {
-    if ("Award" in type) return "Award";
-    if ("Revoke" in type) return "Revoke";
-    if ("Decay" in type) return "Decay";
-    return "Unknown";
+  const getTransactionTypeColor = (type: TransactionUI['transactionType']) => {
+    if ('Award' in type) return '#22c55e';
+    if ('Revoke' in type) return '#ef4444';
+    if ('Decay' in type) return '#facc15';
+    return '#94a3b8';
   };
 
-  const getTransactionTypeColor = (type: TransactionUI["transactionType"]) => {
-    if ("Award" in type) return "success";
-    if ("Revoke" in type) return "error";
-    if ("Decay" in type) return "warning";
-    return "default";
-  };
+  const formatPrincipal = (principal: string) =>
+    principal.length > 12 ? `${principal.slice(0, 5)}...${principal.slice(-5)}` : principal;
 
-  const formatPrincipal = (principal: string) => {
-    return principal.length > 12
-      ? `${principal.slice(0, 5)}...${principal.slice(-5)}`
-      : principal;
-  };
+  const formatTimestamp = (ts: number) => new Date(ts).toLocaleString();
 
-  const formatTimestamp = (timestamp: number) => {
-    return new Date(timestamp).toLocaleString();
-  };
-
-  // rendering guard rails (loading/wallet/error)
-  if (loading) {
-    return (
-      <Container maxWidth="lg" sx={{ py: 4, display: 'flex', justifyContent: 'center' }}>
-        <CircularProgress />
-      </Container>
-    );
-  }
-
-  // actor presence is implied by getPlugActor usage — but keep messaging if no org selected
-  if (!orgId) {
-    return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Alert severity="warning">No organization selected. Select an org to view transaction history.</Alert>
-      </Container>
-    );
-  }
-
-  if (error) {
-    return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Alert severity="error">{error}</Alert>
-      </Container>
-    );
-  }
+  if (loading) return <Container maxWidth="lg" sx={{ py: 4, display: 'flex', justifyContent: 'center' }}><CircularProgress /></Container>;
+  if (!orgId) return <Container maxWidth="lg" sx={{ py: 4 }}><Alert severity="warning">No organization selected. Select an org to view transaction history.</Alert></Container>;
+  if (error) return <Container maxWidth="lg" sx={{ py: 4 }}><Alert severity="error">{error}</Alert></Container>;
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Typography variant="h4" component="h1" gutterBottom sx={{ color: 'hsl(var(--foreground))' }}>
-        Transaction Log
-      </Typography>
-
-      <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-        Complete history of all reputation awards, revocations and decay events.
-      </Typography>
+      <Typography variant="h4" gutterBottom sx={{ color: 'hsl(var(--foreground))' }}>Transaction Log</Typography>
+      <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>Complete history of all reputation awards, revocations and decay events.</Typography>
 
       {/* Filters */}
-      <Box sx={{ mb: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 3 }}>
         <TextField
           label="Search"
           variant="outlined"
           size="small"
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={e => setSearchTerm(e.target.value)}
           placeholder="Search by ID, principal, or reason..."
           sx={{
             minWidth: 300,
-            '& .MuiOutlinedInput-root': {
-              backgroundColor: 'hsl(var(--background))',
-              '& fieldset': { borderColor: 'hsl(var(--border))' },
-            },
+            '& .MuiOutlinedInput-root': { backgroundColor: 'hsl(var(--background))', '& fieldset': { borderColor: 'hsl(var(--border))' } },
             '& .MuiInputBase-input': { color: 'hsl(var(--foreground))' },
-            '& .MuiInputLabel-root': { color: 'hsl(var(--muted-foreground))' }
+            '& .MuiInputLabel-root': { color: 'hsl(var(--muted-foreground))' },
           }}
         />
-
         <FormControl size="small" sx={{ minWidth: 150 }}>
           <InputLabel>Transaction Type</InputLabel>
-          <Select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            label="Transaction Type"
-          >
+          <Select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} label="Transaction Type">
             <MenuItem value="all">All Types</MenuItem>
             <MenuItem value="award">Award</MenuItem>
             <MenuItem value="revoke">Revoke</MenuItem>
@@ -306,49 +185,22 @@ const TransactionLog: React.FC = () => {
       </Box>
 
       {/* Stats */}
-      <Box sx={{ mb: 3, display: 'flex', gap: 2 }}>
-        <Chip label={`Total Transactions: ${transactions.length}`} variant="outlined" />
-        <Chip label={`Filtered Results: ${filteredTransactions.length}`} variant="outlined" />
+      <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+        <Chip label={`Total: ${transactions.length}`} variant="outlined" />
+        <Chip label={`Filtered: ${filteredTransactions.length}`} variant="outlined" />
       </Box>
 
       {/* Table */}
-      <TableContainer component={Paper} sx={{
-        backgroundColor: 'hsl(var(--card))',
-        border: '1px solid hsl(var(--border))'
-      }}>
+      <TableContainer component={Paper} sx={{ border: '1px solid hsl(var(--border))', borderRadius: 'var(--radius)', background: 'hsl(var(--card))' }}>
         <Table>
           <TableHead>
-            <TableRow sx={{ backgroundColor: 'hsl(var(--card))' }}>
-              <TableCell>
-                <TableSortLabel
-                  active={sortField === 'id'}
-                  direction={sortField === 'id' ? sortDirection : 'asc'}
-                  onClick={() => handleSort('id')}
-                >
-                  ID
-                </TableSortLabel>
-              </TableCell>
+            <TableRow>
+              <TableCell>ID</TableCell>
               <TableCell>Type</TableCell>
               <TableCell>From</TableCell>
               <TableCell>To</TableCell>
-              <TableCell>
-                <TableSortLabel
-                  active={sortField === 'amount'}
-                  direction={sortField === 'amount' ? sortDirection : 'asc'}
-                  onClick={() => handleSort('amount')}
-                >
-                  Amount
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>
-                <TableSortLabel
-                  active={sortField === 'timestamp'}
-                  direction={sortField === 'timestamp' ? sortDirection : 'asc'}
-                  onClick={() => handleSort('timestamp')}
-                >
-                  Timestamp
-                </TableSortLabel>
-              </TableCell>
+              <TableCell>Amount</TableCell>
+              <TableCell>Timestamp</TableCell>
               <TableCell>Reason</TableCell>
             </TableRow>
           </TableHead>
@@ -357,39 +209,25 @@ const TransactionLog: React.FC = () => {
               <TableRow key={tx.id} sx={{ '&:hover': { backgroundColor: 'hsl(var(--background))' } }}>
                 <TableCell sx={{ color: 'hsl(var(--foreground))' }}>{tx.id}</TableCell>
                 <TableCell>
-                  <Chip
-                    label={getTransactionTypeText(tx.transactionType)}
-                    color={getTransactionTypeColor(tx.transactionType) as any}
-                    size="small"
-                  />
+                  <Chip label={getTransactionTypeText(tx.transactionType)} sx={{ bgcolor: getTransactionTypeColor(tx.transactionType), color: '#fff', fontWeight: 600 }} size="small" />
                 </TableCell>
-                <TableCell>
-                  <Typography variant="body2" fontFamily="monospace" sx={{ color: 'hsl(var(--foreground))' }}>
-                    {formatPrincipal(tx.from)}
-                  </Typography>
+                <TableCell sx={{ fontFamily: 'monospace', color: 'hsl(var(--foreground))' }}>{formatPrincipal(tx.from)}</TableCell>
+                <TableCell sx={{ fontFamily: 'monospace', color: 'hsl(var(--foreground))' }}>{formatPrincipal(tx.to)}</TableCell>
+                <TableCell sx={{ fontWeight: 600, color: 'hsl(var(--foreground))' }}>
+                  {getTransactionTypeText(tx.transactionType) === 'Revoke' ? `-${tx.amount}` : `+${tx.amount}`}
                 </TableCell>
-                <TableCell>
-                  <Typography variant="body2" fontFamily="monospace" sx={{ color: 'hsl(var(--foreground))' }}>
-                    {formatPrincipal(tx.to)}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2" fontWeight="bold" sx={{ color: ('Revoke' in tx.transactionType) ? 'hsl(var(--destructive))' : 'hsl(var(--foreground))' }}>
-                    {('Revoke' in tx.transactionType) ? `-${tx.amount}` : `${tx.amount}`}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2" sx={{ color: 'hsl(var(--muted-foreground))' }}>
-                    {formatTimestamp(tx.timestamp)}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2" sx={{ color: 'hsl(var(--muted-foreground))', maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {tx.reason || '-'}
-                  </Typography>
-                </TableCell>
+                <TableCell sx={{ color: 'hsl(var(--muted-foreground))' }}>{formatTimestamp(tx.timestamp)}</TableCell>
+                <TableCell sx={{ color: 'hsl(var(--muted-foreground))', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tx.reason || '-'}</TableCell>
               </TableRow>
             ))}
+
+            {filteredTransactions.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={7} sx={{ textAlign: 'center', py: 4, color: 'hsl(var(--muted-foreground))' }}>
+                  No transactions found.
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </TableContainer>
@@ -397,22 +235,7 @@ const TransactionLog: React.FC = () => {
       {/* Pagination */}
       {totalPages > 1 && (
         <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
-          <Pagination
-            count={totalPages}
-            page={page}
-            onChange={(_, newPage) => setPage(newPage)}
-            color="primary"
-          />
-        </Box>
-      )}
-
-      {/* No results */}
-      {filteredTransactions.length === 0 && !loading && (
-        <Box sx={{ mt: 4, textAlign: 'center' }}>
-          <Typography variant="h6" color="text.secondary">No transactions found</Typography>
-          <Typography variant="body2" color="text.secondary">
-            {searchTerm || typeFilter !== 'all' ? 'Try adjusting your filters' : 'No transactions have been recorded yet'}
-          </Typography>
+          <Pagination count={totalPages} page={page} onChange={(_, p) => setPage(p)} color="primary" />
         </Box>
       )}
     </Container>

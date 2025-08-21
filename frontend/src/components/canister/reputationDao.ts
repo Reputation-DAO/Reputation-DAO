@@ -50,7 +50,7 @@ export interface Awarder {
 
 
 // Modify this canisterID based on where the dfx playground hosts your backend
-const canisterId = 'owyeu-jiaaa-aaaam-qdvwq-cai';
+const canisterId = 'yaku6-4iaaa-aaaab-qacfa-cai';
 
 
 // === CACHED ACTOR ===

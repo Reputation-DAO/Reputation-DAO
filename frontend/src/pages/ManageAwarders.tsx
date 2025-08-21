@@ -41,6 +41,11 @@ import {
 } from '@mui/icons-material';
 import { getPlugActor } from '../components/canister/reputationDao';
 
+import InviteAwarderCard from '../components/Dashboard/manageawarder/awarder';
+import SearchCard from '../components/Dashboard/manageawarder/SearchCard';
+import StatsCard from '../components/Dashboard/manageawarder/statscard';
+import AwardersCard from '../components/Dashboard/manageawarder/awarderscard';
+
 interface Awarder {
   id: string;
   name: string;
@@ -181,175 +186,36 @@ const ManageAwarders: React.FC = () => {
         {/* Left Column: Form + Search */}
         <Box sx={{ flex: 1 }}>
           {/* Add Awarder Form */}
-          <Card sx={{ backgroundColor: 'hsl(var(--muted))', border: '1px solid hsl(var(--border))', borderRadius: 2, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', mb: 3 }}>
-            <CardContent sx={{ p: 3 }}>
-              <Typography variant="h6" sx={{ mb: 3, color: 'hsl(var(--foreground))', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <PersonAdd sx={{ color: 'hsl(var(--primary))' }} /> Invite New Awarder
-              </Typography>
-              <Box component="form" onSubmit={handleAddAwarder} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <TextField
-                  fullWidth
-                  label="Principal ID"
-                  value={newAwarderPrincipal}
-                  onChange={e => setNewAwarderPrincipal(e.target.value)}
-                  placeholder="e.g. rdmx6-jaaaa-aaaah-qcaiq-cai"
-                  InputProps={{
-                    startAdornment: <InputAdornment position="start"><AdminPanelSettings sx={{ color: 'hsl(var(--muted-foreground))' }} /></InputAdornment>,
-                  }}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      backgroundColor: 'hsl(var(--background))',
-                      '& fieldset': { borderColor: 'hsl(var(--border))' },
-                      '&:hover fieldset': { borderColor: 'hsl(var(--primary))' },
-                      '&.Mui-focused fieldset': { borderColor: 'hsl(var(--primary))' },
-                    },
-                    '& .MuiInputLabel-root': { color: 'hsl(var(--muted-foreground))' },
-                    '& .MuiInputBase-input': { color: 'hsl(var(--foreground))' },
-                  }}
-                />
-                <TextField
-                  fullWidth
-                  label="Awarder Name"
-                  value={newAwarderName}
-                  onChange={e => setNewAwarderName(e.target.value)}
-                  placeholder="Enter display name"
-                  InputProps={{
-                    startAdornment: <InputAdornment position="start"><PersonAdd sx={{ color: 'hsl(var(--muted-foreground))' }} /></InputAdornment>,
-                  }}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      backgroundColor: 'hsl(var(--background))',
-                      '& fieldset': { borderColor: 'hsl(var(--border))' },
-                      '&:hover fieldset': { borderColor: 'hsl(var(--primary))' },
-                      '&.Mui-focused fieldset': { borderColor: 'hsl(var(--primary))' },
-                    },
-                    '& .MuiInputLabel-root': { color: 'hsl(var(--muted-foreground))' },
-                    '& .MuiInputBase-input': { color: 'hsl(var(--foreground))' },
-                  }}
-                />
-                <Button
-                  type="submit"
-                  variant="contained"
-                  disabled={isLoading}
-                  startIcon={<PersonAdd />}
-                  sx={{
-                    backgroundColor: 'hsl(var(--primary))',
-                    color: 'hsl(var(--primary-foreground))',
-                    px: 4,
-                    py: 1.5,
-                    borderRadius: 2,
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    fontSize: '1rem',
-                    '&:hover': { backgroundColor: 'hsl(var(--accent))' },
-                    '&:disabled': { backgroundColor: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))' },
-                  }}
-                >
-                  {isLoading ? 'Adding...' : 'Add Trusted Awarder'}
-                </Button>
-              </Box>
-            </CardContent>
-          </Card>
+          <InviteAwarderCard
+            newAwarderPrincipal={newAwarderPrincipal}
+            setNewAwarderPrincipal={setNewAwarderPrincipal}
+            newAwarderName={newAwarderName}
+            setNewAwarderName={setNewAwarderName}
+            handleAddAwarder={handleAddAwarder}
+            isLoading={isLoading}
+          />
+
 
           {/* Search */}
-          <Card sx={{ backgroundColor: 'hsl(var(--muted))', border: '1px solid hsl(var(--border))', borderRadius: 2, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', mb: 3 }}>
-            <CardContent sx={{ p: 3 }}>
-              <TextField
-                fullWidth
-                label="Search Awarders"
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                placeholder="Search by name or principal ID"
-                InputProps={{ startAdornment: <InputAdornment position="start"><Search sx={{ color: 'hsl(var(--muted-foreground))' }} /></InputAdornment> }}
-                sx={{
-                  '& .MuiOutlinedInput-root': { backgroundColor: 'hsl(var(--background))', '& fieldset': { borderColor: 'hsl(var(--border))' }, '&:hover fieldset': { borderColor: 'hsl(var(--primary))' }, '&.Mui-focused fieldset': { borderColor: 'hsl(var(--primary))' } },
-                  '& .MuiInputLabel-root': { color: 'hsl(var(--muted-foreground))' },
-                  '& .MuiInputBase-input': { color: 'hsl(var(--foreground))' },
-                }}
-              />
-            </CardContent>
-          </Card>
+          <SearchCard searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
         </Box>
 
         {/* Right Column: Statistics */}
-        <Box sx={{ width: { xs: '100%', lg: '300px' } }}>
-          <Card sx={{ backgroundColor: 'hsl(var(--muted))', border: '1px solid hsl(var(--border))', borderRadius: 2, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', mb: 3 }}>
-            <CardContent sx={{ p: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                <AdminPanelSettings sx={{ color: 'hsl(var(--primary))', mr: 1 }} />
-                <Typography variant="h6" sx={{ color: 'hsl(var(--foreground))', fontWeight: 600 }}>Statistics</Typography>
-                <IconButton size="small" onClick={handleRefresh} disabled={refreshing} sx={{ ml: 'auto', color: 'hsl(var(--muted-foreground))' }}>
-                  {refreshing ? <CircularProgress size={16} /> : <Refresh />}
-                </IconButton>
-              </Box>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {[
-                  { label: 'Total Awarders', value: awarders.length },
-                  { label: 'Active', value: awarders.filter(a => a.status === 'active').length },
-                  { label: 'Inactive', value: awarders.filter(a => a.status === 'inactive').length }
-                ].map(stat => (
-                  <Box key={stat.label} sx={{ display: 'flex', justifyContent: 'space-between', p: 2, backgroundColor: 'hsl(var(--background))', borderRadius: 1, border: '1px solid hsl(var(--border))' }}>
-                    <Typography sx={{ color: 'hsl(var(--muted-foreground))' }}>{stat.label}</Typography>
-                    <Typography sx={{ color: 'hsl(var(--primary))', fontWeight: 600 }}>{stat.value}</Typography>
-                  </Box>
-                ))}
-              </Box>
-            </CardContent>
-          </Card>
-        </Box>
+        <StatsCard
+            awarders={awarders}
+            handleRefresh={handleRefresh}
+            refreshing={refreshing}
+          />
       </Box>
 
       {/* Awarders Table */}
-      <Card sx={{ backgroundColor: 'hsl(var(--muted))', border: '1px solid hsl(var(--border))', borderRadius: 2, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-        <CardContent sx={{ p: 3 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3, alignItems: 'center' }}>
-            <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-              <Group sx={{ color: 'hsl(var(--primary))' }} /> Awarders ({filteredAwarders.length})
-            </Typography>
-            <IconButton onClick={handleRefresh} disabled={refreshing}><Refresh sx={{ color: 'hsl(var(--primary))' }} /></IconButton>
-          </Box>
-
-          {refreshing ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress sx={{ color: 'hsl(var(--primary))' }} /></Box>
-          ) : (
-            <TableContainer component={Paper} sx={{ backgroundColor: 'hsl(var(--background))', boxShadow: 'none', border: '1px solid hsl(var(--border))' }}>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ backgroundColor: 'hsl(var(--muted))' }}>
-                    {['Awarder', 'Principal ID', 'Status', 'Total Awarded', 'Actions'].map(header => (
-                      <TableCell key={header} sx={{ color: 'hsl(var(--foreground))', fontWeight: 600, borderBottom: '1px solid hsl(var(--border))' }}>{header}</TableCell>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filteredAwarders.map(awarder => (
-                    <TableRow key={awarder.id} sx={{ '&:hover': { backgroundColor: 'hsl(var(--muted))' } }}>
-                      <TableCell sx={{ borderBottom: '1px solid hsl(var(--border))' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                          <Avatar sx={{ backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))', width: 32, height: 32 }}>
-                            {awarder.name.charAt(0)}
-                          </Avatar>
-                          <Typography sx={{ color: 'hsl(var(--foreground))', fontWeight: 600 }}>{awarder.name}</Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell sx={{ borderBottom: '1px solid hsl(var(--border))' }}>
-                        <Typography sx={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.875rem', fontFamily: 'monospace' }}>{awarder.principal}</Typography>
-                      </TableCell>
-                      <TableCell sx={{ borderBottom: '1px solid hsl(var(--border))' }}>
-                        <Chip label={awarder.status} color={getStatusColor(awarder.status) as any} size="small" sx={{ textTransform: 'capitalize' }} />
-                      </TableCell>
-                      <TableCell sx={{ color: 'hsl(var(--primary))', fontWeight: 600, borderBottom: '1px solid hsl(var(--border))' }}>{awarder.totalAwarded} REP</TableCell>
-                      <TableCell sx={{ borderBottom: '1px solid hsl(var(--border))' }}>
-                        <IconButton size="small" onClick={e => handleMenuClick(e, awarder)} sx={{ color: 'hsl(var(--muted-foreground))' }}><MoreVert /></IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </CardContent>
-      </Card>
+      <AwardersCard
+        filteredAwarders={filteredAwarders}
+        refreshing={refreshing}
+        handleRefresh={handleRefresh}
+        handleMenuClick={handleMenuClick}
+        getStatusColor={getStatusColor}
+      />
 
       {/* Actions Menu */}
       <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>

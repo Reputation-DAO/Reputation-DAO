@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+// src/pages/OrgSelector.tsx
+import React, { useEffect, useState } from "react";
 import {
   Box,
   Button,
@@ -8,39 +9,32 @@ import {
   Alert,
   CircularProgress,
   Divider,
-} from '@mui/material';
-import { styled } from '@mui/system';
-import { useNavigate } from 'react-router-dom';
-import { getPlugActor, getCurrentPrincipal } from '../components/canister/reputationDao';
+} from "@mui/material";
+import { styled } from "@mui/material/styles";
+import { useNavigate } from "react-router-dom";
+import { getPlugActor, getCurrentPrincipal } from "../components/canister/reputationDao";
 
-const Root = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  justifyContent: 'center',
-  alignItems: 'center',
-  minHeight: '100vh',
-  width: '100%',
-  backgroundColor: theme.palette.background.default,
-  padding: theme.spacing(3),
-}));
+
 
 const SelectorCard = styled(Paper)(({ theme }) => ({
-  width: '100%',
-  maxWidth: 500,
+  width: "100%",
+  maxWidth: 560,
   padding: theme.spacing(4),
-  borderRadius: theme.shape.borderRadius,
-  backgroundColor: theme.palette.background.paper,
-  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+  borderRadius: "var(--radius)",
+  backgroundColor: "hsl(var(--background))",
+  boxShadow: "var(--shadow-lg)",
 }));
 
-const ActionButton = styled(Button)(({ theme }) => ({
-  borderRadius: theme.shape.borderRadius,
-  textTransform: 'none',
-  padding: theme.spacing(1.5, 3),
-  fontWeight: '600',
+const ActionButton = styled(Button)(() => ({
+  borderRadius: "var(--radius)",
+  textTransform: "none",
+  padding: "0.6rem 1.1rem",
+  fontWeight: 600,
+  boxShadow: "var(--shadow-md)",
 }));
 
 const OrgSelector: React.FC = () => {
-  const [orgId, setOrgId] = useState('');
+  const [orgId, setOrgId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -50,80 +44,80 @@ const OrgSelector: React.FC = () => {
 
   const navigate = useNavigate();
 
-  // Check wallet connection status
-  const checkWalletConnection = async () => {
-    try {
-      if (window.ic?.plug?.isConnected) {
-        const connected = await window.ic.plug.isConnected();
-        setIsConnected(connected);
-        
-        if (connected) {
-          const principal = await window.ic.plug.getPrincipal();
-          setUserPrincipal(principal.toString());
-        }
-      }
-    } catch (err) {
-      console.warn('Error checking wallet connection:', err);
-      setIsConnected(false);
-    }
-  };
-
-  // Check connection on mount
-  useEffect(() => {
-    checkWalletConnection();
-  }, []);
-
-  // Debug log to check what's happening
-  console.log('OrgSelector render:', { isConnected, userPrincipal });
-
-  // Redirect to auth if not connected
-  /*useEffect(() => {
-    if (!isConnected) {
-      console.log('Not connected, redirecting to auth');
-      navigate('/auth');
-      return;
-    }
-    
-    if (principal) {
-      setUserPrincipal(principal.toString());
-    }
-  }, [isConnected, principal, navigate]);*/
-
-  const handleDisconnect = async () => {
-    try {
-      if (window.ic?.plug) {
-        await window.ic.plug.disconnect();
-        setIsConnected(false);
-        setUserPrincipal(null);
-      }
-      navigate('/auth');
-    } catch (err) {
-      console.error('Disconnect error:', err);
-    }
-  };
-
   const clearMessages = () => {
     setError(null);
     setSuccess(null);
   };
 
+  // Check wallet connection + retrieve principal (tries helper first, falls back to window.ic.plug)
+  const checkWalletConnection = async () => {
+    try {
+      if (window.ic?.plug) {
+        const connected = await window.ic.plug.isConnected();
+        setIsConnected(Boolean(connected));
+
+        if (connected) {
+          // Prefer helper that may normalize principal retrieval
+          let principal: any = null;
+          try {
+            principal = await getCurrentPrincipal();
+          } catch {
+            /* ignore and fallback */
+          }
+
+          if (!principal && window.ic?.plug?.getPrincipal) {
+            principal = await window.ic.plug.getPrincipal();
+          }
+
+          setUserPrincipal(principal ? principal.toString() : null);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn("Error checking wallet connection:", err);
+    }
+
+    setIsConnected(false);
+    setUserPrincipal(null);
+  };
+
+  useEffect(() => {
+    checkWalletConnection();
+    // we intentionally do not add navigate/getPlugActor to deps
+    // to keep the mount-check simple and stable
+  }, []);
+
+  const handleDisconnect = async () => {
+    try {
+      if (window.ic?.plug?.disconnect) {
+        await window.ic.plug.disconnect();
+      }
+    } catch (err) {
+      console.error("Disconnect error:", err);
+    } finally {
+      setIsConnected(false);
+      setUserPrincipal(null);
+      navigate("/auth");
+    }
+  };
+
   const handleConnectWallet = async () => {
     setConnectingWallet(true);
     clearMessages();
-    
+
     try {
-      // Use the existing getPlugActor function to trigger wallet connection
       const actor = await getPlugActor();
-      if (actor) {
-        // Connection successful - check connection status
-        await checkWalletConnection();
-        console.log('Wallet connected successfully');
-      } else {
-        setError('Failed to connect wallet. Please try again.');
+      if (!actor) {
+        setError("Failed to connect wallet. Please make sure Plug is installed and unlocked.");
+        return;
       }
+
+      // After getPlugActor returns, re-check to fetch principal
+      await checkWalletConnection();
+      setSuccess("Wallet connected");
     } catch (err: any) {
-      console.error('Wallet connection error:', err);
-      setError(err?.message || 'Failed to connect wallet. Please make sure Plug is installed.');
+      console.error("Wallet connection error:", err);
+      setError(err?.message || "Failed to connect wallet. Please make sure Plug is installed.");
     } finally {
       setConnectingWallet(false);
     }
@@ -131,7 +125,7 @@ const OrgSelector: React.FC = () => {
 
   const handleRegisterOrg = async () => {
     if (!orgId.trim()) {
-      setError('Please enter an Organization ID');
+      setError("Please enter an Organization ID");
       return;
     }
 
@@ -141,36 +135,40 @@ const OrgSelector: React.FC = () => {
     try {
       const reputationDao = await getPlugActor();
       if (!reputationDao) {
-        setError('Failed to connect to canister');
+        setError("Failed to connect to canister");
         return;
       }
 
-      const result = await reputationDao.registerOrg(orgId.trim());
-      
-      if (typeof result === 'string') {
-        if (result.includes('Success')) {
-          setSuccess(`Organization "${orgId}" registered successfully! You are the admin.`);
-          
-          // Store org info in localStorage
-          localStorage.setItem('selectedOrgId', orgId.trim());
-          localStorage.setItem('userRole', 'Admin');
-          
-          // Notify role context about organization change
-          window.dispatchEvent(new CustomEvent('orgChanged'));
-          
-          // Redirect to dashboard after a brief delay
-          setTimeout(() => {
-            navigate('/dashboard');
-          }, 2000);
+      const trimmed = orgId.trim();
+      const result = await reputationDao.registerOrg(trimmed);
+
+      // Keep compatibility with the canister's response pattern:
+      // many Motoko bindings return strings, others return objects.
+      if (typeof result === "string") {
+        if (result.toLowerCase().includes("success")) {
+          setSuccess(`Organization "${trimmed}" registered successfully! You are the admin.`);
         } else {
           setError(result);
+          return;
         }
+      } else if (result && (result.ok || result.success)) {
+        // handle ad-hoc success shapes
+        setSuccess(`Organization "${trimmed}" registered successfully! You are the admin.`);
       } else {
-        setError('Unexpected response format');
+        setError("Unexpected response from canister while registering organization");
+        return;
       }
+
+      // store and notify
+      localStorage.setItem("selectedOrgId", trimmed);
+      localStorage.setItem("userRole", "Admin");
+      window.dispatchEvent(new CustomEvent("orgChanged"));
+
+      // navigate after a tiny pause so user sees message
+      setTimeout(() => navigate("/dashboard"), 1200);
     } catch (err: any) {
-      console.error('Register org error:', err);
-      setError(err?.message || 'Failed to register organization');
+      console.error("Register org error:", err);
+      setError(err?.message || "Failed to register organization");
     } finally {
       setLoading(false);
     }
@@ -178,12 +176,12 @@ const OrgSelector: React.FC = () => {
 
   const handleJoinOrg = async () => {
     if (!orgId.trim()) {
-      setError('Please enter an Organization ID');
+      setError("Please enter an Organization ID");
       return;
     }
 
     if (!userPrincipal) {
-      setError('No principal available');
+      setError("No principal available. Connect your wallet first.");
       return;
     }
 
@@ -193,224 +191,337 @@ const OrgSelector: React.FC = () => {
     try {
       const reputationDao = await getPlugActor();
       if (!reputationDao) {
-        setError('Failed to connect to canister');
+        setError("Failed to connect to canister");
         return;
       }
 
-      // First check if org exists by getting admin
-      const adminResult = await reputationDao.getOrgAdmin(orgId.trim()) as any;
-      
+      const trimmed = orgId.trim();
+      // Check admin presence (handle Motoko optional/nullable patterns)
+      const adminResult: any = await reputationDao.getOrgAdmin(trimmed);
       if (!adminResult || (Array.isArray(adminResult) && adminResult.length === 0)) {
-        setError('Organization not found. Please check the Organization ID.');
-        setLoading(false);
+        setError("Organization not found. Please check the Organization ID.");
         return;
       }
 
-      // Handle the optional array format from Motoko: [] | [Principal]
       const adminPrincipal = Array.isArray(adminResult) ? adminResult[0] : adminResult;
-      
-      // Determine user role
-      let userRole = 'RegularUser';
-      
-      // Check if user is admin
+      let userRole = "RegularUser";
+
       if (adminPrincipal && adminPrincipal.toString() === userPrincipal) {
-        userRole = 'Admin';
+        userRole = "Admin";
       } else {
-        // Check if user is trusted awarder
+        // attempt to fetch trusted awarders (handle optional wrapping)
         try {
-          const trustedAwarders = await reputationDao.getTrustedAwarders(orgId.trim()) as any;
-          if (trustedAwarders && Array.isArray(trustedAwarders) && trustedAwarders.length > 0) {
-            const awardersList = trustedAwarders[0];
-            const isAwarder = Array.isArray(awardersList) && awardersList.some((awarder: any) => 
-              awarder.id && awarder.id.toString() === userPrincipal
-            );
-            if (isAwarder) {
-              userRole = 'TrustedAwarder';
+          const trustedAwardersRaw: any = await reputationDao.getTrustedAwarders(trimmed);
+          if (trustedAwardersRaw && Array.isArray(trustedAwardersRaw) && trustedAwardersRaw.length) {
+            const awardersList = trustedAwardersRaw[0];
+            if (Array.isArray(awardersList)) {
+              const isAwarder = awardersList.some((awarder: any) => {
+                // awarder may be an object or direct principal; support both
+                if (!awarder) return false;
+                if (awarder.id) return awarder.id.toString() === userPrincipal;
+                return awarder.toString() === userPrincipal;
+              });
+              if (isAwarder) userRole = "TrustedAwarder";
             }
           }
         } catch (awarderErr) {
-          console.warn('Could not fetch trusted awarders:', awarderErr);
-          // Continue with RegularUser role
+          console.warn("Could not fetch trusted awarders:", awarderErr);
         }
       }
 
-      setSuccess(`Successfully joined organization "${orgId}" as ${userRole}`);
-      
-      // Store org info in localStorage
-      localStorage.setItem('selectedOrgId', orgId.trim());
-      localStorage.setItem('userRole', userRole);
-      
-      // Notify role context about organization change
-      window.dispatchEvent(new CustomEvent('orgChanged'));
-      
-      // Redirect to dashboard after a brief delay
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 2000);
+      setSuccess(`Successfully joined organization "${trimmed}" as ${userRole}`);
+      localStorage.setItem("selectedOrgId", trimmed);
+      localStorage.setItem("userRole", userRole);
+      window.dispatchEvent(new CustomEvent("orgChanged"));
 
+      setTimeout(() => navigate("/dashboard"), 1200);
     } catch (err: any) {
-      console.error('Join org error:', err);
-      setError(err?.message || 'Failed to join organization');
+      console.error("Join org error:", err);
+      setError(err?.message || "Failed to join organization");
     } finally {
       setLoading(false);
     }
   };
 
+  // If wallet not connected, show connect UI
   if (!isConnected || !userPrincipal) {
     return (
-      <Root>
+    <Box
+      sx={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        px: 2, // small padding for mobile
+      }}
+    >
         <SelectorCard>
-          <Box display="flex" flexDirection="column" alignItems="center" p={4}>
-            <Typography variant="h5" fontWeight="600" mb={2}>
+          <Box display="flex" flexDirection="column" alignItems="center" p={2}>
+            <Typography variant="h5" fontWeight={700} mb={2} sx={{ color: "hsl(var(--primary))" }}>
               Connect Your Wallet
             </Typography>
-            <Typography variant="body2" color="text.secondary" mb={3} textAlign="center">
+
+            <Typography variant="body2" sx={{ color: "hsl(var(--muted-foreground))", mb: 3, textAlign: "center" }}>
               Please connect your Plug wallet to select or create an organization.
             </Typography>
-            
+
             {error && (
-              <Alert severity="error" sx={{ mb: 3, width: '100%' }}>
+              <Alert
+                severity="error"
+                sx={{
+                  mb: 3,
+                  width: "100%",
+                  backgroundColor: "hsl(var(--destructive))",
+                  color: "hsl(var(--destructive-foreground))",
+                  borderRadius: "var(--radius)",
+                }}
+              >
                 {error}
               </Alert>
             )}
 
             {success && (
-              <Alert severity="success" sx={{ mb: 3, width: '100%' }}>
+              <Alert
+                severity="success"
+                sx={{
+                  mb: 3,
+                  width: "100%",
+                  backgroundColor: "hsl(var(--success))",
+                  color: "hsl(var(--success-foreground))",
+                  borderRadius: "var(--radius)",
+                }}
+              >
                 {success}
               </Alert>
             )}
-            
+
             <ActionButton
               variant="contained"
               onClick={handleConnectWallet}
               disabled={connectingWallet}
-              color="primary"
-              startIcon={connectingWallet ? <CircularProgress size={20} /> : null}
-              sx={{ minWidth: 200 }}
+              startIcon={connectingWallet ? <CircularProgress size={18} /> : undefined}
+              sx={{
+                minWidth: 220,
+                backgroundColor: "hsl(var(--primary))",
+                color: "hsl(var(--primary-foreground))",
+                "&:hover": { opacity: 0.95 },
+                "&.Mui-disabled": { opacity: 0.6 },
+              }}
             >
-              {connectingWallet ? 'Connecting...' : 'Connect Plug Wallet'}
+              {connectingWallet ? "Connecting..." : "Connect Plug Wallet"}
             </ActionButton>
-            
-            <Typography variant="body2" color="text.secondary" mt={2} textAlign="center">
-              Don't have Plug wallet? <br />
+
+            <Typography variant="body2" sx={{ color: "hsl(var(--muted-foreground))", mt: 2, textAlign: "center" }}>
+              Don't have Plug wallet?{" "}
               <Button
                 variant="text"
                 size="small"
-                onClick={() => window.open('https://plugwallet.ooo/', '_blank')}
-                sx={{ textTransform: 'none' }}
+                onClick={() => window.open("https://plugwallet.ooo/", "_blank")}
+                sx={{ textTransform: "none", color: "hsl(var(--primary))" }}
               >
                 Download here
               </Button>
             </Typography>
           </Box>
         </SelectorCard>
-      </Root>
+    </Box>
     );
   }
 
+  // Connected UI
   return (
-    <Root>
-      <SelectorCard>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-          <Typography variant="h5" fontWeight="600">
-            Select Organization
-          </Typography>
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={handleDisconnect}
-            sx={{
-              borderColor: 'divider',
-              color: 'text.secondary',
-            }}
-          >
-            Disconnect
-          </Button>
-        </Box>
+     <Box
+  sx={{
+    minHeight: "100vh",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    px: 2,
+    backgroundColor: "hsl(var(--background))",
+  }}
+>
+  <SelectorCard
+    sx={{
+      p: 4,
+      backgroundColor: "hsl(var(--card))",
+      color: "hsl(var(--foreground))",
+    }}
+  >
+    {/* Header */}
+    <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+      <Typography variant="h5" fontWeight={700} sx={{ color: "hsl(var(--primary))", letterSpacing: "0.35px" }}>
+        Select Organization
+      </Typography>
 
-        <Box mb={3}>
-          <Typography variant="body2" color="text.secondary" mb={1}>
-            Connected Principal:
-          </Typography>
-          <Typography 
-            variant="body2" 
-            sx={{ 
-              wordBreak: 'break-all',
-              backgroundColor: 'action.hover',
-              color: 'text.primary',
-              padding: 1,
-              borderRadius: 1,
-              fontSize: '0.8rem'
-            }}
-          >
-            {userPrincipal}
-          </Typography>
-        </Box>
+      <Button
+        variant="outlined"
+        size="small"
+        onClick={handleDisconnect}
+        sx={{
+          borderColor: "hsl(var(--primary))",
+          color: "hsl(var(--primary))",
+          fontWeight: 600,
+          borderRadius: "var(--radius)",
+          textTransform: "none",
+          boxShadow: "var(--shadow-md)",
+          "&:hover": { backgroundColor: "hsl(var(--muted))" },
+        }}
+      >
+        Disconnect
+      </Button>
+    </Box>
 
-        <Divider sx={{ mb: 3 }} />
+    {/* Connected Principal */}
+    <Box mb={3}>
+      <Typography variant="body2" sx={{ color: "hsl(var(--muted-foreground))", mb: 1, fontWeight: 600 }}>
+        Connected Principal:
+      </Typography>
+      <Typography
+        variant="body2"
+        sx={{
+          wordBreak: "break-all",
+          backgroundColor: "hsl(var(--secondary))",
+          color: "hsl(var(--foreground))",
+          p: 1.2,
+          borderRadius: "var(--radius)",
+          fontSize: "0.8rem",
+          border: "1px solid hsl(var(--border))",
+          boxShadow: "var(--shadow-md)",
+        }}
+      >
+        {userPrincipal}
+      </Typography>
+    </Box>
 
-        {error && (
-          <Alert severity="error" sx={{ mb: 3 }}>
-            {error}
-          </Alert>
-        )}
+    <Divider sx={{ mb: 3, borderColor: "hsl(var(--border))" }} />
 
-        {success && (
-          <Alert severity="success" sx={{ mb: 3 }}>
-            {success}
-          </Alert>
-        )}
+    {/* Alerts */}
+    {error && (
+      <Alert
+        severity="error"
+        sx={{
+          mb: 3,
+          backgroundColor: "hsl(var(--destructive))",
+          color: "hsl(var(--destructive-foreground))",
+          borderRadius: "var(--radius)",
+          fontWeight: 600,
+          boxShadow: "var(--shadow-md)",
+        }}
+      >
+        {error}
+      </Alert>
+    )}
 
-        <Box component="form" onSubmit={(e) => e.preventDefault()}>
-          <TextField
-            fullWidth
-            label="Organization ID"
-            variant="outlined"
-            value={orgId}
-            onChange={(e) => setOrgId(e.target.value)}
-            placeholder="Enter organization identifier (e.g., my-company)"
-            disabled={loading}
-            sx={{ mb: 3 }}
-            InputProps={{
-              sx: {
-                borderRadius: 2,
-              },
-            }}
-          />
+    {success && (
+      <Alert
+        severity="success"
+        sx={{
+          mb: 3,
+          backgroundColor: "hsl(var(--success))",
+          color: "hsl(var(--success-foreground))",
+          borderRadius: "var(--radius)",
+          fontWeight: 600,
+          boxShadow: "var(--shadow-md)",
+        }}
+      >
+        {success}
+      </Alert>
+    )}
 
-          <Box display="flex" gap={2} mb={3}>
-            <ActionButton
-              variant="contained"
-              fullWidth
-              onClick={handleRegisterOrg}
-              disabled={loading || !orgId.trim()}
-              color="primary"
-            >
-              {loading ? <CircularProgress size={20} /> : 'Register Org'}
-            </ActionButton>
+    {/* Form */}
+    <Box component="form" onSubmit={(e) => { e.preventDefault(); handleRegisterOrg(); }}>
+      <TextField
+  fullWidth
+  label="Organization ID"
+  variant="outlined"
+  value={orgId}
+  onChange={(e) => setOrgId(e.target.value)}
+  placeholder="Enter organization identifier (e.g., my-company)"
+  disabled={loading}
+  sx={{
+    mb: 3,
+    "& .MuiOutlinedInput-root": {
+      borderRadius: "var(--radius)",
+      backgroundColor: "hsl(var(--background))",
+      color: "hsl(var(--foreground))",
+      "& input::placeholder": {
+        color: "hsl(var(--muted-foreground))",
+        opacity: 1,
+      },
 
-            <ActionButton
-              variant="outlined"
-              fullWidth
-              onClick={handleJoinOrg}
-              disabled={loading || !orgId.trim()}
-              color="primary"
-            >
-              {loading ? <CircularProgress size={20} /> : 'Join Org'}
-            </ActionButton>
-          </Box>
+      // Autofill fix
+      "& input:-webkit-autofill": {
+        WebkitBoxShadow: "0 0 0 1000px hsl(var(--background)) inset",
+        WebkitTextFillColor: "hsl(var(--foreground))",
+        transition: "background-color 5000s ease-in-out 0s",
+      },
 
-          <Box>
-            <Typography variant="body2" color="text.secondary" mb={2}>
-              <strong>Register Org:</strong> Create a new organization (you become admin)
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              <strong>Join Org:</strong> Join an existing organization
-            </Typography>
-          </Box>
-        </Box>
-      </SelectorCard>
-    </Root>
+      // Border handling
+      "& fieldset": {
+        borderColor: "hsl(var(--muted-foreground))", // default border
+      },
+      "&:hover fieldset": {
+        borderColor: "hsl(var(--primary))", // on hover
+      },
+      "&.Mui-focused fieldset": {
+        borderColor: "hsl(var(--primary))", // on focus
+        borderWidth: "2px", // optional, looks stronger
+      },
+    },
+    "& .MuiInputLabel-root": {
+      color: "hsl(var(--muted-foreground))",
+      "&.Mui-focused": { color: "hsl(var(--primary))" },
+    },
+  }}
+/>
+
+
+      {/* Action buttons */}
+      <Box display="flex" gap={2} mb={3}>
+        <ActionButton
+          variant="contained"
+          fullWidth
+          onClick={handleRegisterOrg}
+          disabled={loading || !orgId.trim()}
+          sx={{
+            backgroundColor: "hsl(var(--primary))",
+            color: "hsl(var(--primary-foreground))",
+            "&:hover": { opacity: 0.95 },
+            "&.Mui-disabled": { opacity: 0.6 },
+          }}
+        >
+          {loading ? <CircularProgress size={20} /> : "Register Org"}
+        </ActionButton>
+
+        <ActionButton
+          variant="outlined"
+          fullWidth
+          onClick={handleJoinOrg}
+          disabled={loading || !orgId.trim()}
+          sx={{
+            borderColor: "hsl(var(--primary))",
+            color: "hsl(var(--primary))",
+            "&:hover": { backgroundColor: "hsl(var(--muted))" },
+            "&.Mui-disabled": { opacity: 0.6 },
+          }}
+        >
+          {loading ? <CircularProgress size={20} /> : "Join Org"}
+        </ActionButton>
+      </Box>
+
+      {/* Info */}
+      <Box>
+        <Typography variant="body2" sx={{ color: "hsl(var(--muted-foreground))", mb: 1.25, lineHeight: 1.6 }}>
+          <strong style={{ color: "hsl(var(--primary))" }}>Register Org:</strong> Create a new organization (you become admin)
+        </Typography>
+        <Typography variant="body2" sx={{ color: "hsl(var(--muted-foreground))", lineHeight: 1.6 }}>
+          <strong style={{ color: "hsl(var(--primary))" }}>Join Org:</strong> Join an existing organization
+        </Typography>
+      </Box>
+    </Box>
+  </SelectorCard>
+</Box>
+
   );
 };
 

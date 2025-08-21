@@ -37,6 +37,9 @@ import {
 } from '@mui/icons-material';
 import { Principal } from '@dfinity/principal';
 import { getPlugActor } from '../components/canister/reputationDao';
+import Awardform from '../components/Dashboard/awardrep/Awardform';
+import AwardSummary from '../components/Dashboard/awardrep/AwardSummary';
+import RecentAwardsTable from '../components/Dashboard/awardrep/RecentAward';
 
 // Backend transaction interface
 interface BackendTransaction {
@@ -237,21 +240,6 @@ const AwardRep: React.FC = () => {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
       const orgId = localStorage.getItem("selectedOrgId")?.trim();
 
       if (!orgId) {
@@ -361,448 +349,37 @@ const AwardRep: React.FC = () => {
 
       <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', lg: 'row' } }}>
         {/* Award Form */}
-        <Box sx={{ flex: 1 }}>
-          <Card sx={{ 
-            backgroundColor: 'hsl(var(--muted))',
-            border: '1px solid hsl(var(--border))',
-            borderRadius: 2,
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
-          }}>
-            <CardContent sx={{ p: 3 }}>
-              <Typography 
-                variant="h6" 
-                sx={{ 
-                  mb: 3, 
-                  color: 'hsl(var(--foreground))',
-                  fontWeight: 600,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1
-                }}
-              >
-                <Send sx={{ color: 'hsl(var(--primary))' }} />
-                Award Reputation Points
-              </Typography>
+        <Awardform
+        recipient={recipient}
+        setRecipient={setRecipient}
+        amount={amount}
+        setAmount={setAmount}
+        category={category}
+        setCategory={setCategory}
+        reason={reason}
+        setReason={setReason}
+        isLoading={isLoading}
+        handleAwardSubmit={handleAwardSubmit}
+      />
 
-              <Box component="form" onSubmit={handleAwardSubmit}>
-                <Box
-                  sx={{
-                    display: 'grid',
-                    gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
-                    gap: 3,
-                    mb: 3,
-                  }}
-                >
-                  <TextField
-                    fullWidth
-                    label="Recipient Address"
-                    value={recipient}
-                    onChange={(e) => setRecipient(e.target.value)}
-                    placeholder="Enter ICP address"
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <Person sx={{ color: 'hsl(var(--muted-foreground))' }} />
-                        </InputAdornment>
-                      ),
-                    }}
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        backgroundColor: 'hsl(var(--background))',
-                        '& fieldset': {
-                          borderColor: 'hsl(var(--border))',
-                        },
-                        '&:hover fieldset': {
-                          borderColor: 'hsl(var(--primary))',
-                        },
-                        '&.Mui-focused fieldset': {
-                          borderColor: 'hsl(var(--primary))',
-                        },
-                      },
-                      '& .MuiInputLabel-root': {
-                        color: 'hsl(var(--muted-foreground))',
-                      },
-                      '& .MuiInputBase-input': {
-                        color: 'hsl(var(--foreground))',
-                      },
-                    }}
-                  />
-
-                  <TextField
-                    fullWidth
-                    label="Reputation Amount"
-                    type="number"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    placeholder="Enter amount"
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <Star sx={{ color: 'hsl(var(--muted-foreground))' }} />
-                        </InputAdornment>
-                      ),
-                    }}
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        backgroundColor: 'hsl(var(--background))',
-                        '& fieldset': {
-                          borderColor: 'hsl(var(--border))',
-                        },
-                        '&:hover fieldset': {
-                          borderColor: 'hsl(var(--primary))',
-                        },
-                        '&.Mui-focused fieldset': {
-                          borderColor: 'hsl(var(--primary))',
-                        },
-                      },
-                      '& .MuiInputLabel-root': {
-                        color: 'hsl(var(--muted-foreground))',
-                      },
-                      '& .MuiInputBase-input': {
-                        color: 'hsl(var(--foreground))',
-                      },
-                    }}
-                  />
-                </Box>
-
-                <FormControl fullWidth sx={{ mb: 3 }}>
-                  <InputLabel sx={{ color: 'hsl(var(--muted-foreground))' }}>Category</InputLabel>
-                  <Select
-                    value={category}
-                    label="Category"
-                    onChange={(e) => setCategory(e.target.value)}
-                    sx={{
-                      backgroundColor: 'hsl(var(--background))',
-                      '& .MuiOutlinedInput-notchedOutline': {
-                        borderColor: 'hsl(var(--border))',
-                      },
-                      '&:hover .MuiOutlinedInput-notchedOutline': {
-                        borderColor: 'hsl(var(--primary))',
-                      },
-                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                        borderColor: 'hsl(var(--primary))',
-                      },
-                      '& .MuiSelect-select': {
-                        color: 'hsl(var(--foreground))',
-                      },
-                    }}
-                  >
-                    <MenuItem value="development">Development</MenuItem>
-                    <MenuItem value="community">Community</MenuItem>
-                    <MenuItem value="governance">Governance</MenuItem>
-                    <MenuItem value="documentation">Documentation</MenuItem>
-                    <MenuItem value="testing">Testing</MenuItem>
-                    <MenuItem value="other">Other</MenuItem>
-                  </Select>
-                </FormControl>
-
-                <TextField
-                  fullWidth
-                  label="Reason for Award"
-                  multiline
-                  rows={3}
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  placeholder="Explain why this person deserves reputation points"
-                  sx={{
-                    mb: 3,
-                    '& .MuiOutlinedInput-root': {
-                      backgroundColor: 'hsl(var(--background))',
-                      '& fieldset': {
-                        borderColor: 'hsl(var(--border))',
-                      },
-                      '&:hover fieldset': {
-                        borderColor: 'hsl(var(--primary))',
-                      },
-                      '&.Mui-focused fieldset': {
-                        borderColor: 'hsl(var(--primary))',
-                      },
-                    },
-                    '& .MuiInputLabel-root': {
-                      color: 'hsl(var(--muted-foreground))',
-                    },
-                    '& .MuiInputBase-input': {
-                      color: 'hsl(var(--foreground))',
-                    },
-                  }}
-                />
-
-                <Button
-                  type="submit"
-                  variant="contained"
-                  disabled={isLoading}
-                  startIcon={<EmojiEvents />}
-                  sx={{
-                    backgroundColor: 'hsl(var(--primary))',
-                    color: 'hsl(var(--primary-foreground))',
-                    px: 4,
-                    py: 1.5,
-                    borderRadius: 2,
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    fontSize: '1rem',
-                    '&:hover': {
-                      backgroundColor: 'hsl(var(--primary))/90',
-                    },
-                    '&:disabled': {
-                      backgroundColor: 'hsl(var(--muted))',
-                    },
-                  }}
-                >
-                  {isLoading ? 'Awarding...' : 'Award Reputation'}
-                </Button>
-              </Box>
-            </CardContent>
-          </Card>
-        </Box>
 
         {/* Award Summary */}
-        <Box sx={{ width: { xs: '100%', lg: '300px' } }}>
-          <Card sx={{ 
-            backgroundColor: 'hsl(var(--card))',
-            border: '1px solid hsl(var(--border))',
-            borderRadius: 2,
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-            mb: 3
-          }}>
-            <CardContent sx={{ p: 3 }}>
-              <Typography 
-                variant="h6" 
-                sx={{ 
-                  mb: 3, 
-                  color: 'hsl(var(--foreground))',
-                  fontWeight: 600,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1
-                }}
-              >
-                <TrendingUp sx={{ color: 'hsl(var(--primary))' }} />
-                Award Summary
-              </Typography>
+        <AwardSummary totalAwards={totalAwards} totalRepAwarded={totalRepAwarded} />
 
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                
 
-                <Box sx={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  p: 2,
-                  backgroundColor: 'hsl(var(--muted))',
-                  borderRadius: 1,
-                  border: '1px solid hsl(var(--border))'
-                }}>
-                  <Typography sx={{ color: 'hsl(var(--muted-foreground))' }}>
-                    Total Awards
-                  </Typography>
-                  <Typography sx={{ 
-                    color: 'hsl(var(--foreground))', 
-                    fontWeight: 600 
-                  }}>
-                    {totalAwards}
-                  </Typography>
-                </Box>
 
-                <Box sx={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  p: 2,
-                  backgroundColor: 'hsl(var(--muted))',
-                  borderRadius: 1,
-                  border: '1px solid hsl(var(--border))'
-                }}>
-                  <Typography sx={{ color: 'hsl(var(--muted-foreground))' }}>
-                    Total REP Awarded
-                  </Typography>
-                  <Typography sx={{ 
-                    color: 'hsl(var(--foreground))', 
-                    fontWeight: 600 
-                  }}>
-                    {totalRepAwarded} REP
-                  </Typography>
-                </Box>
-              </Box>
 
-              <Alert 
-                severity="info" 
-                sx={{ 
-                  mt: 2,
-                  backgroundColor: 'rgba(33, 150, 243, 0.1)',
-                  border: '1px solid rgba(33, 150, 243, 0.2)',
-                  '& .MuiAlert-message': {
-                    color: 'hsl(var(--foreground))'
-                  }
-                }}
-              >
-                <Typography variant="body2">
-                  Tip: Include detailed reasons to help build trust in the reputation system.
-                </Typography>
-              </Alert>
-            </CardContent>
-          </Card>
-        </Box>
+
+
       </Box>
 
       {/* Recent Awards */}
-      <Box sx={{ mt: 3 }}>
-        <Card sx={{ 
-          backgroundColor: 'hsl(var(--card))',
-          border: '1px solid hsl(var(--border))',
-          borderRadius: 2,
-          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
-        }}>
-          <CardContent sx={{ p: 3 }}>
-            <Typography 
-              variant="h6" 
-              sx={{ 
-                mb: 3, 
-                color: 'hsl(var(--foreground))',
-                fontWeight: 600,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1
-              }}
-            >
-              <History sx={{ color: 'hsl(var(--primary))' }} />
-              Recent Awards
-            </Typography>
+      <RecentAwardsTable
+        recentAwards={recentAwards}
+        loadingAwards={loadingAwards}
+        getStatusColor={getStatusColor}
+      />
 
-            <TableContainer component={Paper} sx={{ 
-              backgroundColor: 'hsl(var(--muted))',
-              boxShadow: 'none',
-              border: '1px solid hsl(var(--border))'
-            }}>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ backgroundColor: 'hsl(var(--card))' }}>
-                    <TableCell sx={{ 
-                      color: 'hsl(var(--foreground))', 
-                      fontWeight: 600,
-                      borderBottom: '1px solid hsl(var(--border))'
-                    }}>
-                      Recipient
-                    </TableCell>
-                    <TableCell sx={{ 
-                      color: 'hsl(var(--foreground))', 
-                      fontWeight: 600,
-                      borderBottom: '1px solid hsl(var(--border))'
-                    }}>
-                      Amount
-                    </TableCell>
-                    <TableCell sx={{ 
-                      color: 'hsl(var(--foreground))', 
-                      fontWeight: 600,
-                      borderBottom: '1px solid hsl(var(--border))'
-                    }}>
-                      Reason
-                    </TableCell>
-                    <TableCell sx={{ 
-                      color: 'hsl(var(--foreground))', 
-                      fontWeight: 600,
-                      borderBottom: '1px solid hsl(var(--border))'
-                    }}>
-                      Date
-                    </TableCell>
-                    <TableCell sx={{ 
-                      color: 'hsl(var(--foreground))', 
-                      fontWeight: 600,
-                      borderBottom: '1px solid hsl(var(--border))'
-                    }}>
-                      Status
-                    </TableCell>
-                    <TableCell sx={{ 
-                      color: 'hsl(var(--foreground))', 
-                      fontWeight: 600,
-                      borderBottom: '1px solid hsl(var(--border))'
-                    }}>
-                      Actions
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {loadingAwards ? (
-                    <TableRow>
-                      <TableCell colSpan={6} sx={{ textAlign: 'center', py: 4 }}>
-                        <CircularProgress size={24} />
-                        <Typography sx={{ mt: 1, color: 'hsl(var(--muted-foreground))' }}>
-                          Loading recent awards...
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  ) : recentAwards.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} sx={{ textAlign: 'center', py: 4 }}>
-                        <Typography sx={{ color: 'hsl(var(--muted-foreground))' }}>
-                          No recent awards found
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    recentAwards.map((award) => (
-                      <TableRow 
-                        key={award.id}
-                        sx={{ 
-                          '&:hover': { 
-                            backgroundColor: 'hsl(var(--card))' 
-                          } 
-                        }}
-                      >
-                        <TableCell sx={{ 
-                          color: 'hsl(var(--foreground))',
-                          borderBottom: '1px solid hsl(var(--border))'
-                        }}>
-                          {award.recipient}
-                        </TableCell>
-                        <TableCell sx={{ 
-                          color: 'hsl(var(--primary))', 
-                          fontWeight: 600,
-                          borderBottom: '1px solid hsl(var(--border))'
-                        }}>
-                          {award.amount} REP
-                        </TableCell>
-                        <TableCell sx={{ 
-                          color: 'hsl(var(--muted-foreground))',
-                          borderBottom: '1px solid hsl(var(--border))',
-                          maxWidth: 200,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap'
-                        }}>
-                          {award.reason}
-                        </TableCell>
-                        <TableCell sx={{ 
-                          color: 'hsl(var(--muted-foreground))',
-                          borderBottom: '1px solid hsl(var(--border))'
-                        }}>
-                          {award.date}
-                        </TableCell>
-                        <TableCell sx={{ borderBottom: '1px solid hsl(var(--border))' }}>
-                          <Chip
-                            label={award.status}
-                            color={getStatusColor(award.status) as any}
-                            size="small"
-                            sx={{ textTransform: 'capitalize' }}
-                          />
-                        </TableCell>
-                        <TableCell sx={{ borderBottom: '1px solid hsl(var(--border))' }}>
-                          <Tooltip title="View Details">
-                            <IconButton 
-                              size="small"
-                              sx={{ color: 'hsl(var(--muted-foreground))' }}
-                            >
-                              <Info />
-                            </IconButton>
-                          </Tooltip>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
-      </Box>
 
       <Snackbar
         open={snackbar.open}

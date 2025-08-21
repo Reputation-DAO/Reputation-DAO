@@ -27,7 +27,6 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useRole } from '../contexts/RoleContext';
 
-// Import all decay components
 import DecayStatusCard from '../components/decay/DecayStatusCard';
 import DecayConfigPanel from '../components/decay/DecayConfigPanel';
 import DecayAnalytics from '../components/decay/DecayAnalytics';
@@ -40,9 +39,7 @@ interface TabPanelProps {
   value: number;
 }
 
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-
+function TabPanel({ children, value, index, ...other }: TabPanelProps) {
   return (
     <div
       role="tabpanel"
@@ -51,14 +48,37 @@ function TabPanel(props: TabPanelProps) {
       aria-labelledby={`decay-tab-${index}`}
       {...other}
     >
-      {value === index && (
-        <Box sx={{ py: 3 }}>
-          {children}
-        </Box>
-      )}
+      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
     </div>
   );
 }
+
+const NeumorphicCard: React.FC<{ children: React.ReactNode; height?: string }> = ({
+  children,
+  height = '100%',
+}) => (
+  <Card
+    sx={{
+      backgroundColor: 'hsl(var(--background))',
+      border: '1px solid hsl(var(--border))',
+      borderRadius: 'var(--radius)',
+      boxShadow: `
+        4px 4px 10px hsl(var(--muted) / 0.4),
+        -4px -4px 10px hsl(var(--muted) / 0.1)
+      `,
+      transition: 'var(--transition-smooth)',
+      '&:hover': {
+        boxShadow: `
+          6px 6px 14px hsl(var(--primary) / 0.4),
+          -6px -6px 14px hsl(var(--primary) / 0.15)
+        `,
+      },
+      height,
+    }}
+  >
+    {children}
+  </Card>
+);
 
 const DecaySystemPage: React.FC = () => {
   const navigate = useNavigate();
@@ -67,39 +87,15 @@ const DecaySystemPage: React.FC = () => {
   const [refreshKey, setRefreshKey] = useState(0);
   const [testingMode, setTestingMode] = useState(false);
 
-  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
-    setCurrentTab(newValue);
-  };
-
-  const handleRefresh = () => {
-    setRefreshKey(prev => prev + 1);
-  };
-
-  const handleBack = () => {
-    navigate('/dashboard');
-  };
+  const handleTabChange = (_: React.SyntheticEvent, newValue: number) => setCurrentTab(newValue);
+  const handleRefresh = () => setRefreshKey(prev => prev + 1);
+  const handleBack = () => navigate('/dashboard');
 
   const tabs = [
-    {
-      label: 'Overview',
-      icon: <DashboardIcon />,
-      value: 0,
-    },
-    {
-      label: 'Analytics',
-      icon: <AnalyticsIcon />,
-      value: 1,
-    },
-    {
-      label: 'History',
-      icon: <HistoryIcon />,
-      value: 2,
-    },
-    ...(isAdmin ? [{
-      label: 'Configuration',
-      icon: <SettingsIcon />,
-      value: 3,
-    }] : []),
+    { label: 'Overview', icon: <DashboardIcon />, value: 0 },
+    { label: 'Analytics', icon: <AnalyticsIcon />, value: 1 },
+    { label: 'History', icon: <HistoryIcon />, value: 2 },
+    ...(isAdmin ? [{ label: 'Configuration', icon: <SettingsIcon />, value: 3 }] : []),
   ];
 
   return (
@@ -140,26 +136,34 @@ const DecaySystemPage: React.FC = () => {
             Reputation Decay System
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-            {/* Testing Mode Toggle */}
             <FormControlLabel
               control={
                 <Switch
                   checked={testingMode}
-                  onChange={(e) => setTestingMode(e.target.checked)}
-                  color="warning"
+                  onChange={e => setTestingMode(e.target.checked)}
+                  sx={{
+                    '& .MuiSwitch-switchBase.Mui-checked': {
+                      color: 'hsl(var(--warning))',
+                    },
+                    '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                      backgroundColor: 'hsl(var(--warning))',
+                    },
+                  }}
                 />
               }
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="body2" sx={{ color: 'hsl(var(--muted-foreground))' }}>
-                    Testing Mode
-                  </Typography>
+                  <Typography sx={{ color: 'hsl(var(--muted-foreground))' }}>Testing Mode</Typography>
                   {testingMode && (
                     <Chip
                       label="MINUTES"
                       size="small"
-                      color="warning"
-                      sx={{ fontSize: '0.6rem', height: 20 }}
+                      sx={{
+                        fontSize: '0.6rem',
+                        height: 20,
+                        backgroundColor: 'hsl(var(--warning))',
+                        color: 'hsl(var(--warning-foreground))',
+                      }}
                     />
                   )}
                 </Box>
@@ -182,42 +186,35 @@ const DecaySystemPage: React.FC = () => {
           </Box>
         </Box>
         <Typography
-          variant="h6"
-          sx={{
-            color: 'hsl(var(--muted-foreground))',
-            fontSize: '1.125rem',
-            fontWeight: 400,
-            ml: 8,
-          }}
+          sx={{ color: 'hsl(var(--muted-foreground))', fontSize: '1.125rem', fontWeight: 400, ml: 8 }}
         >
           Monitor and configure automatic reputation decay to maintain system balance
         </Typography>
       </Box>
 
-            {/* Testing Mode Alert */}
+      {/* Testing Mode Alert */}
       {testingMode && (
-        <Alert 
-          severity="warning" 
-          sx={{ 
+        <Alert
+          severity="warning"
+          sx={{
             mb: 6,
-            borderRadius: 2,
-            '& .MuiAlert-message': {
-              fontSize: '1rem',
-            },
+            borderRadius: 'var(--radius)',
+            '& .MuiAlert-message': { fontSize: '1rem', color: 'hsl(var(--foreground))' },
+            backgroundColor: 'hsl(var(--muted))',
           }}
           action={
             <Button
               color="inherit"
               size="small"
               onClick={() => setTestingMode(false)}
+              sx={{ color: 'hsl(var(--foreground))' }}
             >
               Disable
             </Button>
           }
         >
-          <Typography variant="body1">
+          <Typography>
             <strong>Testing Mode Active:</strong> Decay intervals are set to minutes instead of days for real-time testing.
-            This should only be used in development environments.
           </Typography>
         </Alert>
       )}
@@ -228,7 +225,7 @@ const DecaySystemPage: React.FC = () => {
         sx={{
           backgroundColor: 'hsl(var(--card))',
           border: '1px solid hsl(var(--border))',
-          borderRadius: 3,
+          borderRadius: 'var(--radius)',
           mb: 6,
           overflow: 'hidden',
         }}
@@ -252,13 +249,10 @@ const DecaySystemPage: React.FC = () => {
                 fontWeight: 600,
               },
             },
-            '& .MuiTabs-indicator': {
-              backgroundColor: 'hsl(var(--primary))',
-              height: 3,
-            },
+            '& .MuiTabs-indicator': { backgroundColor: 'hsl(var(--primary))', height: 3 },
           }}
         >
-          {tabs.map((tab) => (
+          {tabs.map(tab => (
             <Tab
               key={tab.value}
               label={
@@ -273,167 +267,63 @@ const DecaySystemPage: React.FC = () => {
         </Tabs>
       </Paper>
 
-      {/* Tabs */}
-      <Paper
-        elevation={0}
-        sx={{
-          backgroundColor: 'hsl(var(--muted))',
-          border: '1px solid hsl(var(--border))',
-          borderRadius: 3,
-          mb: 4,
-        }}
-      >
-        <Tabs
-          value={currentTab}
-          onChange={handleTabChange}
-          variant="scrollable"
-          scrollButtons="auto"
-          sx={{
-            px: 2,
-            '& .MuiTab-root': {
-              color: 'hsl(var(--muted-foreground))',
-              fontSize: '0.875rem',
-              textTransform: 'none',
-              minHeight: 60,
-              '&.Mui-selected': {
-                color: 'hsl(var(--primary))',
-              },
-            },
-            '& .MuiTabs-indicator': {
-              backgroundColor: 'hsl(var(--primary))',
-            },
-          }}
-        >
-          {tabs.map((tab) => (
-            <Tab
-              key={tab.value}
-              label={
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  {tab.icon}
-                  {tab.label}
-                </Box>
-              }
-              value={tab.value}
-            />
-          ))}
-        </Tabs>
-      </Paper>
-
       {/* Tab Content */}
       <Box>
-        {/* Overview Tab */}
         <TabPanel value={currentTab} index={0}>
           <Stack spacing={4}>
-            {/* Status Cards */}
             <DecayStatusCard key={`status-${refreshKey}`} />
-            
-            {/* Main Content Row */}
-            <Box 
-              sx={{ 
-                display: 'flex',
-                gap: 4,
-                flexDirection: { xs: 'column', lg: 'row' },
-              }}
-            >
-              {/* Recent Activity Chart */}
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Card
-                  sx={{
-                    backgroundColor: 'hsl(var(--muted))',
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: 3,
-                    height: '100%',
-                    boxShadow: 'var(--shadow-sm)',
-                  }}
-                >
+           <Box sx={{ display: 'block', gap: 4 }}>
+              <Box sx={{ flex: 1 }}>
+                <NeumorphicCard height="100%">
                   <CardContent sx={{ p: 4, height: '100%' }}>
-                    <Typography variant="h6" sx={{ color: 'hsl(var(--foreground))', mb: 3 }}>
+                    <Typography sx={{ color: 'hsl(var(--muted-foreground))', fontWeight: 600, mb: 3 }}>
                       Recent Decay Activity
                     </Typography>
-                    <Box sx={{ height: 300 }}>
-                      <DecayHistoryChart key={`history-overview-${refreshKey}`} />
-                    </Box>
+                    <DecayHistoryChart key={`history-overview-${refreshKey}`} />
                   </CardContent>
-                </Card>
+                </NeumorphicCard>
               </Box>
-
-              {/* Quick Filters Sidebar */}
-              <Box sx={{ width: { lg: 400 }, flexShrink: 0 }}>
-                <Card
-                  sx={{
-                    backgroundColor: 'hsl(var(--muted))',
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: 3,
-                    height: '100%',
-                    boxShadow: 'var(--shadow-sm)',
-                  }}
-                >
+              <br/>
+              <Box sx={{ flex: 1 }}>
+                <NeumorphicCard height="100%">
                   <CardContent sx={{ p: 4 }}>
-                    <Typography variant="h6" sx={{ color: 'hsl(var(--foreground))', mb: 3 }}>
+                    <Typography sx={{ color: 'hsl(var(--muted-foreground))', fontWeight: 600, mb: 3 }}>
                       Quick Filters
                     </Typography>
                     <DecayTransactionFilter key={`filter-overview-${refreshKey}`} />
                   </CardContent>
-                </Card>
+                </NeumorphicCard>
               </Box>
             </Box>
           </Stack>
         </TabPanel>
 
-        {/* Analytics Tab */}
         <TabPanel value={currentTab} index={1}>
-          <DecayAnalytics key={`analytics-${refreshKey}`} />
+          <NeumorphicCard>
+            <CardContent sx={{ p: 4 }}>
+              <DecayAnalytics key={`analytics-${refreshKey}`} />
+            </CardContent>
+          </NeumorphicCard>
         </TabPanel>
 
-        {/* History Tab */}
         <TabPanel value={currentTab} index={2}>
-          <Stack spacing={4}>
-            <Box 
-              sx={{ 
-                display: 'flex',
-                gap: 4,
-                flexDirection: { xs: 'column', lg: 'row' },
-              }}
-            >
-              {/* History Chart */}
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Card
-                  sx={{
-                    backgroundColor: 'hsl(var(--muted))',
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: 3,
-                    boxShadow: 'var(--shadow-sm)',
-                  }}
-                >
-                  <CardContent sx={{ p: 4 }}>
-                    <Typography variant="h6" sx={{ color: 'hsl(var(--foreground))', mb: 3 }}>
-                      Decay History Chart
-                    </Typography>
-                    <Box sx={{ height: 400 }}>
-                      <DecayHistoryChart key={`history-${refreshKey}`} />
-                    </Box>
-                  </CardContent>
-                </Card>
-              </Box>
-              
-              {/* Transaction Filter */}
-              <Box sx={{ width: { lg: 400 }, flexShrink: 0 }}>
-                <DecayTransactionFilter key={`filter-${refreshKey}`} />
-              </Box>
-            </Box>
-          </Stack>
+          <NeumorphicCard>
+            <CardContent sx={{ p: 4 }}>
+              <DecayHistoryChart key={`history-tab-${refreshKey}`} />
+            </CardContent>
+          </NeumorphicCard>
         </TabPanel>
 
-        {/* Configuration Tab - Admin Only */}
         {isAdmin && (
           <TabPanel value={currentTab} index={3}>
-            <DecayConfigPanel 
-              key={`config-${refreshKey}`}
-              onConfigUpdate={() => {
-                // Refresh all components when config is updated
-                setRefreshKey(prev => prev + 1);
-              }}
-            />
+            <NeumorphicCard>
+              <CardContent sx={{ p: 4 }}>
+                <DecayConfigPanel
+                  key={`config-${refreshKey}`}
+                  onConfigUpdate={() => setRefreshKey(prev => prev + 1)}
+                />
+              </CardContent>
+            </NeumorphicCard>
           </TabPanel>
         )}
       </Box>
@@ -441,12 +331,10 @@ const DecaySystemPage: React.FC = () => {
   );
 };
 
-const DecaySystemPageWithProtection: React.FC = () => {
-  return (
-    <ProtectedPage>
-      <DecaySystemPage />
-    </ProtectedPage>
-  );
-};
+const DecaySystemPageWithProtection: React.FC = () => (
+  <ProtectedPage>
+    <DecaySystemPage />
+  </ProtectedPage>
+);
 
 export default DecaySystemPageWithProtection;
