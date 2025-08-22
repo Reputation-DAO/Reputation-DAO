@@ -23,9 +23,12 @@ interface Awarder {
   id: string;
   name: string;
   principal: string;
-  status: string;
+  status: 'active' | 'inactive';
   totalAwarded: number;
+  joinDate: string;
+  lastActive: string;
 }
+
 
 interface AwardersCardProps {
   filteredAwarders: Awarder[];

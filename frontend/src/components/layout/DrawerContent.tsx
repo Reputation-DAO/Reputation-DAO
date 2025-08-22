@@ -13,6 +13,7 @@ import {
   Chip,
 } from '@mui/material';
 import { useLocation, useNavigate } from 'react-router-dom';
+
 import { getFilteredNavItems } from './navItems';
 import { useRole } from '../../contexts/RoleContext';
 import {
@@ -25,7 +26,7 @@ const DrawerContent: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const { userRole, userName, isAdmin, isAwarder, loading } = useRole();
+  const { userRole, userName, isAdmin, isAwarder} = useRole();
 
   // Get filtered navigation items based on user role (exclude Loading state)
   const availableNavItems = userRole !== 'Loading' 

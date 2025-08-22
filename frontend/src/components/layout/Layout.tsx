@@ -1,7 +1,7 @@
 import React from 'react';
-import { Box, CssBaseline, Drawer } from '@mui/material';
+import { Box, CssBaseline } from '@mui/material';
 import AppBarHeader from './AppBarHeader';
-import DrawerContent from './DrawerContent';
+
 import { RoleProvider } from '../../contexts/RoleContext';
 
 import Sidebar from './Sidebar';
@@ -16,13 +16,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     setMobileOpen(!mobileOpen);
   };
 
-  const drawerPaperStyles = {
-    boxSizing: 'border-box',
-    width: drawerWidth,
-    backgroundColor: 'hsl(var(--background))',
-    color: 'hsl(var(--foreground))',
-    transition: 'background-color var(--transition-smooth), color var(--transition-smooth)',
-  };
+
 
   return (
     <RoleProvider>

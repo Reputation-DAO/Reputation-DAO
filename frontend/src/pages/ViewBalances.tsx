@@ -1,38 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect} from 'react';
 import ProtectedPage from '../components/layout/ProtectedPage';
 import { Principal } from '@dfinity/principal';
 import {
   Box,
-  Card,
-  CardContent,
   Typography,
-  TextField,
-  Button,
   Alert,
   Snackbar,
-  InputAdornment,
-  Avatar,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  IconButton,
-  Tooltip,
   Chip,
-  CircularProgress
 } from '@mui/material';
 import {
   AccountBalanceWallet,
-  Search,
-  Person,
-  TrendingUp,
-  History,
-  Refresh,
-  Download,
-  FilterList
 } from '@mui/icons-material';
 import { getPlugActor } from '../components/canister/reputationDao';
 import UserBalanceSearchCard from '../components/Dashboard/ViewBalances/BalanceCard';
@@ -62,9 +39,7 @@ interface BackendTransaction {
 }
 
 const ViewBalances: React.FC = () => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedBalance, setSelectedBalance] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const searchTerm = '';
   const [refreshing, setRefreshing] = useState(false);
   const [userBalances, setUserBalances] = useState<UserBalance[]>([]);
   const [orgId, setOrgId] = useState<string | null>(null);
@@ -92,31 +67,7 @@ const ViewBalances: React.FC = () => {
   }, [orgId]);
 
   // Real function to fetch balance from blockchain
-  const fetchBalance = async (principalString: string): Promise<number> => {
-    try {
-      // Validate Principal format
-      const principal = Principal.fromText(principalString);
-
-      // Use getPlugActor to get actor instance
-      const plugActor = await getPlugActor();
-      if (!plugActor) {
-        throw new Error('Failed to connect to blockchain');
-      }
-
-      if (!orgId) {
-        throw new Error('Organization ID not found');
-      }
-
-      const balance = await plugActor.getBalance(orgId, principal);
-      return Number(balance);
-    } catch (error) {
-      console.error('Error fetching balance:', error);
-      if (error instanceof Error && error.message.includes('Invalid principal')) {
-        throw new Error('Invalid Principal ID format');
-      }
-      throw new Error('Failed to fetch balance from blockchain');
-    }
-  };
+  
 
   // Load all balances from transaction history
   const loadAllBalances = async () => {
@@ -218,41 +169,7 @@ const ViewBalances: React.FC = () => {
     loadAllBalances();
   }, []);
 
-  const handleSearch = async () => {
-    if (!searchTerm.trim()) {
-      setSnackbar({
-        open: true,
-        message: 'Please enter a Principal ID to search',
-        severity: 'warning'
-      });
-      return;
-    }
-
-    setIsLoading(true);
-    setSelectedBalance(null);
-
-    try {
-      const balance = await fetchBalance(searchTerm.trim());
-      setSelectedBalance(balance);
-      
-      setSnackbar({
-        open: true,
-        message: balance > 0 
-          ? `Found ${balance} reputation points`
-          : 'No reputation found for this Principal ID',
-        severity: balance > 0 ? 'success' : 'info'
-      });
-    } catch (error) {
-      console.error('Search error:', error);
-      setSnackbar({
-        open: true,
-        message: (error as Error).message,
-        severity: 'error'
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+ 
 
   const handleRefresh = () => {
     loadAllBalances();
@@ -266,11 +183,13 @@ const ViewBalances: React.FC = () => {
     return status === 'active' ? 'success' : 'default';
   };
 
-  const getChangeColor = (change: string) => {
-    if (change.startsWith('+')) return 'hsl(var(--primary))';
-    if (change.startsWith('-')) return 'hsl(var(--destructive))';
+ const getChangeColor = (change: string | number) => {
+    const strChange = typeof change === 'number' ? change.toString() : change;
+    if (strChange.startsWith('+')) return 'hsl(var(--primary))';
+    if (strChange.startsWith('-')) return 'hsl(var(--destructive))';
     return 'hsl(var(--muted-foreground))';
   };
+
 
   const filteredBalances = userBalances.filter(user =>
     user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||

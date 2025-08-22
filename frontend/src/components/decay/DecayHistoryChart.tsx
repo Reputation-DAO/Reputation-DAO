@@ -236,9 +236,19 @@ const DecayHistoryChart: React.FC<DecayHistoryChartProps> = ({ className }) => {
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
-                <Pie data={pieChartData} cx="50%" cy="50%" labelLine={false} outerRadius={80} dataKey="value" label={({ name, percent }) => `${name} ${(percent*100).toFixed(0)}%`}>
-                  {pieChartData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                </Pie>
+              <Pie
+                data={pieChartData}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                outerRadius={80}
+                dataKey="value"
+                label={({ name, percent }) => `${name} ${( (percent ?? 0) * 100 ).toFixed(0)}%`}
+              >
+                {pieChartData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+              </Pie>
+
+                
                 <ChartTooltip />
               </PieChart>
             </ResponsiveContainer>

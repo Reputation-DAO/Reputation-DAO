@@ -110,7 +110,10 @@ const AppBarHeader: React.FC<AppBarHeaderProps> = ({ onMenuClick }) => {
             </IconButton>
           </Tooltip>
 
-          <WalletConnectButton sx={{ minHeight: '32px', fontSize: '0.8rem' }} />
+          <Box sx={{ minHeight: '32px', fontSize: '0.8rem' }}>
+            <WalletConnectButton />
+          </Box>
+
         </Box>
       </Toolbar>
     </AppBar>

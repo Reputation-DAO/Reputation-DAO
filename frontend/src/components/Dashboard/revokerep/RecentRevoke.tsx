@@ -23,7 +23,7 @@ interface Revocation {
   amount: number;
   reason: string;
   date: string;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "completed" | "failed";
 }
 
 interface RecentRevocationsTableProps {

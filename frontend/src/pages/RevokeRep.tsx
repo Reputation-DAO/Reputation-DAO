@@ -3,28 +3,10 @@ import ProtectedPage from '../components/layout/ProtectedPage';
 import { Principal } from '@dfinity/principal';
 import {
   Box,
-  Card,
-  CardContent,
   Typography,
-  TextField,
   Button,
   Alert,
   Snackbar,
-  InputAdornment,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Chip,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  IconButton,
-  Tooltip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -33,12 +15,7 @@ import {
 } from '@mui/material';
 import {
   RemoveCircle,
-  Person,
-  Warning,
-  History,
-  TrendingDown,
-  Info,
-  Undo
+
 } from '@mui/icons-material';
 import { getPlugActor } from '../components/canister/reputationDao';
 import  RevokeReputationCard  from '../components/Dashboard/revokerep/RevokeForm';

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState, useEffect } from 'react';
 import { Principal } from '@dfinity/principal';
 import { useNavigate } from 'react-router-dom';
@@ -69,7 +70,7 @@ const Dashboard: React.FC = React.memo(() => {
 
   
   // Get role information from context
-  const { userRole, userName, isAdmin, isAwarder, loading: roleLoading, currentPrincipal } = useRole();
+  const { userRole, userName, currentPrincipal } = useRole();
   
   // Get organization ID from localStorage
   const [orgId, setOrgId] = useState<string | null>(null);

@@ -134,18 +134,6 @@ const DecayTransactionFilter: React.FC<DecayTransactionFilterProps> = ({
     }
   };
 
-  const getTransactionColor = (type: TransactionType) => {
-    switch (type) {
-      case "Award":
-        return "success";
-      case "Revoke":
-        return "error";
-      case "Decay":
-        return "warning";
-      default:
-        return "default";
-    }
-  };
 
   const exportToCSV = () => {
     const csv = [

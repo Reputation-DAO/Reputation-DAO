@@ -3,41 +3,26 @@ import ProtectedPage from '../components/layout/ProtectedPage';
 import { Principal } from '@dfinity/principal';
 import {
   Box,
-  Card,
-  CardContent,
+
   Typography,
-  TextField,
+
   Button,
   Alert,
   Snackbar,
-  InputAdornment,
-  Avatar,
-  IconButton,
-  Chip,
+
   Dialog,
   DialogActions,
   DialogContent,
   DialogContentText,
   DialogTitle,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
+
   Menu,
   MenuItem,
-  CircularProgress
+
 } from '@mui/material';
 import {
   Group,
-  PersonAdd,
-  AdminPanelSettings,
-  MoreVert,
   Delete,
-  Search,
-  Refresh
 } from '@mui/icons-material';
 import { getPlugActor } from '../components/canister/reputationDao';
 
@@ -174,7 +159,10 @@ const ManageAwarders: React.FC = () => {
   };
   const handleCloseSnackbar = () => setSnackbar(prev => ({ ...prev, open: false }));
 
-  const getStatusColor = (status: 'active' | 'inactive') => (status === 'active' ? 'success' : 'default');
+  const getStatusColor = (status: string) => {
+    return status === 'active' ? 'success' : 'default';
+  };
+
 
   return (
     <Box sx={{ p: 3, backgroundColor: 'hsl(var(--background))', minHeight: '100vh' }}>

@@ -2,38 +2,13 @@ import React, { useState, useEffect } from 'react';
 import ProtectedPage from '../components/layout/ProtectedPage';
 import {
   Box,
-  Card,
-  CardContent,
   Typography,
-  TextField,
-  Button,
   Alert,
   Snackbar,
-  InputAdornment,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Chip,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  IconButton,
-  Tooltip,
-  CircularProgress
+  
 } from '@mui/material';
 import {
   EmojiEvents,
-  Send,
-  Person,
-  Star,
-  TrendingUp,
-  History,
-  Info
 } from '@mui/icons-material';
 import { Principal } from '@dfinity/principal';
 import { getPlugActor } from '../components/canister/reputationDao';
@@ -42,15 +17,7 @@ import AwardSummary from '../components/Dashboard/awardrep/AwardSummary';
 import RecentAwardsTable from '../components/Dashboard/awardrep/RecentAward';
 
 // Backend transaction interface
-interface BackendTransaction {
-  id: bigint;
-  transactionType: { Award: null } | { Revoke: null };
-  from: Principal;
-  to: Principal;
-  amount: bigint;
-  timestamp: bigint;
-  reason: [] | [string];
-}
+
 
 interface AwardTransaction {
   id: string;
