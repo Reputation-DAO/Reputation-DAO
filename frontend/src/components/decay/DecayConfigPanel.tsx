@@ -24,7 +24,11 @@ import {
   Warning as WarningIcon,
 } from '@mui/icons-material';
 import { useRole } from '../../contexts/RoleContext';
-import { getDecayConfig, configureDecay, type DecayConfig } from '../canister/reputationDao';
+import {
+  getDecayConfig,
+  configureOrgDecay,
+  type DecayConfig,
+} from '../canister/reputationDao';
 
 interface DecayConfigPanelProps {
   className?: string;
@@ -34,10 +38,10 @@ interface DecayConfigPanelProps {
 const DecayConfigPanel: React.FC<DecayConfigPanelProps> = ({ className, onConfigUpdate }) => {
   const { isAdmin } = useRole();
   const [config, setConfig] = useState<DecayConfig>({
-    decayRate: 500,
-    decayInterval: 300,
+    decayRate: 500, // 5%
+    decayInterval: 300, // 5 minutes for testing
     minThreshold: 10,
-    gracePeriod: 300,
+    gracePeriod: 300, // 5 minutes for testing
     enabled: true,
   });
   const [originalConfig, setOriginalConfig] = useState<DecayConfig | null>(null);
@@ -45,8 +49,8 @@ const DecayConfigPanel: React.FC<DecayConfigPanelProps> = ({ className, onConfig
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [testingMode, setTestingMode] = useState(true);
-
+  const [testingMode, setTestingMode] = useState(true); // Enable testing mode by default
+  // Track if there are changes pending save
   const isChanged = originalConfig && (
     originalConfig.decayRate !== config.decayRate ||
     originalConfig.decayInterval !== config.decayInterval ||
@@ -56,12 +60,15 @@ const DecayConfigPanel: React.FC<DecayConfigPanelProps> = ({ className, onConfig
   );
 
   useEffect(() => {
-    if (isAdmin) fetchConfig();
+    if (isAdmin) {
+      fetchConfig();
+    }
   }, [isAdmin]);
 
   const fetchConfig = async () => {
     setLoading(true);
     setError(null);
+
     try {
       const currentConfig = await getDecayConfig();
       if (currentConfig) {
@@ -69,7 +76,7 @@ const DecayConfigPanel: React.FC<DecayConfigPanelProps> = ({ className, onConfig
         setOriginalConfig(currentConfig);
       }
     } catch (err) {
-      console.error(err);
+      console.error('Error fetching decay config:', err);
       setError('Failed to fetch current configuration');
     } finally {
       setLoading(false);
@@ -77,44 +84,71 @@ const DecayConfigPanel: React.FC<DecayConfigPanelProps> = ({ className, onConfig
   };
 
   const handleSave = async () => {
-    if (!config) return setError('No configuration to save');
+    if (!config) {
+      setError('No configuration to save');
+      return;
+    }
+
     setSaving(true);
     setError(null);
     setSuccessMessage(null);
+
     try {
-      const result = await configureDecay(
+      console.log('Saving decay config:', config);
+      
+      // Get orgId from localStorage
+      const orgId = localStorage.getItem('selectedOrgId');
+      if (!orgId) {
+        setError('No organization selected. Please select an organization first.');
+        return;
+      }
+
+      const result = await configureOrgDecay(
+        orgId,
         config.decayRate,
         config.decayInterval,
         config.minThreshold,
         config.gracePeriod,
         config.enabled
       );
+
+      console.log('Save result:', result);
+      
       if (result && (result.includes('Success') || result.includes('configured'))) {
         setSuccessMessage('Decay configuration updated successfully!');
         setOriginalConfig({ ...config });
         onConfigUpdate?.(config);
+        // Refresh the config to ensure we have the latest state
         await fetchConfig();
       } else {
         setError(result || 'Unknown error occurred while saving');
       }
     } catch (err: any) {
-      console.error(err);
+      console.error('Error saving decay config:', err);
       setError(err.message || 'Failed to save configuration');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleReset = () => { if (originalConfig) setConfig(originalConfig); };
-  const formatDays = (s: number) => Math.floor(s / 86400);
-  const formatMinutes = (s: number) => Math.floor(s / 60);
-  const formatPercentage = (bp: number) => (bp / 100).toFixed(2);
+  const handleReset = () => {
+    if (originalConfig) {
+      setConfig(originalConfig);
+    }
+  };
+
+  // Helper functions for formatting
+  const formatDays = (seconds: number) => Math.floor(seconds / 86400);
+  const formatMinutes = (seconds: number) => Math.floor(seconds / 60);
+  const formatPercentage = (basisPoints: number) => (basisPoints / 100).toFixed(2);
 
   if (!isAdmin) {
     return (
-      <Card className={className} sx={{ borderRadius: 'var(--radius)', boxShadow: 'none' }}>
+      <Card className={className}>
         <CardContent>
-          <Alert severity="warning">Only administrators can access decay configuration settings.</Alert>
+          <Alert severity="warning">
+            Only administrators can access decay configuration settings.
+          </Alert>
         </CardContent>
       </Card>
     );
@@ -122,14 +156,7 @@ const DecayConfigPanel: React.FC<DecayConfigPanelProps> = ({ className, onConfig
 
   return (
     <>
-      <Card
-        className={className}
-        sx={{
-          borderRadius: 'var(--radius)',
-          background: 'hsl(var(--card))',
-          boxShadow: '4px 4px 10px hsl(var(--muted)/0.2), -4px -4px 10px hsl(var(--muted)/0.05)',
-        }}
-      >
+      <Card className={className}>
         <CardHeader
           title={
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -137,13 +164,13 @@ const DecayConfigPanel: React.FC<DecayConfigPanelProps> = ({ className, onConfig
               <Typography variant="h6">Decay Configuration</Typography>
               {config.enabled ? (
                 <Tooltip title="Decay is currently enabled">
-                  <IconButton size="small" sx={{ color: 'var(--success)' }}>
+                  <IconButton size="small" color="success">
                     <InfoIcon />
                   </IconButton>
                 </Tooltip>
               ) : (
                 <Tooltip title="Decay is currently disabled">
-                  <IconButton size="small" sx={{ color: 'var(--warning)' }}>
+                  <IconButton size="small" color="warning">
                     <WarningIcon />
                   </IconButton>
                 </Tooltip>
@@ -151,7 +178,12 @@ const DecayConfigPanel: React.FC<DecayConfigPanelProps> = ({ className, onConfig
             </Box>
           }
           action={
-            <Button startIcon={<RefreshIcon />} onClick={fetchConfig} disabled={loading} size="small">
+            <Button
+              startIcon={<RefreshIcon />}
+              onClick={fetchConfig}
+              disabled={loading}
+              size="small"
+            >
               Refresh
             </Button>
           }
@@ -163,49 +195,65 @@ const DecayConfigPanel: React.FC<DecayConfigPanelProps> = ({ className, onConfig
             </Box>
           ) : (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {error && <Alert severity="error">{error}</Alert>}
+              {error && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {error}
+                </Alert>
+              )}
 
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={config.enabled}
-                    onChange={(e) => setConfig({ ...config, enabled: e.target.checked })}
-                    color="primary"
-                  />
-                }
-                label={
-                  <Box>
-                    <Typography variant="body1">Enable Point Decay</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Turn decay system on or off globally
-                    </Typography>
-                  </Box>
-                }
-              />
-
-              <Divider sx={{ my: 3 }} />
-
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={testingMode}
-                    onChange={(e) => setTestingMode(e.target.checked)}
-                    color="warning"
-                  />
-                }
-                label={
-                  <Box>
-                    <Typography variant="body1">Testing Mode (Minutes Instead of Days)</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Use minutes instead of days for real-time testing
-                    </Typography>
-                  </Box>
-                }
-              />
+              {/* Enable/Disable Decay */}
+              <Box sx={{ mb: 3 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={config.enabled}
+                      onChange={(e) => setConfig({ ...config, enabled: e.target.checked })}
+                      color="primary"
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body1">
+                        Enable Point Decay
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Turn decay system on or off globally
+                      </Typography>
+                    </Box>
+                  }
+                />
+              </Box>
 
               <Divider sx={{ my: 3 }} />
 
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}>
+              {/* Testing Mode Toggle */}
+              <Box sx={{ mb: 3 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={testingMode}
+                      onChange={(e) => setTestingMode(e.target.checked)}
+                      color="warning"
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body1">
+                        Testing Mode (Minutes Instead of Days)
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Use minutes instead of days for real-time testing
+                      </Typography>
+                    </Box>
+                  }
+                />
+              </Box>
+
+              <Divider sx={{ my: 3 }} />
+
+              {/* Configuration Fields */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3, mt: 2 }}>
+                {/* Decay Rate */}
                 <TextField
                   fullWidth
                   label="Decay Rate (%)"
@@ -215,12 +263,9 @@ const DecayConfigPanel: React.FC<DecayConfigPanelProps> = ({ className, onConfig
                   disabled={!config.enabled}
                   helperText="Percentage of points to decay per interval"
                   inputProps={{ min: 0, max: 100, step: 0.1 }}
-                  sx={{
-                    background: 'hsl(var(--background))',
-                    borderRadius: 'var(--radius)',
-                    boxShadow: 'inset 2px 2px 6px hsl(var(--muted)/0.05), inset -2px -2px 6px hsl(var(--muted)/0.05)',
-                  }}
                 />
+
+                {/* Decay Interval */}
                 <TextField
                   fullWidth
                   label={testingMode ? "Decay Interval (Minutes)" : "Decay Interval (Days)"}
@@ -228,16 +273,15 @@ const DecayConfigPanel: React.FC<DecayConfigPanelProps> = ({ className, onConfig
                   value={testingMode ? formatMinutes(config.decayInterval) : formatDays(config.decayInterval)}
                   onChange={(e) => {
                     const value = parseInt(e.target.value);
-                    setConfig({ ...config, decayInterval: testingMode ? value * 60 : value * 86400 });
+                    const seconds = testingMode ? value * 60 : value * 86400;
+                    setConfig({ ...config, decayInterval: seconds });
                   }}
                   disabled={!config.enabled}
                   helperText={testingMode ? "How often decay occurs (in minutes)" : "How often decay occurs (in days)"}
-                  sx={{
-                    background: 'hsl(var(--background))',
-                    borderRadius: 'var(--radius)',
-                    boxShadow: 'inset 2px 2px 6px hsl(var(--muted)/0.05), inset -2px -2px 6px hsl(var(--muted)/0.05)',
-                  }}
+                  inputProps={{ min: 1, max: testingMode ? 1440 : 365 }}
                 />
+
+                {/* Minimum Threshold */}
                 <TextField
                   fullWidth
                   label="Minimum Threshold"
@@ -246,12 +290,10 @@ const DecayConfigPanel: React.FC<DecayConfigPanelProps> = ({ className, onConfig
                   onChange={(e) => setConfig({ ...config, minThreshold: parseInt(e.target.value) })}
                   disabled={!config.enabled}
                   helperText="Points below this amount won't decay"
-                  sx={{
-                    background: 'hsl(var(--background))',
-                    borderRadius: 'var(--radius)',
-                    boxShadow: 'inset 2px 2px 6px hsl(var(--muted)/0.05), inset -2px -2px 6px hsl(var(--muted)/0.05)',
-                  }}
+                  inputProps={{ min: 0, max: 1000 }}
                 />
+
+                {/* Grace Period */}
                 <TextField
                   fullWidth
                   label={testingMode ? "Grace Period (Minutes)" : "Grace Period (Days)"}
@@ -259,29 +301,21 @@ const DecayConfigPanel: React.FC<DecayConfigPanelProps> = ({ className, onConfig
                   value={testingMode ? formatMinutes(config.gracePeriod) : formatDays(config.gracePeriod)}
                   onChange={(e) => {
                     const value = parseInt(e.target.value);
-                    setConfig({ ...config, gracePeriod: testingMode ? value * 60 : value * 86400 });
+                    const seconds = testingMode ? value * 60 : value * 86400;
+                    setConfig({ ...config, gracePeriod: seconds });
                   }}
                   disabled={!config.enabled}
                   helperText={testingMode ? "New users protected from decay (in minutes)" : "New users protected from decay (in days)"}
-                  sx={{
-                    background: 'hsl(var(--background))',
-                    borderRadius: 'var(--radius)',
-                    boxShadow: 'inset 2px 2px 6px hsl(var(--muted)/0.05), inset -2px -2px 6px hsl(var(--muted)/0.05)',
-                  }}
+                  inputProps={{ min: 0, max: testingMode ? 1440 : 365 }}
                 />
               </Box>
 
+              {/* Configuration Preview */}
               {config.enabled && (
-                <Box
-                  sx={{
-                    mt: 3,
-                    p: 2,
-                    borderRadius: 'var(--radius)',
-                    background: 'hsl(var(--card))',
-                    boxShadow: 'inset 2px 2px 6px hsl(var(--muted)/0.05), inset -2px -2px 6px hsl(var(--muted)/0.05)',
-                  }}
-                >
-                  <Typography variant="subtitle2" gutterBottom>Configuration Summary</Typography>
+                <Box sx={{ mt: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Configuration Summary
+                  </Typography>
                   <Typography variant="body2" color="text.secondary">
                     Users will lose <strong>{formatPercentage(config.decayRate)}%</strong> of their points 
                     every <strong>{testingMode ? formatMinutes(config.decayInterval) : formatDays(config.decayInterval)} {testingMode ? 'minutes' : 'days'}</strong>.
@@ -296,17 +330,23 @@ const DecayConfigPanel: React.FC<DecayConfigPanelProps> = ({ className, onConfig
                 </Box>
               )}
 
+              {/* Action Buttons */}
               <Box sx={{ display: 'flex', gap: 2, mt: 3 }}>
                 <Button
                   variant="contained"
                   startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />}
                   onClick={handleSave}
                   disabled={saving || !isChanged}
-                  sx={{ boxShadow: 'var(--shadow-md)' }}
+                  color="primary"
                 >
                   {saving ? 'Saving...' : (isChanged ? 'Save Configuration' : 'No Changes')}
                 </Button>
-                <Button variant="outlined" onClick={handleReset} disabled={!originalConfig}>
+
+                <Button
+                  variant="outlined"
+                  onClick={handleReset}
+                  disabled={!originalConfig}
+                >
                   Reset to Default
                 </Button>
               </Box>
@@ -321,6 +361,7 @@ const DecayConfigPanel: React.FC<DecayConfigPanelProps> = ({ className, onConfig
         </CardContent>
       </Card>
 
+      {/* Success Snackbar */}
       <Snackbar
         open={!!successMessage}
         autoHideDuration={4000}

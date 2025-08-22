@@ -52,6 +52,8 @@ service : {
    (text);
   configureDecay: (decayRate: nat, decayInterval: nat, minThreshold: 
    nat, gracePeriod: nat, enabled: bool) -> (text);
+  configureOrgDecay: (orgId: OrgID, decayRate: nat, decayInterval: nat,
+   minThreshold: nat, gracePeriod: nat, enabled: bool) -> (text);
   /// Get all organizations
   getAllOrgs: () -> (vec OrgID) query;
   getAllTransactions: () -> (vec Transaction) query;

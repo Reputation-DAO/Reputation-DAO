@@ -62,6 +62,11 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Text],
         [],
       ),
+    'configureOrgDecay' : IDL.Func(
+        [OrgID, IDL.Nat, IDL.Nat, IDL.Nat, IDL.Nat, IDL.Bool],
+        [IDL.Text],
+        [],
+      ),
     'getAllOrgs' : IDL.Func([], [IDL.Vec(OrgID)], ['query']),
     'getAllTransactions' : IDL.Func([], [IDL.Vec(Transaction)], ['query']),
     'getBalance' : IDL.Func(

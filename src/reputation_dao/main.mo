@@ -124,7 +124,7 @@ persistent actor ReputationDAO {
 
     // TODO: Set your admin principal aka your plug id here 
 
-    var owner : Principal = Principal.fromText("gvlvr-wz5ef-7evg7-bphlu-yld24-vgds7-ghcic-do3kl-ecvlh-3mdkp-2ae"); 
+    var owner : Principal = Principal.fromText("ofkbl-m6bgx-xlgm3-ko4y6-mh7i4-kp6b4-sojbh-wyy2r-aznnp-gmqtb-xqe"); 
 
     // --- MULTI-ORGANIZATION STATE ---
     
@@ -172,11 +172,12 @@ persistent actor ReputationDAO {
     };
 
     // Heartbeat throttle: only process when full interval elapsed
-    system func heartbeat() : async () {
-        if (decayConfig.enabled and now() >= (lastGlobalDecayProcess + decayConfig.decayInterval)) {
-            await processAutomaticDecay();
-        };
-    };
+    // DISABLED: We now use transaction-based decay instead of automatic heartbeat decay
+    // system func heartbeat() : async () {
+    //     if (decayConfig.enabled and now() >= (lastGlobalDecayProcess + decayConfig.decayInterval)) {
+    //         await processAutomaticDecay();
+    //     };
+    // };
 
     // On upgrade we just preserve state; no timer IDs to recreate
     system func postupgrade() {
@@ -186,17 +187,18 @@ persistent actor ReputationDAO {
         };
     };
 
+    // DISABLED: No longer using automatic decay timer - using transaction-based decay instead
     // Restart logic after config changes: set lastGlobalDecayProcess so next heartbeat triggers soon
-    private func restartDecayTimer() : async () {
-        if (decayConfig.enabled) {
-            // Set to an old time to trigger immediate processing on next heartbeat
-            if (lastGlobalDecayProcess > decayConfig.decayInterval) {
-                lastGlobalDecayProcess := lastGlobalDecayProcess - decayConfig.decayInterval;
-            } else {
-                lastGlobalDecayProcess := 0;
-            };
-        };
-    };
+    // private func restartDecayTimer() : async () {
+    //     if (decayConfig.enabled) {
+    //         // Set to an old time to trigger immediate processing on next heartbeat
+    //         if (lastGlobalDecayProcess > decayConfig.decayInterval) {
+    //             lastGlobalDecayProcess := lastGlobalDecayProcess - decayConfig.decayInterval;
+    //         } else {
+    //             lastGlobalDecayProcess := 0;
+    //         };
+    //     };
+    // };
 
 
     // --- Utility functions and core logic ---
@@ -722,70 +724,79 @@ public shared({caller}) func awardRep(orgId: OrgID, to: Principal, amount: Nat, 
                 return "Error: Daily mint cap exceeded";
             };
 
-            // Update user balance
-            let currentBalance = getOrgUserBalance(orgData, to);
-            let updatedOrgData = updateOrgUserBalance(orgData, to, currentBalance + amount);
-            
-            // Update daily minted tracking
-            let updatedDailyMinted = Array.map<(Principal, Nat), (Principal, Nat)>(
-                updatedOrgData.dailyMinted,
-                func((p, minted)) = if (Principal.equal(p, caller)) (p, dailyMintedAmount + amount) else (p, minted)
-            );
-            
-            let finalDailyMinted = if (Array.find<(Principal, Nat)>(
-                updatedOrgData.dailyMinted,
-                func((p, _)) = Principal.equal(p, caller)
-            ) == null) {
-                Array.append(updatedDailyMinted, [(caller, amount)])
-            } else {
-                updatedDailyMinted
-            };
-            
-            // Update last mint timestamp
-            let updatedLastMintTime = Array.map<(Principal, Nat), (Principal, Nat)>(
-                updatedOrgData.lastMintTimestamp,
-                func((p, time)) = if (Principal.equal(p, caller)) (p, currentTime) else (p, time)
-            );
-            
-            let finalLastMintTime = if (Array.find<(Principal, Nat)>(
-                updatedOrgData.lastMintTimestamp,
-                func((p, _)) = Principal.equal(p, caller)
-            ) == null) {
-                Array.append(updatedLastMintTime, [(caller, currentTime)])
-            } else {
-                updatedLastMintTime
-            };
-            
-            // Create transaction record
-            let transaction: Transaction = {
-                id = updatedOrgData.nextTransactionId;
-                transactionType = #Award;
-                from = caller;
-                to = to;
-                amount = amount;
-                timestamp = currentTime;
-                reason = reason;
-            };
-            
-            let finalOrgData = {
-                admin = updatedOrgData.admin;
-                trustedAwarders = updatedOrgData.trustedAwarders;
-                userBalances = updatedOrgData.userBalances;
-                dailyMinted = finalDailyMinted;
-                lastMintTimestamp = finalLastMintTime;
-                userDecayInfo = updatedOrgData.userDecayInfo;
-                transactionHistory = Array.append(updatedOrgData.transactionHistory, [transaction]);
-                nextTransactionId = updatedOrgData.nextTransactionId + 1;
-                totalDecayedPoints = updatedOrgData.totalDecayedPoints;
-                lastGlobalDecayProcess = updatedOrgData.lastGlobalDecayProcess;
-            };
-            
-            updateOrgData(orgId, finalOrgData);
-            Debug.print("Rep awarded: " # Nat.toText(amount) # " to " # Principal.toText(to));
-            return "Success: " # Nat.toText(amount) # " reputation points awarded to " # Principal.toText(to) # "."
-        };
-    }
-};
+            // Apply decay calculation first before awarding
+            let _decayAmount = applyDecayToUserInOrg(orgId, to);
+
+            // Refresh org data after decay application
+            switch (validateOrgExists(orgId)) {
+                case null { return "Error: Organization was modified during processing" };
+                case (?refreshedOrgData) {
+                    // Update user balance
+                    let currentBalance = getOrgUserBalance(refreshedOrgData, to);
+                    let updatedOrgData = updateOrgUserBalance(refreshedOrgData, to, currentBalance + amount);
+                    
+                    // Update daily minted tracking
+                    let updatedDailyMinted = Array.map<(Principal, Nat), (Principal, Nat)>(
+                        updatedOrgData.dailyMinted,
+                        func((p, minted)) = if (Principal.equal(p, caller)) (p, dailyMintedAmount + amount) else (p, minted)
+                    );
+                    
+                    let finalDailyMinted = if (Array.find<(Principal, Nat)>(
+                        updatedOrgData.dailyMinted,
+                        func((p, _)) = Principal.equal(p, caller)
+                    ) == null) {
+                        Array.append(updatedDailyMinted, [(caller, amount)])
+                    } else {
+                        updatedDailyMinted
+                    };
+                    
+                    // Update last mint timestamp
+                    let updatedLastMintTime = Array.map<(Principal, Nat), (Principal, Nat)>(
+                        updatedOrgData.lastMintTimestamp,
+                        func((p, time)) = if (Principal.equal(p, caller)) (p, currentTime) else (p, time)
+                    );
+                    
+                    let finalLastMintTime = if (Array.find<(Principal, Nat)>(
+                        updatedOrgData.lastMintTimestamp,
+                        func((p, _)) = Principal.equal(p, caller)
+                    ) == null) {
+                        Array.append(updatedLastMintTime, [(caller, currentTime)])
+                    } else {
+                        updatedLastMintTime
+                    };
+                    
+                    // Create transaction record
+                    let transaction: Transaction = {
+                        id = updatedOrgData.nextTransactionId;
+                        transactionType = #Award;
+                        from = caller;
+                        to = to;
+                        amount = amount;
+                        timestamp = currentTime;
+                        reason = reason;
+                    };
+                    
+                    let finalOrgData = {
+                        admin = updatedOrgData.admin;
+                        trustedAwarders = updatedOrgData.trustedAwarders;
+                        userBalances = updatedOrgData.userBalances;
+                        dailyMinted = finalDailyMinted;
+                        lastMintTimestamp = finalLastMintTime;
+                        userDecayInfo = updatedOrgData.userDecayInfo;
+                        transactionHistory = Array.append(updatedOrgData.transactionHistory, [transaction]);
+                        nextTransactionId = updatedOrgData.nextTransactionId + 1;
+                        totalDecayedPoints = updatedOrgData.totalDecayedPoints;
+                        lastGlobalDecayProcess = updatedOrgData.lastGlobalDecayProcess;
+                    };
+                    
+                    updateOrgData(orgId, finalOrgData);
+                    Debug.print("Rep awarded: " # Nat.toText(amount) # " to " # Principal.toText(to));
+                    return "Success: " # Nat.toText(amount) # " reputation points awarded to " # Principal.toText(to) # ".";
+                }; // close refreshedOrgData case
+            }; // close nested switch
+        }; // close orgData case
+    }; // close main switch
+}; // close function
     
     // --- 2️⃣ revokeRep: Revoke reputation from a user in an organization (admin only) ---
 public shared({caller}) func revokeRep(orgId: OrgID, from: Principal, amount: Nat, reason: ?Text) : async Text {
@@ -801,52 +812,61 @@ public shared({caller}) func revokeRep(orgId: OrgID, from: Principal, amount: Na
                 return "Error: Only admin can revoke reputation";
             };
 
-            let currentBalance = getOrgUserBalance(orgData, from);
-            
-            // Check if user has enough reputation to revoke
-            if (currentBalance < amount) {
-                return "Error: User does not have enough reputation points (has " # Nat.toText(currentBalance) # ", trying to revoke " # Nat.toText(amount) # ")";
-            };
-            
-            // Only revoke if user has sufficient balance
-            if (currentBalance == 0) {
-                return "Error: User has no reputation points to revoke";
-            };
-            
-            let newBalance = Nat.sub(currentBalance, amount);
+            // Apply decay calculation first before revoking
+            let _decayAmount = applyDecayToUserInOrg(orgId, from);
 
-            let updatedOrgData = updateOrgUserBalance(orgData, from, newBalance);
-            
-            // Create transaction record
-            let transaction: Transaction = {
-                id = updatedOrgData.nextTransactionId;
-                transactionType = #Revoke;
-                from = caller;
-                to = from;
-                amount = amount;
-                timestamp = now();
-                reason = reason;
-            };
-            
-            let finalOrgData = {
-                admin = updatedOrgData.admin;
-                trustedAwarders = updatedOrgData.trustedAwarders;
-                userBalances = updatedOrgData.userBalances;
-                dailyMinted = updatedOrgData.dailyMinted;
-                lastMintTimestamp = updatedOrgData.lastMintTimestamp;
-                userDecayInfo = updatedOrgData.userDecayInfo;
-                transactionHistory = Array.append(updatedOrgData.transactionHistory, [transaction]);
-                nextTransactionId = updatedOrgData.nextTransactionId + 1;
-                totalDecayedPoints = updatedOrgData.totalDecayedPoints;
-                lastGlobalDecayProcess = updatedOrgData.lastGlobalDecayProcess;
-            };
-            
-            updateOrgData(orgId, finalOrgData);
-            Debug.print("Rep revoked: " # Nat.toText(amount) # " from " # Principal.toText(from));
-            return "Success: " # Nat.toText(amount) # " reputation points revoked from " # Principal.toText(from) # "."
-        };
-    }
-};
+            // Refresh org data after decay application
+            switch (validateOrgExists(orgId)) {
+                case null { return "Error: Organization was modified during processing" };
+                case (?refreshedOrgData) {
+                    let currentBalance = getOrgUserBalance(refreshedOrgData, from);
+                    
+                    // Check if user has enough reputation to revoke
+                    if (currentBalance < amount) {
+                        return "Error: User does not have enough reputation points (has " # Nat.toText(currentBalance) # ", trying to revoke " # Nat.toText(amount) # ")";
+                    };
+                    
+                    // Only revoke if user has sufficient balance
+                    if (currentBalance == 0) {
+                        return "Error: User has no reputation points to revoke";
+                    };
+                    
+                    let newBalance = Nat.sub(currentBalance, amount);
+
+                    let updatedOrgData = updateOrgUserBalance(refreshedOrgData, from, newBalance);
+                    
+                    // Create transaction record
+                    let transaction: Transaction = {
+                        id = updatedOrgData.nextTransactionId;
+                        transactionType = #Revoke;
+                        from = caller;
+                        to = from;
+                        amount = amount;
+                        timestamp = now();
+                        reason = reason;
+                    };
+                    
+                    let finalOrgData = {
+                        admin = updatedOrgData.admin;
+                        trustedAwarders = updatedOrgData.trustedAwarders;
+                        userBalances = updatedOrgData.userBalances;
+                        dailyMinted = updatedOrgData.dailyMinted;
+                        lastMintTimestamp = updatedOrgData.lastMintTimestamp;
+                        userDecayInfo = updatedOrgData.userDecayInfo;
+                        transactionHistory = Array.append(updatedOrgData.transactionHistory, [transaction]);
+                        nextTransactionId = updatedOrgData.nextTransactionId + 1;
+                        totalDecayedPoints = updatedOrgData.totalDecayedPoints;
+                        lastGlobalDecayProcess = updatedOrgData.lastGlobalDecayProcess;
+                    };
+                    
+                    updateOrgData(orgId, finalOrgData);
+                    Debug.print("Rep revoked: " # Nat.toText(amount) # " from " # Principal.toText(from));
+                    return "Success: " # Nat.toText(amount) # " reputation points revoked from " # Principal.toText(from) # ".";
+                }; // close refreshedOrgData case
+            }; // close nested switch
+        }; // close orgData case
+    }; // close main switch
+}; // close function
 
 
     // --- 3️⃣ addTrustedAwarder: Add a trusted awarder to an organization (admin only) ---
@@ -1165,11 +1185,44 @@ public shared({caller}) func removeTrustedAwarder(orgId: OrgID, p: Principal) : 
             enabled = enabled;
         };
 
-        // Restart the decay timer with new configuration
-        ignore restartDecayTimer();
+        // DISABLED: No longer using automatic decay timer - using transaction-based decay instead
+        // ignore restartDecayTimer();
 
         Debug.print("Decay configuration updated");
         return "Success: Decay configuration updated.";
+    };
+
+    // 🔟 Configure organization-specific decay settings (Organization admin only)
+    public shared({caller}) func configureOrgDecay(
+        orgId: OrgID,
+        decayRate: Nat, 
+        decayInterval: Nat, 
+        minThreshold: Nat, 
+        gracePeriod: Nat, 
+        enabled: Bool
+    ) : async Text {
+        switch (validateOrgExists(orgId)) {
+            case null { return "Error: Organization does not exist" };
+            case (?orgData) {
+                // Check if caller is organization admin
+                if (not Principal.equal(caller, orgData.admin)) {
+                    return "Error: Only organization admin can configure decay settings.";
+                };
+
+                // Update global decay config (affects all organizations for now)
+                // In a more advanced system, each org could have its own config
+                decayConfig := {
+                    decayRate = decayRate;
+                    decayInterval = decayInterval;
+                    minThreshold = minThreshold;
+                    gracePeriod = gracePeriod;
+                    enabled = enabled;
+                };
+
+                Debug.print("Organization decay configuration updated by admin " # Principal.toText(caller) # " for org " # orgId);
+                return "Success: Decay configuration updated for organization " # orgId # ".";
+            };
+        };
     };
 
     // 1️⃣1️⃣ Get current decay configuration

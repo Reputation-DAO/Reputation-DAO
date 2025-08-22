@@ -46,6 +46,10 @@ export interface _SERVICE {
     [bigint, bigint, bigint, bigint, boolean],
     string
   >,
+  'configureOrgDecay' : ActorMethod<
+    [OrgID, bigint, bigint, bigint, bigint, boolean],
+    string
+  >,
   'getAllOrgs' : ActorMethod<[], Array<OrgID>>,
   'getAllTransactions' : ActorMethod<[], Array<Transaction>>,
   'getBalance' : ActorMethod<[OrgID, Principal], [] | [bigint]>,
