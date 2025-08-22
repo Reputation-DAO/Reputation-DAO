@@ -269,30 +269,67 @@ const DecayHistoryChart: React.FC<DecayHistoryChartProps> = ({ className }) => {
       borderRadius: "var(--radius)",
       boxShadow: "4px 4px 10px hsl(var(--muted)/0.4), -4px -4px 10px hsl(var(--muted)/0.1)",
       mb: 4,
+      color:"hsl(var(--foreground))"
     }}>
       <CardHeader
         title={<Box sx={{ display:'flex', alignItems:'center', gap:1 }}><TimelineIcon /> <Typography variant="h6">Decay History & Trends</Typography></Box>}
         subheader={`Last updated: ${lastUpdated.toLocaleString()}`}
         action={
           <Box sx={{ display: 'flex', gap: 1 }}>
-            <FormControl size="small" sx={{ minWidth: 100 }}>
+            <FormControl
+              size="small"
+              sx={{
+                minWidth: 100,
+                color: "hsl(var(--foreground))",
+                "& .MuiInputLabel-root": { color: "hsl(var(--foreground))" },
+                "& .MuiSelect-select": { color: "hsl(var(--foreground))" },
+                "& .MuiSvgIcon-root": { color: "hsl(var(--foreground))" },
+                "& .MuiMenuItem-root": { color: "hsl(var(--foreground))" },
+              }}
+            >
               <InputLabel>Range</InputLabel>
-              <Select value={timeRange} onChange={e=>setTimeRange(e.target.value)} label="Range">
+              <Select
+                value={timeRange}
+                onChange={(e) => setTimeRange(e.target.value)}
+                label="Range"
+              >
                 <MenuItem value="7d">7 Days</MenuItem>
                 <MenuItem value="30d">30 Days</MenuItem>
                 <MenuItem value="90d">90 Days</MenuItem>
                 <MenuItem value="1y">1 Year</MenuItem>
               </Select>
             </FormControl>
-            <FormControl size="small" sx={{ minWidth: 100 }}>
+
+            <FormControl
+              size="small"
+              sx={{
+                minWidth: 100,
+                color: "hsl(var(--foreground))",
+                "& .MuiInputLabel-root": { color: "hsl(var(--foreground))" },
+                "& .MuiSelect-select": { color: "hsl(var(--foreground))" },
+                "& .MuiSvgIcon-root": { color: "hsl(var(--foreground))" },
+                "& .MuiMenuItem-root": { color: "hsl(var(--foreground))" },
+              }}
+            >
               <InputLabel>Chart</InputLabel>
-              <Select value={chartType} onChange={e=>setChartType(e.target.value as any)} label="Chart">
-                <MenuItem value="line"><ShowChartIcon fontSize="small" /> Line</MenuItem>
-                <MenuItem value="bar"><BarChartIcon fontSize="small" /> Bar</MenuItem>
-                <MenuItem value="pie"><TrendingDownIcon fontSize="small" /> Pie</MenuItem>
+              <Select
+                value={chartType}
+                onChange={(e) => setChartType(e.target.value as any)}
+                label="Chart"
+              >
+                <MenuItem value="line">
+                  <ShowChartIcon fontSize="small" /> Line
+                </MenuItem>
+                <MenuItem value="bar">
+                  <BarChartIcon fontSize="small" /> Bar
+                </MenuItem>
+                <MenuItem value="pie">
+                  <TrendingDownIcon fontSize="small" /> Pie
+                </MenuItem>
               </Select>
             </FormControl>
-            <IconButton onClick={fetchDecayHistory} size="small" disabled={loading}><RefreshIcon /></IconButton>
+
+            <IconButton onClick={fetchDecayHistory} size="small" disabled={loading}><RefreshIcon sx = {{ color:"hsl(var(--foreground))"}} /></IconButton>
           </Box>
         }
       />
@@ -302,20 +339,20 @@ const DecayHistoryChart: React.FC<DecayHistoryChartProps> = ({ className }) => {
 
         {/* Stats Grid */}
         <Box sx={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))', gap:2, mb:3 }}>
-          <Paper sx={{p:2, textAlign:'center'}}>
+          <Paper sx={{p:2, textAlign:'center', background: "hsl(var(--background))",}}>
             <Typography variant="h5" color="warning.main" fontWeight="bold">{totalStats.events}</Typography>
-            <Typography variant="body2" color="text.secondary">Total Events</Typography>
-            <Typography variant="caption" color="text.secondary">{totalStats.avgPerDay.toFixed(1)}/day avg</Typography>
+            <Typography variant="body2" sx = {{ color:"hsl(var(--foreground))"}}>Total Events</Typography>
+            <Typography variant="caption" sx = {{ color:"hsl(var(--foreground))"}}>{totalStats.avgPerDay.toFixed(1)}/day avg</Typography>
           </Paper>
-          <Paper sx={{p:2, textAlign:'center'}}>
+          <Paper sx={{p:2, textAlign:'center', background: "hsl(var(--background))",}}>
             <Typography variant="h5" color="error.main" fontWeight="bold">{totalStats.points}</Typography>
-            <Typography variant="body2" color="text.secondary">Points Decayed</Typography>
-            <Typography variant="caption" color="text.secondary">{totalStats.avgPointsPerDay.toFixed(1)}/day avg</Typography>
+            <Typography variant="body2" sx = {{ color:"hsl(var(--foreground))"}}>Points Decayed</Typography>
+            <Typography variant="caption" sx = {{ color:"hsl(var(--foreground))"}}>{totalStats.avgPointsPerDay.toFixed(1)}/day avg</Typography>
           </Paper>
-          <Paper sx={{p:2, textAlign:'center'}}>
+          <Paper sx={{p:2, textAlign:'center', background: "hsl(var(--background))",}}>
             <Typography variant="h5" color="info.main" fontWeight="bold">{userBreakdown.length}</Typography>
-            <Typography variant="body2" color="text.secondary">Users Affected</Typography>
-            <Typography variant="caption" color="text.secondary">In time range</Typography>
+            <Typography variant="body2" sx = {{ color:"hsl(var(--foreground))"}}>Users Affected</Typography>
+            <Typography variant="caption" sx = {{ color:"hsl(var(--foreground))"}}>In time range</Typography>
           </Paper>
         </Box>
 

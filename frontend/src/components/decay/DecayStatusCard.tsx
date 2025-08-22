@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -9,7 +9,7 @@ import {
   Tooltip,
   IconButton,
   Collapse,
-} from '@mui/material';
+} from "@mui/material";
 import {
   Schedule as ScheduleIcon,
   Warning as WarningIcon,
@@ -18,8 +18,8 @@ import {
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
   Info as InfoIcon,
-} from '@mui/icons-material';
-import { useRole } from '../../contexts/RoleContext';
+} from "@mui/icons-material";
+import { useRole } from "../../contexts/RoleContext";
 import {
   getBalanceWithDetails,
   getDecayConfig,
@@ -28,7 +28,7 @@ import {
   getDecayStatus,
   type DecayConfig,
   type BalanceWithDetails,
-} from '../canister/reputationDao';
+} from "../canister/reputationDao";
 
 interface DecayStatusCardProps {
   className?: string;
@@ -42,7 +42,8 @@ const DecayStatusCard: React.FC<DecayStatusCardProps> = ({
   borderColor = "hsl(var(--border))",
 }) => {
   const { currentPrincipal } = useRole();
-  const [balanceDetails, setBalanceDetails] = useState<BalanceWithDetails | null>(null);
+  const [balanceDetails, setBalanceDetails] =
+    useState<BalanceWithDetails | null>(null);
   const [decayConfig, setDecayConfig] = useState<DecayConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
@@ -64,8 +65,8 @@ const DecayStatusCard: React.FC<DecayStatusCardProps> = ({
       setBalanceDetails(details);
       setDecayConfig(config);
     } catch (err) {
-      console.error('Error fetching decay data:', err);
-      setError('Failed to fetch decay information');
+      console.error("Error fetching decay data:", err);
+      setError("Failed to fetch decay information");
     } finally {
       setLoading(false);
     }
@@ -73,43 +74,61 @@ const DecayStatusCard: React.FC<DecayStatusCardProps> = ({
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'safe': return 'success';
-      case 'grace': return 'info';
-      case 'at-risk': return 'warning';
-      case 'decaying': return 'error';
-      default: return 'default';
+      case "safe":
+        return "success";
+      case "grace":
+        return "info";
+      case "at-risk":
+        return "warning";
+      case "decaying":
+        return "error";
+      default:
+        return "default";
     }
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'safe': return <CheckCircleIcon />;
-      case 'grace': return <NewReleasesIcon />;
-      case 'at-risk': return <WarningIcon />;
-      case 'decaying': return <ScheduleIcon />;
-      default: return <InfoIcon />;
+      case "safe":
+        return <CheckCircleIcon color="success" />;
+      case "grace":
+        return <NewReleasesIcon color="info" />;
+      case "at-risk":
+        return <WarningIcon color="warning" />;
+      case "decaying":
+        return <ScheduleIcon color="error" />;
+      default:
+        return <InfoIcon color="disabled" />;
     }
   };
 
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'safe': return 'Safe from Decay';
-      case 'grace': return 'Grace Period';
-      case 'at-risk': return 'Decay Soon';
-      case 'decaying': return 'Decay Pending';
-      default: return 'Unknown';
+      case "safe":
+        return "Safe from Decay";
+      case "grace":
+        return "Grace Period";
+      case "at-risk":
+        return "Decay Soon";
+      case "decaying":
+        return "Decay Pending";
+      default:
+        return "Unknown";
     }
   };
 
   const formatTimeRemaining = (days: number) => {
-    if (days <= 0) return 'Decay available now';
-    if (days === 1) return '1 day remaining';
+    if (days <= 0) return "Decay available now";
+    if (days === 1) return "1 day remaining";
     return `${days} days remaining`;
   };
 
   const getDecayProgress = (daysUntilDecay: number, intervalDays: number) => {
     if (intervalDays === 0) return 0;
-    return Math.max(0, Math.min(100, ((intervalDays - daysUntilDecay) / intervalDays) * 100));
+    return Math.max(
+      0,
+      Math.min(100, ((intervalDays - daysUntilDecay) / intervalDays) * 100)
+    );
   };
 
   if (loading) {
@@ -120,17 +139,19 @@ const DecayStatusCard: React.FC<DecayStatusCardProps> = ({
           background: bgColor,
           border: `1px solid ${borderColor}`,
           borderRadius: "var(--radius)",
-          boxShadow: '4px 4px 10px hsl(var(--muted)/0.4), -4px -4px 10px hsl(var(--muted)/0.1)',
+          boxShadow: "var(--shadow-md)",
         }}
       >
         <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
             <ScheduleIcon color="disabled" />
-            <Typography variant="h6" color="text.secondary">
+            <Typography variant="h6" color="hsl(var(--foreground))">
               Loading decay status...
             </Typography>
           </Box>
-          <LinearProgress sx={{ mt: 2, height: 8, borderRadius: 4 }} />
+          <LinearProgress
+            sx={{ mt: 2, height: 8, borderRadius: "var(--radius)" }}
+          />
         </CardContent>
       </Card>
     );
@@ -144,14 +165,17 @@ const DecayStatusCard: React.FC<DecayStatusCardProps> = ({
           background: bgColor,
           border: `1px solid ${borderColor}`,
           borderRadius: "var(--radius)",
-          boxShadow: '4px 4px 10px hsl(var(--muted)/0.4), -4px -4px 10px hsl(var(--muted)/0.1)',
+          boxShadow: "var(--shadow-md)",
         }}
       >
         <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
             {error ? <WarningIcon color="error" /> : <InfoIcon color="disabled" />}
-            <Typography variant="h6" color={error ? 'error' : 'text.secondary'}>
-              {error ?? 'No decay information available'}
+            <Typography
+              variant="h6"
+              color={error ? "hsl(var(--destructive))" : "hsl(var(--muted-foreground))"}
+            >
+              {error ?? "No decay information available"}
             </Typography>
           </Box>
         </CardContent>
@@ -159,7 +183,11 @@ const DecayStatusCard: React.FC<DecayStatusCardProps> = ({
     );
   }
 
-  const status = getDecayStatus(balanceDetails.currentBalance, balanceDetails.decayInfo || null, decayConfig);
+  const status = getDecayStatus(
+    balanceDetails.currentBalance,
+    balanceDetails.decayInfo || null,
+    decayConfig
+  );
   const daysUntilDecay = balanceDetails.decayInfo
     ? calculateDaysUntilDecay(balanceDetails.decayInfo, decayConfig)
     : 0;
@@ -173,120 +201,256 @@ const DecayStatusCard: React.FC<DecayStatusCardProps> = ({
         background: bgColor,
         border: `1px solid ${borderColor}`,
         borderRadius: "var(--radius)",
-        boxShadow: '4px 4px 10px hsl(var(--muted)/0.4), -4px -4px 10px hsl(var(--muted)/0.1)',
+        boxShadow: "var(--shadow-lg)",
         transition: "var(--transition-smooth)",
-        '&:hover': {
-          boxShadow: '6px 6px 14px hsl(var(--primary)/0.5), -6px -6px 14px hsl(var(--primary)/0.2)',
+        "&:hover": {
+          boxShadow:
+            "0 8px 20px hsl(var(--primary)/0.4), 0 4px 12px hsl(var(--primary)/0.2)",
         },
         mb: 4,
       }}
     >
       <CardContent>
         {/* Header */}
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            mb: 3,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
             {getStatusIcon(status)}
-            <Typography variant="h6">Point Decay Status</Typography>
+            <Typography
+              variant="h6"
+              fontWeight={600}
+              color="hsl(var(--foreground))"
+            >
+              Point Decay Status
+            </Typography>
           </Box>
           <Chip
             label={getStatusLabel(status)}
             color={getStatusColor(status) as any}
             size="small"
             variant="outlined"
+            sx={{
+              fontWeight: 500,
+              color: "hsl(var(--foreground))",
+              borderColor: "hsl(var(--muted-foreground)/0.4)",
+            }}
           />
         </Box>
 
         {/* Status Overview */}
         <Box sx={{ mb: 2 }}>
-          <Typography variant="body2" color="text.secondary" gutterBottom>
-            Current Balance: <strong>{balanceDetails.currentBalance}</strong>
+          <Typography
+            variant="body2"
+            color="hsl(var(--foreground))"
+            gutterBottom
+          >
+            Current Balance:{" "}
+            <strong>{balanceDetails.currentBalance}</strong>
             {balanceDetails.pendingDecay > 0 && (
               <Tooltip title={`${balanceDetails.pendingDecay} points will decay`}>
                 <Chip
                   label={`-${balanceDetails.pendingDecay}`}
                   size="small"
                   color="warning"
-                  sx={{ ml: 1 }}
+                  sx={{ ml: 1, fontWeight: 600 }}
                 />
               </Tooltip>
             )}
           </Typography>
           {decayConfig.enabled && balanceDetails.decayInfo && (
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{ fontStyle: "italic" }}
+              color="hsl(var(--muted-foreground))"
+            >
               {formatTimeRemaining(daysUntilDecay)}
             </Typography>
           )}
         </Box>
 
         {/* Progress Bar */}
-        {decayConfig.enabled && status !== 'safe' && status !== 'grace' && (
-          <Box sx={{ mb: 2 }}>
+        {decayConfig.enabled && status !== "safe" && status !== "grace" && (
+          <Box sx={{ mb: 3 }}>
             <LinearProgress
               variant="determinate"
               value={progress}
-              color={status === 'at-risk' ? 'warning' : 'error'}
-              sx={{ height: 8, borderRadius: 4 }}
+              color={status === "at-risk" ? "warning" : "error"}
+              sx={{ height: 10, borderRadius: "var(--radius)" }}
             />
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+            <Typography
+              variant="caption"
+              color="hsl(var(--muted-foreground))"
+              sx={{ mt: 0.75, display: "block" }}
+            >
               Progress to next decay
             </Typography>
           </Box>
         )}
 
         {/* Expand/Collapse */}
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
-          <IconButton onClick={() => setExpanded(!expanded)} size="small" color="primary">
+        <Box sx={{ display: "flex", justifyContent: "center", mt: 1 }}>
+          <IconButton
+            onClick={() => setExpanded(!expanded)}
+            size="small"
+            sx={{
+              color: "hsl(var(--primary))",
+              "&:hover": { color: "hsl(var(--primary-foreground))" },
+            }}
+          >
             {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
           </IconButton>
         </Box>
 
         <Collapse in={expanded}>
-          <Box sx={{ mt: 2, p: 2, bgcolor: 'background.paper', borderRadius: 1 }}>
-            <Typography variant="subtitle2" gutterBottom>Decay Details</Typography>
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, fontSize: '0.875rem' }}>
+          <Box
+            sx={{
+              mt: 2,
+              p: 2,
+              bgcolor: "hsl(var(--secondary))",
+              borderRadius: "var(--radius)",
+            }}
+          >
+            <Typography
+              variant="subtitle2"
+              gutterBottom
+              color="hsl(var(--foreground))"
+              fontWeight={600}
+            >
+              Decay Details
+            </Typography>
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 2,
+                fontSize: "0.875rem",
+              }}
+            >
               <Box>
-                <Typography variant="caption" color="text.secondary">Raw Balance</Typography>
-                <Typography variant="body2">{balanceDetails.rawBalance}</Typography>
+                <Typography
+                  variant="caption"
+                  color="hsl(var(--muted-foreground))"
+                >
+                  Raw Balance
+                </Typography>
+                <Typography variant="body2" color="hsl(var(--foreground))">
+                  {balanceDetails.rawBalance}
+                </Typography>
               </Box>
               <Box>
-                <Typography variant="caption" color="text.secondary">Pending Decay</Typography>
-                <Typography variant="body2" color={balanceDetails.pendingDecay > 0 ? 'warning.main' : 'text.primary'}>
+                <Typography
+                  variant="caption"
+                  color="hsl(var(--muted-foreground))"
+                >
+                  Pending Decay
+                </Typography>
+                <Typography
+                  variant="body2"
+                  color={
+                    balanceDetails.pendingDecay > 0
+                      ? "hsl(var(--warning))"
+                      : "hsl(var(--foreground))"
+                  }
+                  fontWeight={600}
+                >
                   {balanceDetails.pendingDecay}
                 </Typography>
               </Box>
               {balanceDetails.decayInfo && (
                 <>
                   <Box>
-                    <Typography variant="caption" color="text.secondary">Total Decayed</Typography>
-                    <Typography variant="body2">{balanceDetails.decayInfo.totalDecayed}</Typography>
+                    <Typography
+                      variant="caption"
+                      color="hsl(var(--muted-foreground))"
+                    >
+                      Total Decayed
+                    </Typography>
+                    <Typography variant="body2" color="hsl(var(--foreground))">
+                      {balanceDetails.decayInfo.totalDecayed}
+                    </Typography>
                   </Box>
                   <Box>
-                    <Typography variant="caption" color="text.secondary">Registration</Typography>
-                    <Typography variant="body2">{new Date(balanceDetails.decayInfo.registrationTime * 1000).toLocaleDateString()}</Typography>
+                    <Typography
+                      variant="caption"
+                      color="hsl(var(--muted-foreground))"
+                    >
+                      Registration
+                    </Typography>
+                    <Typography variant="body2" color="hsl(var(--foreground))">
+                      {new Date(
+                        balanceDetails.decayInfo.registrationTime * 1000
+                      ).toLocaleDateString()}
+                    </Typography>
                   </Box>
                   <Box>
-                    <Typography variant="caption" color="text.secondary">Last Decay</Typography>
-                    <Typography variant="body2">{new Date(balanceDetails.decayInfo.lastDecayTime * 1000).toLocaleDateString()}</Typography>
+                    <Typography
+                      variant="caption"
+                      color="hsl(var(--muted-foreground))"
+                    >
+                      Last Decay
+                    </Typography>
+                    <Typography variant="body2" color="hsl(var(--foreground))">
+                      {new Date(
+                        balanceDetails.decayInfo.lastDecayTime * 1000
+                      ).toLocaleDateString()}
+                    </Typography>
                   </Box>
                   <Box>
-                    <Typography variant="caption" color="text.secondary">Last Activity</Typography>
-                    <Typography variant="body2">{new Date(balanceDetails.decayInfo.lastActivityTime * 1000).toLocaleDateString()}</Typography>
+                    <Typography
+                      variant="caption"
+                      color="hsl(var(--muted-foreground))"
+                    >
+                      Last Activity
+                    </Typography>
+                    <Typography variant="body2" color="hsl(var(--foreground))">
+                      {new Date(
+                        balanceDetails.decayInfo.lastActivityTime * 1000
+                      ).toLocaleDateString()}
+                    </Typography>
                   </Box>
                 </>
               )}
             </Box>
 
             {/* Config Info */}
-            <Box sx={{ mt: 2, p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
-              <Typography variant="caption" color="text.secondary">System Configuration</Typography>
-              <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
-                {decayConfig.decayRate / 100}% every {intervalDays} days, min {decayConfig.minThreshold} points
+            <Box
+              sx={{
+                mt: 2,
+                p: 1.5,
+                bgcolor: "hsl(var(--muted))",
+                borderRadius: "var(--radius)",
+              }}
+            >
+              <Typography
+                variant="caption"
+                color="hsl(var(--muted-foreground))"
+              >
+                System Configuration
               </Typography>
-              {balanceDetails.decayInfo && isInGracePeriod(balanceDetails.decayInfo, decayConfig) && (
-                <Typography variant="body2" color="info.main" sx={{ fontSize: '0.75rem' }}>
-                  You're in the grace period - no decay for new users!
-                </Typography>
-              )}
+              <Typography
+                variant="body2"
+                sx={{ fontSize: "0.8rem" }}
+                color="hsl(var(--foreground))"
+              >
+                {decayConfig.decayRate / 100}% every {intervalDays} days, min{" "}
+                {decayConfig.minThreshold} points
+              </Typography>
+              {balanceDetails.decayInfo &&
+                isInGracePeriod(balanceDetails.decayInfo, decayConfig) && (
+                  <Typography
+                    variant="body2"
+                    color="hsl(var(--info))"
+                    sx={{ fontSize: "0.8rem", fontWeight: 500 }}
+                  >
+                    You're in the grace period - no decay for new users!
+                  </Typography>
+                )}
             </Box>
           </Box>
         </Collapse>

@@ -19,7 +19,6 @@ import {
   TableHead,
   TableRow,
   Paper,
-  TableSortLabel,
   CircularProgress,
   Pagination,
   Alert,
@@ -51,14 +50,13 @@ const TransactionLog: React.FC = () => {
   const [filteredTransactions, setFilteredTransactions] = useState<TransactionUI[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [page, setPage] = useState(1);
   const itemsPerPage = 10;
   const [orgId, setOrgId] = useState<string | null>(null);
 
-  // load orgId
+  // Load orgId
   useEffect(() => {
     const stored = localStorage.getItem('selectedOrgId');
     if (stored) setOrgId(stored);
@@ -99,7 +97,7 @@ const TransactionLog: React.FC = () => {
     }
   };
 
-  // filtering
+  // Filtering
   useEffect(() => {
     let filtered = [...transactions];
 
@@ -137,10 +135,10 @@ const TransactionLog: React.FC = () => {
   };
 
   const getTransactionTypeColor = (type: TransactionUI['transactionType']) => {
-    if ('Award' in type) return '#22c55e';
-    if ('Revoke' in type) return '#ef4444';
-    if ('Decay' in type) return '#facc15';
-    return '#94a3b8';
+    if ('Award' in type) return 'hsl(var(--success))';
+    if ('Revoke' in type) return 'hsl(var(--destructive))';
+    if ('Decay' in type) return 'hsl(var(--warning))';
+    return 'hsl(var(--muted))';
   };
 
   const formatPrincipal = (principal: string) =>
@@ -148,17 +146,37 @@ const TransactionLog: React.FC = () => {
 
   const formatTimestamp = (ts: number) => new Date(ts).toLocaleString();
 
-  if (loading) return <Container maxWidth="lg" sx={{ py: 4, display: 'flex', justifyContent: 'center' }}><CircularProgress /></Container>;
-  if (!orgId) return <Container maxWidth="lg" sx={{ py: 4 }}><Alert severity="warning">No organization selected. Select an org to view transaction history.</Alert></Container>;
-  if (error) return <Container maxWidth="lg" sx={{ py: 4 }}><Alert severity="error">{error}</Alert></Container>;
+  // Loading/Error handling
+  if (loading) return (
+    <Container maxWidth="lg" sx={{ py: 6, display: 'flex', justifyContent: 'center' }}>
+      <CircularProgress sx={{ color: 'hsl(var(--primary))' }} />
+    </Container>
+  );
+
+  if (!orgId) return (
+    <Container maxWidth="lg" sx={{ py: 6 }}>
+      <Alert severity="warning">No organization selected. Select an org to view transaction history.</Alert>
+    </Container>
+  );
+
+  if (error) return (
+    <Container maxWidth="lg" sx={{ py: 6 }}>
+      <Alert severity="error">{error}</Alert>
+    </Container>
+  );
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Typography variant="h4" gutterBottom sx={{ color: 'hsl(var(--foreground))' }}>Transaction Log</Typography>
-      <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>Complete history of all reputation awards, revocations and decay events.</Typography>
+    <Container maxWidth="lg" sx={{ py: 6 }}>
+      {/* Header */}
+      <Typography variant="h4" gutterBottom sx={{ color: 'hsl(var(--foreground))', fontWeight: 700 }}>
+        Transaction Log
+      </Typography>
+      <Typography variant="body1" sx={{ color: 'hsl(var(--muted-foreground))', mb: 4 }}>
+        Complete history of all reputation awards, revocations, and decay events.
+      </Typography>
 
       {/* Filters */}
-      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 3 }}>
+      <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', mb: 4 }}>
         <TextField
           label="Search"
           variant="outlined"
@@ -167,15 +185,29 @@ const TransactionLog: React.FC = () => {
           onChange={e => setSearchTerm(e.target.value)}
           placeholder="Search by ID, principal, or reason..."
           sx={{
-            minWidth: 300,
-            '& .MuiOutlinedInput-root': { backgroundColor: 'hsl(var(--background))', '& fieldset': { borderColor: 'hsl(var(--border))' } },
+            minWidth: 280,
+            '& .MuiOutlinedInput-root': {
+              backgroundColor: 'hsl(var(--background))',
+              borderRadius: 'var(--radius)',
+              '& fieldset': { borderColor: 'hsl(var(--border))' },
+              '&:hover fieldset': { borderColor: 'hsl(var(--primary))' },
+            },
             '& .MuiInputBase-input': { color: 'hsl(var(--foreground))' },
             '& .MuiInputLabel-root': { color: 'hsl(var(--muted-foreground))' },
           }}
         />
-        <FormControl size="small" sx={{ minWidth: 150 }}>
+        <FormControl size="small" sx={{ minWidth: 160 }}>
           <InputLabel>Transaction Type</InputLabel>
-          <Select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} label="Transaction Type">
+          <Select
+            value={typeFilter}
+            onChange={e => setTypeFilter(e.target.value)}
+            label="Transaction Type"
+            sx={{
+              backgroundColor: 'hsl(var(--background))',
+              borderRadius: 'var(--radius)',
+              '& .MuiSelect-select': { color: 'hsl(var(--foreground))' },
+            }}
+          >
             <MenuItem value="all">All Types</MenuItem>
             <MenuItem value="award">Award</MenuItem>
             <MenuItem value="revoke">Revoke</MenuItem>
@@ -185,31 +217,38 @@ const TransactionLog: React.FC = () => {
       </Box>
 
       {/* Stats */}
-      <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-        <Chip label={`Total: ${transactions.length}`} variant="outlined" />
-        <Chip label={`Filtered: ${filteredTransactions.length}`} variant="outlined" />
+      <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+        <Chip label={`Total: ${transactions.length}`} variant="outlined" sx={{ borderColor: 'hsl(var(--border))', color: 'hsl(var(--foreground))' }} />
+        <Chip label={`Filtered: ${filteredTransactions.length}`} variant="outlined" sx={{ borderColor: 'hsl(var(--border))', color: 'hsl(var(--foreground))' }} />
       </Box>
 
       {/* Table */}
-      <TableContainer component={Paper} sx={{ border: '1px solid hsl(var(--border))', borderRadius: 'var(--radius)', background: 'hsl(var(--card))' }}>
-        <Table>
-          <TableHead>
+      <TableContainer component={Paper} sx={{ borderRadius: 'var(--radius)', overflow: 'hidden', boxShadow: 'var(--shadow-md)', border: '1px solid hsl(var(--border))' , background:"hsl(var(--background))"}}>
+        <Table sx={{ minWidth: 720 }}>
+          <TableHead sx={{ backgroundColor: 'hsl(var(--secondary))' }}>
             <TableRow>
-              <TableCell>ID</TableCell>
-              <TableCell>Type</TableCell>
-              <TableCell>From</TableCell>
-              <TableCell>To</TableCell>
-              <TableCell>Amount</TableCell>
-              <TableCell>Timestamp</TableCell>
-              <TableCell>Reason</TableCell>
+              {['ID', 'Type', 'From', 'To', 'Amount', 'Timestamp', 'Reason'].map(header => (
+                <TableCell key={header} sx={{ color: 'hsl(var(--secondary-foreground))', fontWeight: 600 }}>{header}</TableCell>
+              ))}
             </TableRow>
           </TableHead>
           <TableBody>
             {paginatedTransactions.map(tx => (
-              <TableRow key={tx.id} sx={{ '&:hover': { backgroundColor: 'hsl(var(--background))' } }}>
-                <TableCell sx={{ color: 'hsl(var(--foreground))' }}>{tx.id}</TableCell>
+              <TableRow key={tx.id} sx={{
+                '&:hover': { backgroundColor: 'hsl(var(--muted))', transition: 'var(--transition-fast)' },
+              }}>
+                <TableCell sx={{ fontFamily: 'monospace', color: 'hsl(var(--foreground))' }}>{tx.id}</TableCell>
                 <TableCell>
-                  <Chip label={getTransactionTypeText(tx.transactionType)} sx={{ bgcolor: getTransactionTypeColor(tx.transactionType), color: '#fff', fontWeight: 600 }} size="small" />
+                  <Chip
+                    label={getTransactionTypeText(tx.transactionType)}
+                    sx={{
+                      bgcolor: getTransactionTypeColor(tx.transactionType),
+                      color: 'hsl(var(--primary-foreground))',
+                      fontWeight: 600,
+                      borderRadius: 'var(--radius)',
+                    }}
+                    size="small"
+                  />
                 </TableCell>
                 <TableCell sx={{ fontFamily: 'monospace', color: 'hsl(var(--foreground))' }}>{formatPrincipal(tx.from)}</TableCell>
                 <TableCell sx={{ fontFamily: 'monospace', color: 'hsl(var(--foreground))' }}>{formatPrincipal(tx.to)}</TableCell>
@@ -217,10 +256,17 @@ const TransactionLog: React.FC = () => {
                   {getTransactionTypeText(tx.transactionType) === 'Revoke' ? `-${tx.amount}` : `+${tx.amount}`}
                 </TableCell>
                 <TableCell sx={{ color: 'hsl(var(--muted-foreground))' }}>{formatTimestamp(tx.timestamp)}</TableCell>
-                <TableCell sx={{ color: 'hsl(var(--muted-foreground))', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tx.reason || '-'}</TableCell>
+                <TableCell sx={{
+                  color: 'hsl(var(--muted-foreground))',
+                  maxWidth: 200,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {tx.reason || '-'}
+                </TableCell>
               </TableRow>
             ))}
-
             {filteredTransactions.length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} sx={{ textAlign: 'center', py: 4, color: 'hsl(var(--muted-foreground))' }}>
@@ -234,7 +280,7 @@ const TransactionLog: React.FC = () => {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
+        <Box sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
           <Pagination count={totalPages} page={page} onChange={(_, p) => setPage(p)} color="primary" />
         </Box>
       )}

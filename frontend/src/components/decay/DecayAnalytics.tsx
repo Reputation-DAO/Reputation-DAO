@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -16,7 +16,7 @@ import {
   ListItem,
   ListItemText,
   ListItemIcon,
-} from '@mui/material';
+} from "@mui/material";
 import {
   Analytics as AnalyticsIcon,
   TrendingDown as TrendingDownIcon,
@@ -27,12 +27,9 @@ import {
   Info as InfoIcon,
   Refresh as RefreshIcon,
   Timeline as TimelineIcon,
-} from '@mui/icons-material';
-import {
-  getOrgUserBalances,
-  getOrgTransactionHistory,
-} from '../canister/reputationDao';
-import { useRole } from '../../contexts/RoleContext';
+} from "@mui/icons-material";
+import { useRole } from "../../contexts/RoleContext";
+import { getOrgUserBalances, getOrgTransactionHistory } from "../canister/reputationDao";
 
 interface UserBalance {
   userId: any;
@@ -60,7 +57,7 @@ interface UserDecayRisk {
   projectedBalance: number;
   decayAmount: number;
   daysUntilDecay: number;
-  riskLevel: 'Low' | 'Medium' | 'High' | 'Critical';
+  riskLevel: "Low" | "Medium" | "High" | "Critical";
 }
 
 const DecayAnalytics: React.FC<DecayAnalyticsProps> = ({ className }) => {
@@ -73,7 +70,7 @@ const DecayAnalytics: React.FC<DecayAnalyticsProps> = ({ className }) => {
   const [orgId, setOrgId] = useState<string | null>(null);
 
   useEffect(() => {
-    const storedOrgId = localStorage.getItem('selectedOrgId');
+    const storedOrgId = localStorage.getItem("selectedOrgId");
     if (storedOrgId) setOrgId(storedOrgId);
   }, []);
 
@@ -92,7 +89,7 @@ const DecayAnalytics: React.FC<DecayAnalyticsProps> = ({ className }) => {
         getOrgTransactionHistory(orgId),
       ]);
 
-      const decayTransactions = transactions.filter((tx: any) => tx.transactionType === 'Decay');
+      const decayTransactions = transactions.filter((tx: any) => tx.transactionType === "Decay");
       const totalDecayedPoints = decayTransactions.reduce((sum: number, tx: any) => sum + tx.amount, 0);
       const usersWithDecay = new Set(decayTransactions.map((tx: any) => tx.to.toString())).size;
       const totalActiveUsers = userBalances.length;
@@ -104,7 +101,7 @@ const DecayAnalytics: React.FC<DecayAnalyticsProps> = ({ className }) => {
         totalDecayedPoints,
         averageDecayPerUser: usersWithDecay > 0 ? totalDecayedPoints / usersWithDecay : 0,
         decayTransactionsCount: decayTransactions.length,
-        usersAtMinimumThreshold: userRisks.filter(u => u.riskLevel === 'Critical').length,
+        usersAtMinimumThreshold: userRisks.filter(u => u.riskLevel === "Critical").length,
         usersInGracePeriod: userRisks.filter(u => u.daysUntilDecay < 0).length,
         totalActiveUsers,
         decayEfficiency: totalActiveUsers > 0 ? (usersWithDecay / totalActiveUsers) * 100 : 0,
@@ -115,7 +112,7 @@ const DecayAnalytics: React.FC<DecayAnalyticsProps> = ({ className }) => {
       setLastUpdated(new Date());
     } catch (err) {
       console.error(err);
-      setError('Failed to fetch decay analytics');
+      setError("Failed to fetch decay analytics");
     } finally {
       setLoading(false);
     }
@@ -128,10 +125,10 @@ const DecayAnalytics: React.FC<DecayAnalyticsProps> = ({ className }) => {
       const projectedBalance = user.balance - decayAmount;
       const daysUntilDecay = Math.floor(Math.random() * 7) + 1;
 
-      let riskLevel: UserDecayRisk['riskLevel'] = 'Low';
-      if (projectedBalance <= 10) riskLevel = 'Critical';
-      else if (projectedBalance <= 50) riskLevel = 'High';
-      else if (projectedBalance <= 100) riskLevel = 'Medium';
+      let riskLevel: UserDecayRisk["riskLevel"] = "Low";
+      if (projectedBalance <= 10) riskLevel = "Critical";
+      else if (projectedBalance <= 50) riskLevel = "High";
+      else if (projectedBalance <= 100) riskLevel = "Medium";
 
       risks.push({
         userId: user.userId.toString(),
@@ -150,86 +147,108 @@ const DecayAnalytics: React.FC<DecayAnalyticsProps> = ({ className }) => {
   };
 
   const formatPrincipal = (p: string) => `${p.slice(0, 8)}...${p.slice(-4)}`;
-  const getRiskColor = (risk: UserDecayRisk['riskLevel']) => {
+  const getRiskColor = (risk: UserDecayRisk["riskLevel"]) => {
     switch (risk) {
-      case 'Critical': return 'error';
-      case 'High': return 'warning';
-      case 'Medium': return 'info';
-      case 'Low': return 'success';
-      default: return 'default';
+      case "Critical":
+        return "hsl(var(--destructive))";
+      case "High":
+        return "hsl(var(--warning))";
+      case "Medium":
+        return "hsl(var(--info))";
+      case "Low":
+        return "hsl(var(--success))";
+      default:
+        return "hsl(var(--muted-foreground))";
     }
   };
 
   const StatCard: React.FC<{ title: string; value: string | number; subtitle?: string; icon?: React.ReactNode }> = ({ title, value, subtitle, icon }) => (
-    <Paper sx={{
-      p: 2,
-      textAlign: 'center',
-      minHeight: 120,
-      borderRadius: 'var(--radius)',
-      background: 'hsl(var(--card))',
-      boxShadow: '4px 4px 10px hsl(var(--muted) / 0.2), -4px -4px 10px hsl(var(--muted) / 0.05)',
-      transition: 'var(--transition-smooth)',
-      '&:hover': {
-        boxShadow: '6px 6px 14px hsl(var(--primary) / 0.3), -6px -6px 14px hsl(var(--primary) / 0.15)',
-      }
-    }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1 }}>
-        {icon && <Box sx={{ mr: 1, color: 'var(--primary)' }}>{icon}</Box>}
-        <Typography variant="h4" sx={{ fontWeight: 600 }}>{typeof value === 'number' ? value.toLocaleString() : value}</Typography>
+    <Paper
+      sx={{
+        p: 4,
+        textAlign: "center",
+        minHeight: 140,
+        borderRadius: "var(--radius)",
+        background: "hsl(var(--card))",
+        boxShadow: "4px 4px 10px hsl(var(--muted)/0.2), -4px -4px 10px hsl(var(--muted)/0.05)",
+        transition: "var(--transition-smooth)",
+        "&:hover": {
+          boxShadow: "6px 6px 14px hsl(var(--primary)/0.3), -6px -6px 14px hsl(var(--primary)/0.15)",
+        },
+      }}
+    >
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", mb: 2 }}>
+        {icon && <Box sx={{ mr: 1, color: "hsl(var(--primary))" }}>{icon}</Box>}
+        <Typography variant="h4" sx={{ fontWeight: 600, color: "hsl(var(--foreground))" }}>
+          {typeof value === "number" ? value.toLocaleString() : value}
+        </Typography>
       </Box>
-      <Typography variant="subtitle2" sx={{ fontWeight: 500 }}>{title}</Typography>
-      {subtitle && <Typography variant="caption" color="text.secondary">{subtitle}</Typography>}
+      <Typography variant="subtitle2" sx={{ fontWeight: 500, color: "hsl(var(--foreground))" }}>
+        {title}
+      </Typography>
+      {subtitle && (
+        <Typography variant="caption" sx={{ color: "hsl(var(--muted-foreground))" }}>
+          {subtitle}
+        </Typography>
+      )}
     </Paper>
   );
 
-  if (!isAdmin) return (
-    <Card className={className} sx={{ borderRadius: 'var(--radius)', boxShadow: 'none' }}>
-      <CardContent>
-        <Alert severity="warning">Decay analytics are only available to administrators.</Alert>
-      </CardContent>
-    </Card>
-  );
+  if (!isAdmin)
+    return (
+      <Card className={className} sx={{ borderRadius: "var(--radius)", boxShadow: "none", background: "hsl(var(--background))" }}>
+        <CardContent>
+          <Alert severity="warning" sx={{ color: "hsl(var(--foreground))", backgroundColor: "hsl(var(--warning)/0.1)", borderColor: "hsl(var(--warning))" }}>
+            Decay analytics are only available to administrators.
+          </Alert>
+        </CardContent>
+      </Card>
+    );
 
   return (
-    <Card className={className} sx={{ borderRadius: 'var(--radius)', background: 'hsl(var(--background))', boxShadow: 'none' }}>
+    <Card className={className} sx={{ borderRadius: "var(--radius)", background: "hsl(var(--background))", boxShadow: "none" }}>
       <CardHeader
         title={
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <AnalyticsIcon />
-            <Typography variant="h6">Decay Analytics</Typography>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <AnalyticsIcon sx={{ color: "hsl(var(--primary))" }} />
+            <Typography variant="h6" sx={{ color: "hsl(var(--foreground))" }}>
+              Decay Analytics
+            </Typography>
           </Box>
         }
-        subheader={`Last updated: ${lastUpdated.toLocaleString()}`}
+        subheader={<Typography variant="caption" sx={{ color: "hsl(var(--muted-foreground))" }}>Last updated: {lastUpdated.toLocaleString()}</Typography>}
         action={
           <Tooltip title="Refresh Analytics">
-            <IconButton onClick={fetchAnalytics} size="small" disabled={loading}><RefreshIcon /></IconButton>
+            <IconButton onClick={fetchAnalytics} size="small" disabled={loading} sx={{ color: "hsl(var(--foreground))" }}>
+              <RefreshIcon />
+            </IconButton>
           </Tooltip>
         }
       />
       <CardContent>
-        {loading && <LinearProgress sx={{ mb: 2 }} />}
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+        {loading && <LinearProgress sx={{ mb: 2, backgroundColor: "hsl(var(--muted))", "& .MuiLinearProgress-bar": { backgroundColor: "hsl(var(--primary))" } }} />}
+        {error && <Alert severity="error" sx={{ mb: 2, color: "hsl(var(--destructive-foreground))", backgroundColor: "hsl(var(--destructive)/0.1)" }}>{error}</Alert>}
 
         {stats && (
           <>
             {/* Key Metrics */}
-            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1, color: "hsl(var(--foreground))" }}>
               <AssessmentIcon /> Key Metrics
             </Typography>
-            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 2, mb: 3 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 3, mb: 4 }}>
               <StatCard title="Total Decay Events" value={stats.decayTransactionsCount} icon={<ScheduleIcon />} />
               <StatCard title="Points Decayed" value={stats.totalDecayedPoints} icon={<TrendingDownIcon />} />
               <StatCard title="Users Affected" value={stats.totalUsersWithDecay} subtitle={`${stats.decayEfficiency.toFixed(1)}% of active users`} icon={<PeopleIcon />} />
               <StatCard title="Avg Decay/User" value={Math.round(stats.averageDecayPerUser)} icon={<TimelineIcon />} />
             </Box>
 
-            <Divider sx={{ my: 3 }} />
+            <Divider sx={{ my: 4, borderColor: "hsl(var(--border))" }} />
 
             {/* User Risk Analysis */}
-            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1, color: "hsl(var(--foreground))" }}>
               <WarningIcon /> User Risk Analysis
             </Typography>
-            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2, mb: 3 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 3, mb: 4 }}>
               <StatCard title="Critical Risk" value={stats.usersAtMinimumThreshold} subtitle="Near minimum threshold" icon={<WarningIcon />} />
               <StatCard title="In Grace Period" value={stats.usersInGracePeriod} subtitle="Protected from decay" icon={<InfoIcon />} />
               <StatCard title="Total Active Users" value={stats.totalActiveUsers} subtitle="With reputation points" icon={<PeopleIcon />} />
@@ -238,28 +257,25 @@ const DecayAnalytics: React.FC<DecayAnalyticsProps> = ({ className }) => {
             {/* High-Risk Users */}
             {riskUsers.length > 0 && (
               <>
-                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1, color: "hsl(var(--foreground))" }}>
                   <TrendingDownIcon /> Users at Risk (Top 10)
                 </Typography>
-                <Paper variant="outlined" sx={{
-                  p: 2,
-                  borderRadius: 'var(--radius)',
-                  background: 'hsl(var(--card))',
-                  boxShadow: 'inset 2px 2px 6px hsl(var(--muted)/0.1), inset -2px -2px 6px hsl(var(--muted)/0.05)'
-                }}>
+                <Paper variant="outlined" sx={{ p: 3, borderRadius: "var(--radius)", background: "hsl(var(--card))", boxShadow: "inset 2px 2px 6px hsl(var(--muted)/0.1), inset -2px -2px 6px hsl(var(--muted)/0.05)" }}>
                   <List dense>
                     {riskUsers.map((user, i) => (
                       <ListItem key={user.userId} divider={i < riskUsers.length - 1}>
-                        <ListItemIcon><Typography variant="body2" color="text.secondary">#{i + 1}</Typography></ListItemIcon>
+                        <ListItemIcon>
+                          <Typography variant="body2" sx={{ color: "hsl(var(--muted-foreground))" }}>#{i + 1}</Typography>
+                        </ListItemIcon>
                         <ListItemText
                           primary={
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{formatPrincipal(user.userId)}</Typography>
-                              <Chip label={user.riskLevel} size="small" color={getRiskColor(user.riskLevel) as any} variant="outlined" />
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                              <Typography variant="body2" sx={{ fontFamily: "monospace", color: "hsl(var(--foreground))" }}>{formatPrincipal(user.userId)}</Typography>
+                              <Chip label={user.riskLevel} size="small" sx={{ borderColor: getRiskColor(user.riskLevel), color: "hsl(var(--foreground))" }} />
                             </Box>
                           }
                           secondary={
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" sx={{ color: "hsl(var(--muted-foreground))" }}>
                               Current: {user.currentBalance} → Projected: {user.projectedBalance} (Decay: -{user.decayAmount} in {user.daysUntilDecay} days)
                             </Typography>
                           }

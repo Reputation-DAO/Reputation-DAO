@@ -50,7 +50,7 @@ export interface Awarder {
 }
 
 //modify this canisterID based on where the dfx playground hosts your backend
-const canisterId = '363tq-3yaaa-aaaab-qacma-cai';
+const canisterId = '3xyym-nqaaa-aaaab-qacnq-cai';
 
 export const getPlugActor = async () => {
   if (!window.ic?.plug) {
