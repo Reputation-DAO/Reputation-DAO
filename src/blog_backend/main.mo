@@ -6,7 +6,7 @@ import Time "mo:base/Time";
 import Principal "mo:base/Principal";
 import Iter "mo:base/Iter";
 
-actor Blog {
+persistent actor Blog {
 
   // Types must be declared first
   type Author = {
