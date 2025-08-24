@@ -10,7 +10,7 @@ import LightbulbIcon from '@mui/icons-material/Lightbulb';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import SlideshowIcon from '@mui/icons-material/Slideshow';
 import SchemaIcon from '@mui/icons-material/Schema';
-import DesignServicesIcon from '@mui/icons-material/DesignServices';
+
 
 const resources = [
   {
@@ -38,11 +38,7 @@ const resources = [
     href: 'https://www.figma.com/board/fWhXwD7MX9wxylm8SumTqr/REPUTAION-DAO-WORKFLOW?t=xV8nwU4sJ0ZQSwEq-0',
     icon: <SchemaIcon fontSize="medium" />,
   },
-  {
-    label: 'Figma Link',
-    href: 'https://www.figma.com/design/1Qwqc7fWOyigkncoVoSiPH/REPUTATION-DAO?t=xV8nwU4sJ0ZQSwEq-0',
-    icon: <DesignServicesIcon fontSize="medium" />,
-  },
+
 ];
 
 export default function Resources() {

@@ -210,27 +210,29 @@ export default function AuthPage() {
               />
 
               <Button
-                fullWidth
-                variant="contained"
-                sx={{
-                  mt: 2,
-                  py: 1.5,
-                  borderRadius: 'var(--radius)',
-                  textTransform: 'none',
-                  backgroundColor: 'hsl(var(--primary))',
-                  color: 'hsl(var(--primary-foreground))',
-                  fontWeight: 600,
-                  boxShadow: 'var(--shadow-lg)',
-                  transition: 'all var(--transition-fast)',
-                  '&:hover': {
-                    transform: 'translateY(-1px)',
-                    backgroundColor: 'hsl(var(--primary))',
-                    boxShadow: '0 8px 20px rgba(0,0,0,0.12)',
-                  },
-                }}
-              >
-                {isSignUp ? 'Create Account' : 'Login'}
-              </Button>
+				  fullWidth
+				  variant="contained"
+				  sx={{
+				    mt: 2,
+				    py: 1.5,
+				    borderRadius: 'var(--radius)',
+				    textTransform: 'none',
+				    backgroundColor: 'hsl(var(--primary))',
+				    color: 'hsl(var(--primary-foreground))',
+				    fontWeight: 600,
+				    boxShadow: 'var(--shadow-lg)',
+				    transition: 'all var(--transition-fast)',
+				    '&:hover': {
+				      transform: 'translateY(-1px)',
+				      backgroundColor: 'hsl(var(--primary))',
+				      boxShadow: '0 8px 20px rgba(0,0,0,0.12)',
+				    },
+				  }}
+				  onClick={() => alert("Presently only 'Connect with Plug' feature is available")}
+				>
+				  {isSignUp ? 'Create Account' : 'Login'}
+				</Button>
+
 
               <Divider sx={{ my: 2, borderColor: 'hsl(var(--border))' }}>or</Divider>
 
