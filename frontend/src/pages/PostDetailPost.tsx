@@ -1,5 +1,6 @@
 import { useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import { useEffect, useMemo, useState } from "react";
 import {
   Container,
   Typography,
@@ -8,28 +9,59 @@ import {
   Chip,
   Stack,
   Paper,
+  CardMedia,
 } from "@mui/material";
 import { blogActor, type Post } from "../components/canister/blogBackend";
 
+type PostStatusStr = "Draft" | "Published" | "Archived";
+type PostView = Omit<Post, "status"> & { status: PostStatusStr };
+
+function resolveUrl(input?: unknown): string | undefined {
+  if (!input) return;
+  if (typeof input !== "string") return;
+
+  // already absolute or data/blob URL
+  if (/^(https?:|data:|blob:)/i.test(input)) return input;
+
+  // leading slash → site-absolute
+  if (input.startsWith("/")) return input;
+
+  // relative → make absolute against origin
+  try {
+    return new URL(input, window.location.origin).toString();
+  } catch {
+    return input;
+  }
+}
+
 export default function PostDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const [post, setPost] = useState<Post | null>(null);
+  const [post, setPost] = useState<PostView | null>(null);
   const [loading, setLoading] = useState(true);
+  const [imgOk, setImgOk] = useState(true);
+  const [avatarOk, setAvatarOk] = useState(true);
 
   useEffect(() => {
     if (!id) return;
     (async () => {
       try {
-        const fetched = await blogActor.getPostById(Number(id));
-        if (Array.isArray(fetched) && fetched.length > 0) {
-          setPost({
-            ...fetched[0],
-            status: Object.keys(fetched[0].status)[0] as
-              | "Draft"
-              | "Published"
-              | "Archived",
-          });
-        } else setPost(null);
+        const opt = await blogActor.getPostById(Number(id));
+        // Motoko ?Post → JS [] | [Post]
+        const raw: Post | null =
+          Array.isArray(opt) && opt.length > 0 ? opt[0] : null;
+
+        if (!raw) {
+          setPost(null);
+          return;
+        }
+
+        const statusKey = Object.keys(raw.status)[0] as PostStatusStr;
+
+        // normalize into PostView
+        setPost({
+          ...raw,
+          status: statusKey,
+        });
       } catch (err) {
         console.error(err);
         setPost(null);
@@ -38,6 +70,14 @@ export default function PostDetailPage() {
       }
     })();
   }, [id]);
+
+  const timestamp =
+    typeof post?.date === "number" ? Number(post.date) / 1_000_000 : Date.now();
+  const dateStr = useMemo(() => new Date(timestamp).toLocaleDateString(), [timestamp]);
+
+  // Normalize image URLs so nested routes don’t break them
+  const imageSrc = resolveUrl(post?.image);
+  const avatarSrc = resolveUrl(post?.author?.avatar);
 
   if (loading)
     return (
@@ -55,10 +95,6 @@ export default function PostDetailPage() {
       </Container>
     );
 
-  const timestamp =
-    typeof post.date === "number" ? post.date / 1_000_000 : Date.now();
-  const dateStr = new Date(timestamp).toLocaleDateString();
-
   return (
     <Container maxWidth="lg" sx={{ py: { xs: 2, md: 4 }, px: { xs: 0, md: 0 } }}>
       <Paper
@@ -71,7 +107,8 @@ export default function PostDetailPage() {
           boxShadow: "var(--shadow-lg)",
           transition: "var(--transition-smooth)",
           "&:hover": {
-            boxShadow: "0 12px 32px rgba(0,0,0,0.12), 0 16px 64px rgba(0,0,0,0.08)",
+            boxShadow:
+              "0 12px 32px rgba(0,0,0,0.12), 0 16px 64px rgba(0,0,0,0.08)",
           },
         }}
       >
@@ -112,13 +149,13 @@ export default function PostDetailPage() {
           {dateStr} · {post.author?.name ?? "Unknown author"}
         </Typography>
 
-        {/* Image */}
-        {post.image && (
-          <Box
+        {/* Image (only render if we have a good src and no error) */}
+        {imageSrc && imgOk && (
+          <CardMedia
             component="img"
-            src={post.image}
+            image={imageSrc}
             alt={post.title}
-
+            onError={() => setImgOk(false)}
             sx={{
               width: "100%",
               maxHeight: 480,
@@ -127,7 +164,6 @@ export default function PostDetailPage() {
               mb: 5,
               boxShadow: "var(--shadow-md)",
               transition: "transform 0.5s ease, filter 0.5s ease",
-              color:"hsl(var(--foreground))",
               "&:hover": {
                 transform: "scale(1.035)",
                 filter: "brightness(1.08)",
@@ -147,16 +183,56 @@ export default function PostDetailPage() {
             whiteSpace: "pre-line",
             mb: 5,
             userSelect: "text",
-            "&::first-letter": {
-              fontSize: "2rem",
-              fontWeight: 700,
-              float: "left",
-              lineHeight: 1,
-              mr: 1,
-            },
+            
           }}
         >
-          {post.content}
+          <ReactMarkdown
+  components={{
+    h1: ({ node, ...props }) => (
+      <Typography
+        variant="h4"
+        gutterBottom
+        sx={{ mt: 4, mb: 2, fontWeight: 700 }}
+        {...props}
+      />
+    ),
+    h2: ({ node, ...props }) => (
+      <Typography
+        variant="h5"
+        gutterBottom
+        sx={{ mt: 3, mb: 1.5, fontWeight: 600 }}
+        {...props}
+      />
+    ),
+    p: ({ node, ...props }) => (
+      <Typography
+        variant="body1"
+        sx={{
+          color: "hsl(var(--foreground))",
+          opacity: 0.95,
+          lineHeight: 1.6, // tighter, less airy
+          fontSize: "1.05rem", // slightly smaller for balance
+          mb: 2, // reduced bottom margin
+        }}
+        {...props}
+      />
+    ),
+    li: ({ node, ...props }) => (
+      <li>
+        <Typography
+          component="span"
+          variant="body1"
+          sx={{ lineHeight: 1.6, fontSize: "1.05rem" }}
+          {...props}
+        />
+      </li>
+    ),
+  }}
+>
+  {post.content}
+</ReactMarkdown>
+
+
         </Typography>
 
         {/* Meta info */}
@@ -186,19 +262,20 @@ export default function PostDetailPage() {
               color: "hsl(var(--primary-foreground))",
             }}
           />
-          <Chip label={`Views: ${post.views ?? 0}`} />
+          <Chip label={`Views: ${Number(post.views) ?? 0}`} />
           <Chip label={`Status: ${post.status}`} />
           <Chip label={`Editor’s Pick: ${post.isEditorsPick ? "Yes" : "No"}`} />
           <Chip label={`Featured: ${post.isFeatured ? "Yes" : "No"}`} />
         </Stack>
 
         {/* Author */}
-        {post.author?.avatar && (
+        {avatarSrc && avatarOk && (
           <Stack direction="row" spacing={2} alignItems="center" mt={3}>
             <Box
               component="img"
-              src={post.author.avatar}
-              alt={`${post.author.name ?? "Author"} avatar`}
+              src={avatarSrc}
+              alt={`${post.author?.name ?? "Author"} avatar`}
+              onError={() => setAvatarOk(false)}
               sx={{
                 width: 64,
                 height: 64,
@@ -213,7 +290,7 @@ export default function PostDetailPage() {
             />
             <Box>
               <Typography fontWeight={700} color="hsl(var(--foreground))">
-                {post.author.name}
+                {post.author?.name}
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 About the author

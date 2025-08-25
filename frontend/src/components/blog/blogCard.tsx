@@ -7,7 +7,10 @@ interface Props {
 }
 
 export default function BlogCard({ post }: Props) {
-  const date = new Date(Number(post.date) / 1_000_000).toLocaleDateString();
+  const timestamp =
+    typeof post?.date === "number" ? Number(post.date) / 1_000_000 : Date.now();
+  const date = new Date(timestamp).toLocaleDateString();
+
 
   return (
     <Link
@@ -25,7 +28,6 @@ export default function BlogCard({ post }: Props) {
           bgcolor: "hsl(var(--background))",
           border: "1px solid hsl(var(--border))",
           "&:hover": {
-            transform: "translateY(-8px)",
             boxShadow: "0 20px 40px hsl(var(--shadow) / 0.15)",
             borderColor: "hsl(var(--foreground))",
           },

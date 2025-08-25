@@ -23,7 +23,7 @@ export default function LatestArticlesGrid({ loading, posts }: LatestArticlesGri
         justifyContent="center"
       >
         {loading
-          ? Array.from({ length: 6 }).map((_, idx) => (
+          ? Array.from({ length: 3 }).map((_, idx) => (
               <Grid
                 item
                 xs={12}
@@ -68,7 +68,7 @@ export default function LatestArticlesGrid({ loading, posts }: LatestArticlesGri
                     maxWidth: 360,
                     transition: "transform 0.3s ease, box-shadow 0.3s ease",
                     "&:hover": {
-                      transform: "translateY(-8px)",
+                    
                       boxShadow: "0 16px 40px rgba(0,0,0,0.15)",
                     },
                   }}

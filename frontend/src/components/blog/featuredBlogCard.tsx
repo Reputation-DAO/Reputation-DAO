@@ -14,7 +14,9 @@ interface Props {
 }
 
 export default function FeaturedBlogCard({ post }: Props) {
-  const date = new Date(Number(post.date) / 1_000_000).toLocaleDateString();
+  const timestamp =
+    typeof post?.date === "number" ? Number(post.date) / 1_000_000 : Date.now();
+  const date = new Date(timestamp).toLocaleDateString();
 
   return (
     <Link
