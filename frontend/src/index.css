@@ -4,49 +4,63 @@
 
 @layer base {
   :root {
-    --background: 0 0% 98%;
-    --foreground: 222 47% 11%;
+    /* Light theme with brand blue accents */
+    --background: 210 15% 98%;
+    --foreground: 215 25% 15%;
 
-    --primary: 220 90% 56%;
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 15%;
+
+    /* Brand blue from ReputationDAO */
+    --primary: 217 91% 60%;
     --primary-foreground: 0 0% 100%;
+    --primary-glow: 217 91% 70%;
+    --primary-light: 217 91% 95%;
 
-    --secondary: 220 14% 95%;
-    --secondary-foreground: 222 47% 11%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 215 25% 25%;
 
-    --accent: 200 90% 55%;
-    --accent-foreground: 0 0% 100%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 65%;
 
-    --muted: 222 16% 92%;
-    --muted-foreground: 220 10% 40%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 215 25% 15%;
 
-    --info: 210 100% 50%;
-    --info-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
 
-    --success: 142 70% 45%;
-    --success-foreground: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 217 91% 60%;
 
-    --warning: 45 100% 50%;
-    --warning-foreground: 0 0% 0%;
+    --radius: 0.75rem;
 
-    --destructive: 0 80% 60%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 220 90% 50%;
-    --input: 220 14% 90%;
-    --ring: 220 90% 56%;
-
-    --radius: 0.5rem;
+    /* Glassmorphism variables */
+    --glass: 0 0% 0% / 0.05;
+    --glass-border: 0 0% 100% / 0.1;
 
     /* Shadow variants */
-    --shadow-lg: 0 6px 20px rgba(0, 0, 0, 0.1);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    --shadow-glow: 0 0 30px hsl(var(--primary) / 0.2);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 
-    --glass-blur: blur(14px);
-    --glass-border: 1px solid rgba(0, 0, 0, 0.08);
-    --transition-fast: 150ms ease-in-out;
-    --transition-smooth: 300ms ease-in-out;
+    /* Gradient mesh background */
+    --gradient-mesh: 
+      radial-gradient(at 40% 20%, hsl(var(--primary) / 0.05) 0px, transparent 50%),
+      radial-gradient(at 80% 0%, hsl(var(--primary-glow) / 0.05) 0px, transparent 50%),
+      radial-gradient(at 0% 50%, hsl(var(--primary) / 0.05) 0px, transparent 50%),
+      radial-gradient(at 80% 50%, hsl(var(--primary-glow) / 0.05) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, hsl(var(--secondary) / 0.05) 0px, transparent 50%),
+      radial-gradient(at 80% 100%, hsl(var(--primary) / 0.05) 0px, transparent 50%),
+      radial-gradient(at 0% 0%, hsl(var(--primary-glow) / 0.05) 0px, transparent 50%);
 
-    --gradient-header: linear-gradient(135deg, hsl(220 90% 56% / 0.85), hsl(0 0% 100% / 0.9));
+    /* Transitions */
+    --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-slow: 0.6s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .dark {
@@ -99,10 +113,55 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
     margin: 0;
     min-height: 100vh;
     font-family: system-ui, sans-serif;
+    background: var(--gradient-mesh);
+    background-attachment: fixed;
+  }
+
+  /* Glassmorphism utilities */
+  .glass {
+    background: hsl(var(--glass));
+    backdrop-filter: blur(20px);
+    border: 1px solid hsl(var(--glass-border));
+  }
+
+  /* Animation keyframes */
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+  }
+
+  @keyframes fadeInUp {
+    0% { transform: translateY(30px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 20px hsl(var(--primary) / 0.3); }
+    50% { box-shadow: 0 0 60px hsl(var(--primary) / 0.6); }
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--background));
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--primary) / 0.3);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary) / 0.5);
+  }
   }
 
   html,
@@ -115,4 +174,4 @@
   body::-webkit-scrollbar {
     display: none;
   }
-}
+
