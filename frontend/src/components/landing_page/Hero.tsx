@@ -1,6 +1,7 @@
 import { Box, Container, Typography, Button, Stack } from '@mui/material';
 import { Link as MuiLink } from '@mui/material';
 import { Play, ArrowRight, Zap, Shield, Network } from 'lucide-react';
+import heroBg from '../../assets/hero-bg.jpg';
 
 export default function Hero() {
   return (
@@ -13,11 +14,32 @@ export default function Hero() {
         alignItems: 'center',
         justifyContent: 'center',
         overflow: 'hidden',
-        background: `
-          linear-gradient(135deg, hsl(var(--background)) 0%, hsl(var(--secondary)) 100%),
-          radial-gradient(circle at 20% 80%, hsl(var(--primary) / 0.1) 0%, transparent 50%),
-          radial-gradient(circle at 80% 20%, hsl(var(--primary-glow) / 0.15) 0%, transparent 50%)
-        `,
+        backgroundImage: `url(${heroBg})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          inset: 0,
+          background: `
+            linear-gradient(135deg, 
+              rgba(255, 255, 255, 0.85) 0%, 
+              rgba(248, 250, 252, 0.75) 50%, 
+              rgba(241, 245, 249, 0.8) 100%
+            )
+          `,
+          '.dark &': {
+            background: `
+              linear-gradient(135deg, 
+                rgba(15, 23, 42, 0.85) 0%, 
+                rgba(30, 41, 59, 0.75) 50%, 
+                rgba(51, 65, 85, 0.8) 100%
+              )
+            `
+          },
+          zIndex: 1
+        }
       }}
     >
       {/* Animated Background Elements */}
@@ -25,7 +47,7 @@ export default function Hero() {
         sx={{
           position: 'absolute',
           inset: 0,
-          zIndex: 1,
+          zIndex: 2,
           '& > div': {
             position: 'absolute',
             borderRadius: '50%',
@@ -48,6 +70,8 @@ export default function Hero() {
       <Container
         maxWidth="lg"
         sx={{
+          position: 'relative',
+          zIndex: 3,
           position: 'relative',
           zIndex: 10,
           textAlign: 'center',

@@ -1,289 +1,515 @@
-import {
-  Box,
-  Button,
-  TextField,
-  Typography,
-  Divider,
-  Paper,
-  useMediaQuery,
-  Stack,
-  keyframes,
-} from '@mui/material';
-import { CreditCard } from '@mui/icons-material';
-import { styled } from '@mui/system';
-import { Link as MuiLink } from '@mui/material';
-import { useState } from "react";
-import { useTheme } from '@mui/material/styles';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Button, Card, Box } from "@mui/material";
+import { Wallet, Shield, Zap, ArrowRight, CheckCircle } from "lucide-react";
+import { useAuth } from '../contexts/AuthContext';
+import { styled } from '@mui/material/styles';
 
-// Heartbeat glow keyframes
-const heartbeatGlow = keyframes`
-  0% { opacity: 0.06; filter: blur(15px); }
-  20% { opacity: 0.14; filter: blur(25px); }
-  50% { opacity: 0.36; filter: blur(35px); }
-  80% { opacity: 0.14; filter: blur(25px); }
-  100% { opacity: 0.06; filter: blur(15px); }
-`;
+// Hook to detect dark mode from CSS classes
+const useDarkMode = () => {
+  const [isDark, setIsDark] = useState(false);
 
-const Root = styled(Box)({
-  display: 'flex',
-  justifyContent: 'center',
-  alignItems: 'center',
-  minHeight: '100vh',
-  width: '100%',
-  backgroundColor: 'hsl(var(--background))',
-  padding: '1rem', // decreased padding
-  position: 'relative',
-  overflow: 'hidden',
-  transition: 'background-color var(--transition-smooth)',
+  useEffect(() => {
+    const checkDarkMode = () => {
+      setIsDark(document.documentElement.classList.contains('dark'));
+    };
+
+    checkDarkMode();
+    
+    // Create observer to watch for class changes
+    const observer = new MutationObserver(checkDarkMode);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class']
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
+  return isDark;
+};
+
+const StyledCard = styled(Card)(() => {
+  const isDark = document.documentElement.classList.contains('dark');
+  return {
+    padding: '24px',
+    cursor: 'pointer',
+    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+    position: 'relative',
+    overflow: 'hidden',
+    background: isDark 
+      ? 'rgba(255, 255, 255, 0.05)'
+      : 'rgba(255, 255, 255, 0.9)',
+    backdropFilter: 'blur(10px)',
+    border: isDark
+      ? '1px solid rgba(255, 255, 255, 0.1)'
+      : '1px solid rgba(0, 0, 0, 0.08)',
+    borderRadius: '16px',
+    boxShadow: isDark
+      ? '0 4px 12px rgba(0, 0, 0, 0.3)'
+      : '0 4px 12px rgba(0, 0, 0, 0.1)',
+    '&:hover': {
+      transform: 'scale(1.02)',
+      boxShadow: isDark
+        ? '0 8px 25px rgba(0, 0, 0, 0.4)'
+        : '0 8px 25px rgba(0, 0, 0, 0.15)',
+    },
+  };
 });
 
-// Glows
-const Glow = styled(Box)(({ side }: { side: 'left' | 'right' }) => ({
+const IconContainer = styled(Box)(() => {
+  const isDark = document.documentElement.classList.contains('dark');
+  return {
+    width: '48px',
+    height: '48px',
+    borderRadius: '12px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: isDark
+      ? 'rgba(59, 130, 246, 0.2)'
+      : 'rgba(59, 130, 246, 0.1)',
+    transition: 'all 0.3s ease',
+    '&:hover': {
+      background: isDark
+        ? 'rgba(59, 130, 246, 0.3)'
+        : 'rgba(59, 130, 246, 0.2)',
+      transform: 'scale(1.1)',
+    },
+  };
+});
+
+const RecommendedBadge = styled(Box)({
   position: 'absolute',
   top: 0,
-  [side]: 0,
-  width: '80px',
-  height: '100%',
-  background: 'hsl(var(--primary))',
-  animation: `${heartbeatGlow} 10s ease-in-out infinite`,
-  zIndex: 0,
-  pointerEvents: 'none',
-  mixBlendMode: 'screen',
-  borderRadius: side === 'left' ? '0 80px 80px 0' : '80px 0 0 80px',
-}));
-
-const AuthWindow = styled(Box)(({ theme }) => ({
-  width: '100%',
-  maxWidth: 1100, // slightly reduced for padding
-  display: 'flex',
-  borderRadius: 'var(--radius)',
-  overflow: 'hidden',
-  flexDirection: 'row',
-  backgroundColor: 'hsl(var(--card))',
-  boxShadow: 'var(--shadow-lg)',
-  [theme.breakpoints.down('md')]: {
-    flexDirection: 'column',
-  },
-}));
-
-const SidePanel = styled(Box)(({ theme }) => ({
-  flex: 1,
-  position: 'relative',
-  backgroundImage: `url('/assets/bgimage.png')`,
-  backgroundSize: 'cover',
-  backgroundPosition: 'center',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  flexDirection: 'column',
-  padding: '2rem', // decreased padding
-  '&::before': {
-    content: '""',
-    position: 'absolute',
-    inset: 0,
-    background: 'linear-gradient(to bottom right, hsl(var(--primary) / 0.75), hsl(var(--accent) / 0.5))',
-    backdropFilter: 'var(--glass-blur)',
-    borderRadius: 'var(--radius)',
-  },
-  [theme.breakpoints.down('md')]: {
-    width: '100%',
-    height: 180,
-    padding: '1rem',
-    backgroundPosition: 'top',
-  },
-}));
-
-const SideContent = styled(Box)({
-  position: 'relative',
-  zIndex: 2,
-  textAlign: 'center',
-  color: 'hsl(var(--primary-foreground))',
+  right: 0,
+  background: '#3b82f6',
+  color: 'white',
+  padding: '4px 12px',
+  fontSize: '12px',
+  borderRadius: '0 16px 0 12px',
+  fontWeight: 600,
+  zIndex: 1,
 });
 
-const FormPanel = styled(Box)({
-  flex: 1,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: '1rem', // reduced padding
-});
+const WalletOption = ({ icon: Icon, name, description, isRecommended, isConnected, onConnect, isLoading }: {
+  icon: any;
+  name: string;
+  description: string;
+  isRecommended?: boolean;
+  isConnected?: boolean;
+  onConnect: () => void;
+  isLoading?: boolean;
+}) => {
+  const isDark = useDarkMode();
+  
+  return (
+  <StyledCard>
+    {isRecommended && (
+      <RecommendedBadge>
+        Recommended
+      </RecommendedBadge>
+    )}
+    
+    <Box display="flex" alignItems="center" gap={2} mb={2}>
+      <IconContainer>
+        <Icon size={24} color="#3b82f6" />
+      </IconContainer>
+      <Box>
+        <Box 
+          fontSize="18px" 
+          fontWeight="600" 
+          mb={0.5}
+          sx={{
+            color: isDark ? '#ffffff' : '#1a1a1a'
+          }}
+        >
+          {name}
+        </Box>
+        <Box 
+          fontSize="14px"
+          sx={{
+            color: isDark ? '#b0b0b0' : '#666666'
+          }}
+        >
+          {description}
+        </Box>
+      </Box>
+    </Box>
+    
+    <Button 
+      onClick={onConnect}
+      disabled={isLoading || isConnected}
+      variant={isConnected ? "outlined" : "contained"}
+      fullWidth
+      sx={{
+        borderRadius: '12px',
+        py: 1.5,
+        textTransform: 'none',
+        fontWeight: 600,
+        fontSize: '16px',
+        transition: 'all 0.3s ease',
+        backgroundColor: isConnected ? 'transparent' : '#3b82f6',
+        color: isConnected ? '#3b82f6' : 'white',
+        border: isConnected ? '2px solid #3b82f6' : '2px solid #3b82f6',
+        '&:hover': {
+          transform: 'translateY(-2px)',
+          backgroundColor: isConnected ? 'rgba(59, 130, 246, 0.1)' : '#2563eb',
+          borderColor: isConnected ? '#2563eb' : '#2563eb',
+        },
+        '&:disabled': {
+          backgroundColor: isConnected ? 'transparent' : '#94a3b8',
+          color: isConnected ? '#94a3b8' : 'white',
+          borderColor: '#94a3b8',
+          transform: 'none',
+        },
+      }}
+    >
+      {isLoading ? (
+        <Box display="flex" alignItems="center">
+          <Box
+            sx={{
+              width: 16,
+              height: 16,
+              border: '2px solid transparent',
+              borderTop: '2px solid currentColor',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
+              mr: 1,
+            }}
+          />
+          Connecting...
+        </Box>
+      ) : isConnected ? (
+        <Box display="flex" alignItems="center">
+          <CheckCircle size={16} style={{ marginRight: 8 }} />
+          Connected
+        </Box>
+      ) : (
+        <Box display="flex" alignItems="center">
+          Connect
+          <ArrowRight size={16} style={{ marginLeft: 8 }} />
+        </Box>
+      )}
+    </Button>
+  </StyledCard>
+  );
+};
 
-const FormCard = styled(Paper)({
-  width: '100%',
-  maxWidth: 380, // slightly smaller for sleekness
-  padding: '1.5rem', // reduced padding
-  borderRadius: 'var(--radius)',
-  boxShadow: 'var(--shadow-lg)',
-  backgroundColor: 'hsl(var(--card))',
-  color: 'hsl(var(--foreground))',
-  transition: 'all var(--transition-smooth)',
-});
+const Auth = () => {
+  const navigate = useNavigate();
+  const [isConnecting, setIsConnecting] = useState<string | null>(null);
+  const [connectedWallet, setConnectedWallet] = useState<string | null>(null);
+  const { login, error } = useAuth();
+  const isDark = useDarkMode();
 
-export default function AuthPage() {
-  const [isSignUp, setIsSignUp] = useState(false);
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const handleWalletConnect = async (walletType: string) => {
+    setIsConnecting(walletType);
+    
+    try {
+      if (walletType === 'ii') {
+        // Internet Identity login
+        await login();
+        setConnectedWallet(walletType);
+        
+        // Redirect to Internet Identity specific org selector
+        setTimeout(() => {
+          navigate('/org-selector-ii');
+        }, 1000);
+      } else if (walletType === 'plug') {
+        // Plug wallet connection - redirect to original org selector
+        setTimeout(() => {
+          navigate('/org-selector');
+        }, 1000);
+        setConnectedWallet(walletType);
+      } else {
+        // Other wallets - simulate connection
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        setConnectedWallet(walletType);
+        
+        setTimeout(() => {
+          navigate('/org-selector');
+        }, 1000);
+      }
+      
+    } catch (error) {
+      console.error(`Failed to connect ${walletType}:`, error);
+    } finally {
+      setIsConnecting(null);
+    }
+  };
+
+  const walletOptions = [
+    {
+      icon: Zap,
+      name: "Plug Wallet",
+      description: "Connect with Plug wallet for Internet Computer",
+      isRecommended: true,
+      isConnected: connectedWallet === "plug",
+      onConnect: () => handleWalletConnect("plug")
+    },
+    {
+      icon: Shield,
+      name: "Internet Identity",
+      description: "Secure authentication with Internet Identity",
+      isConnected: connectedWallet === "ii",
+      onConnect: () => handleWalletConnect("ii")
+    }
+  ];
 
   return (
-    <Root>
-      <Glow side="left" />
-      <Glow side="right" />
+    <Box 
+      sx={{
+        minHeight: '100vh',
+        background: isDark 
+          ? 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)'
+          : 'linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%)',
+        position: 'relative',
+        overflow: 'hidden'
+      }}
+    >
+    
+      
+      {/* Background Effects */}
+      <Box 
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          overflow: 'hidden',
+          pointerEvents: 'none'
+        }}
+      >
+        <Box 
+          sx={{
+            position: 'absolute',
+            top: '25%',
+            left: '25%',
+            width: '384px',
+            height: '384px',
+            background: 'rgba(59, 130, 246, 0.05)',
+            borderRadius: '50%',
+            filter: 'blur(60px)',
+            animation: 'pulse 4s ease-in-out infinite'
+          }}
+        />
+        <Box 
+          sx={{
+            position: 'absolute',
+            bottom: '25%',
+            right: '25%',
+            width: '384px',
+            height: '384px',
+            background: 'rgba(147, 51, 234, 0.05)',
+            borderRadius: '50%',
+            filter: 'blur(60px)',
+            animation: 'pulse 4s ease-in-out infinite',
+            animationDelay: '1s'
+          }}
+        />
+      </Box>
 
-      <AuthWindow>
-        {!isMobile && (
-          <SidePanel>
-            <SideContent>
-              <Box
-                component="img"
-                src="/assets/dark_logo.png"
-                alt="Logo"
-                sx={{ width: 150, height: 150, mb: 1.5 }}
-              />
-              <Typography variant="h5" fontWeight="bold">
-                Reputation DAO
-              </Typography>
-              <Typography mt={0.5} fontSize={14} sx={{ color: 'hsl(var(--primary-foreground))', opacity: 0.85 }}>
-                Secure, modern, and community-driven
-              </Typography>
-            </SideContent>
-          </SidePanel>
+      <Box sx={{ position: 'relative', maxWidth: '1024px', mx: 'auto', px: 2, py: 10 }}>
+        {/* Header */}
+        <Box sx={{ textAlign: 'center', mb: 8 }}>
+          <Box 
+            sx={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 64,
+              height: 64,
+              background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+              borderRadius: '16px',
+              mb: 3,
+              animation: 'pulse 2s ease-in-out infinite'
+            }}
+          >
+            <Shield size={32} color="white" />
+          </Box>
+          
+          <Box 
+            component="h1"
+            sx={{
+              fontSize: { xs: '2.5rem', md: '3rem' },
+              fontWeight: 'bold',
+              mb: 3,
+              background: isDark
+                ? 'linear-gradient(135deg, #f8fafc, #e2e8f0)'
+                : 'linear-gradient(135deg, #1f2937, #374151)',
+              backgroundClip: 'text',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent'
+            }}
+          >
+            Connect Your Wallet
+          </Box>
+          
+          <Box 
+            sx={{
+              fontSize: '1.25rem',
+              color: isDark ? '#cbd5e1' : '#4b5563',
+              maxWidth: '600px',
+              mx: 'auto',
+              mb: 4
+            }}
+          >
+            Choose your wallet to access the Reputation DAO dashboard and start building your on-chain reputation.
+          </Box>
+        </Box>
+
+        {/* Display error if any */}
+        {error && (
+          <Box 
+            sx={{
+              mb: 4,
+              p: 2,
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.2)',
+              borderRadius: '8px',
+              color: '#dc2626',
+              textAlign: 'center'
+            }}
+          >
+            {error}
+          </Box>
         )}
 
-        <FormPanel>
-          <FormCard>
-            <Typography variant="h6" fontWeight="600" gutterBottom>
-              {isSignUp ? 'Sign Up' : 'Login'}
-            </Typography>
-
-            <Box component="form" mt={1.5}>
-              {isSignUp && (
-                <TextField
-                  fullWidth
-                  label="Name"
-                  variant="outlined"
-                  margin="dense"
-                  InputProps={{
-                    sx: {
-                      borderRadius: 'var(--radius)',
-                      backgroundColor: 'hsl(var(--input))',
-                      color: 'hsl(var(--foreground))',
-                      transition: 'all var(--transition-fast)',
-                      '&:hover': { backgroundColor: 'hsl(var(--secondary))' },
-                    },
-                  }}
-                />
-              )}
-              <TextField
-                fullWidth
-                label="Email"
-                variant="outlined"
-                margin="dense"
-                InputProps={{
-                  sx: {
-                    borderRadius: 'var(--radius)',
-                    backgroundColor: 'hsl(var(--input))',
-                    color: 'hsl(var(--foreground))',
-                    '& input': { color: 'hsl(var(--foreground))' },
-                    transition: 'all var(--transition-fast)',
-                    '&:hover': { backgroundColor: 'hsl(var(--secondary))' },
-                  },
-                }}
-                InputLabelProps={{ sx: { color: 'hsl(var(--muted-foreground))' } }}
+        {/* Wallet Options */}
+        <Box sx={{ display: 'grid', gap: 3, maxWidth: '600px', mx: 'auto' }}>
+          {walletOptions.map((option, index) => (
+            <Box 
+              key={option.name}
+              sx={{
+                animation: `fadeInUp 0.6s ease-out ${index * 0.1}s both`
+              }}
+            >
+              <WalletOption
+                {...option}
+                isLoading={isConnecting === option.name.toLowerCase().replace(' ', '')}
               />
-              <TextField
-                fullWidth
-                label="Password"
-                type="password"
-                variant="outlined"
-                margin="dense"
-                InputProps={{
-                  sx: {
-                    borderRadius: 'var(--radius)',
-                    backgroundColor: 'hsl(var(--input))',
-                    color: 'hsl(var(--foreground))',
-                    '& input': { color: 'hsl(var(--foreground))' },
-                    transition: 'all var(--transition-fast)',
-                    '&:hover': { backgroundColor: 'hsl(var(--secondary))' },
-                  },
-                }}
-                InputLabelProps={{ sx: { color: 'hsl(var(--muted-foreground))' } }}
-              />
-
-              <Button
-				  fullWidth
-				  variant="contained"
-				  sx={{
-				    mt: 2,
-				    py: 1.5,
-				    borderRadius: 'var(--radius)',
-				    textTransform: 'none',
-				    backgroundColor: 'hsl(var(--primary))',
-				    color: 'hsl(var(--primary-foreground))',
-				    fontWeight: 600,
-				    boxShadow: 'var(--shadow-lg)',
-				    transition: 'all var(--transition-fast)',
-				    '&:hover': {
-				      transform: 'translateY(-1px)',
-				      backgroundColor: 'hsl(var(--primary))',
-				      boxShadow: '0 8px 20px rgba(0,0,0,0.12)',
-				    },
-				  }}
-				  onClick={() => alert("Presently only 'Connect with Plug' feature is available")}
-				>
-				  {isSignUp ? 'Create Account' : 'Login'}
-				</Button>
-
-
-              <Divider sx={{ my: 2, borderColor: 'hsl(var(--border))' }}>or</Divider>
-
-              <Stack spacing={1}>
-                <Button
-                  component={MuiLink}
-
-                  href="/org-selector" // Update this to your desired route
-
-                  variant="outlined"
-                  startIcon={<CreditCard />}
-                  fullWidth
-                  sx={{
-                    borderRadius: 'var(--radius)',
-                    textTransform: 'none',
-                    color: 'hsl(var(--foreground))',
-                    borderColor: 'hsl(var(--border))',
-                    fontWeight: 500,
-                    transition: 'all var(--transition-fast)',
-                    '&:hover': {
-                      borderColor: 'hsl(var(--foreground))',
-                      backgroundColor: 'hsl(var(--secondary))',
-                      transform: 'translateY(-1px)',
-                    },
-                  }}
-                >
-                  Connect with Plug
-                </Button>
-              </Stack>
-
-              <Typography mt={2} fontSize={13} textAlign="center" color="hsl(var(--muted-foreground))">
-                {isSignUp ? 'Already have an account?' : "Don't have an account?"}
-                <Button
-                  variant="text"
-                  onClick={() => setIsSignUp(!isSignUp)}
-                  sx={{
-                    ml: 1,
-                    textTransform: 'none',
-                    color: 'hsl(var(--primary))',
-                    fontWeight: 'bold',
-                    transition: 'color var(--transition-fast)',
-                    '&:hover': { color: 'hsl(var(--accent-foreground))' },
-                  }}
-                >
-                  {isSignUp ? 'Login' : 'Sign Up'}
-                </Button>
-              </Typography>
             </Box>
-          </FormCard>
-        </FormPanel>
-      </AuthWindow>
-    </Root>
+          ))}
+        </Box>
+
+        {/* Security Notice */}
+        <Box 
+          sx={{
+            mt: 8,
+            p: 3,
+            maxWidth: '600px',
+            mx: 'auto',
+            background: isDark
+              ? 'rgba(255, 255, 255, 0.05)'
+              : 'rgba(255, 255, 255, 0.8)',
+            backdropFilter: 'blur(10px)',
+            border: isDark
+              ? '1px solid rgba(255, 255, 255, 0.1)'
+              : '1px solid rgba(0, 0, 0, 0.1)',
+            borderRadius: '16px',
+            animation: 'fadeInUp 0.6s ease-out 0.4s both'
+          }}
+        >
+          <Box display="flex" alignItems="flex-start" gap={2}>
+            <Shield size={24} color="#3b82f6" style={{ marginTop: 4, flexShrink: 0 }} />
+            <Box>
+              <Box 
+                fontWeight="600" 
+                mb={1}
+                sx={{
+                  color: isDark ? '#ffffff' : '#1f2937'
+                }}
+              >
+                Secure & Privacy-First
+              </Box>
+              <Box 
+                fontSize="14px"
+                sx={{
+                  color: isDark ? '#cbd5e1' : '#6b7280'
+                }}
+              >
+                Your wallet connection is secure and private. We never store your private keys or sensitive information. 
+                Your reputation data is stored on-chain and remains under your control.
+              </Box>
+            </Box>
+          </Box>
+        </Box>
+
+        {/* Features Preview */}
+        <Box 
+          sx={{
+            mt: 8,
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
+            gap: 3,
+            maxWidth: '1024px',
+            mx: 'auto'
+          }}
+        >
+          {[
+            {
+              icon: Zap,
+              title: "Instant Access",
+              description: "Connect and access your dashboard immediately"
+            },
+            {
+              icon: Shield,
+              title: "Secure Storage",
+              description: "Your reputation is stored securely on-chain"
+            },
+            {
+              icon: Wallet,
+              title: "Multi-Wallet",
+              description: "Support for multiple wallet providers"
+            }
+          ].map((feature, index) => (
+            <Box 
+              key={feature.title}
+              sx={{
+                textAlign: 'center',
+                p: 3,
+                animation: `fadeInUp 0.6s ease-out ${0.5 + index * 0.1}s both`
+              }}
+            >
+              <Box 
+                sx={{
+                  width: 48,
+                  height: 48,
+                  background: isDark
+                    ? 'rgba(59, 130, 246, 0.1)'
+                    : 'rgba(59, 130, 246, 0.15)',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mx: 'auto',
+                  mb: 2
+                }}
+              >
+                <feature.icon size={24} color="#3b82f6" />
+              </Box>
+              <Box 
+                fontWeight="600" 
+                mb={1}
+                sx={{
+                  color: isDark ? '#ffffff' : '#1f2937'
+                }}
+              >
+                {feature.title}
+              </Box>
+              <Box 
+                fontSize="14px"
+                sx={{
+                  color: isDark ? '#cbd5e1' : '#6b7280'
+                }}
+              >
+                {feature.description}
+              </Box>
+            </Box>
+          ))}
+        </Box>
+      </Box>
+    </Box>
   );
-}
+};
+
+export default Auth;

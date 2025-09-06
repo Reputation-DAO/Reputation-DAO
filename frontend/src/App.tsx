@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import HomeLayout from './components/layout/HomePageLayout';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { AuthProvider } from './contexts/AuthContext';
 
 
 import Dashboard from './pages/Dashboard';
@@ -19,11 +20,13 @@ import Auth from './pages/Auth';
 import Test from './pages/test'; 
 import PostDetailPage from './pages/PostDetailPost';
 import OrgSelector from './pages/OrgSelector';
+import OrgSelectorII from './pages/OrgSelectorII';
 
 
 function App() {
   return (
-    <Router>
+    <AuthProvider>
+      <Router>
       <Routes>
         <Route
           path="/"
@@ -92,6 +95,14 @@ function App() {
             element={
               <HomeLayout>
                 <OrgSelector />
+              </HomeLayout>
+            }
+          />
+          <Route
+            path="/org-selector-ii"
+            element={
+              <HomeLayout>
+                <OrgSelectorII />
               </HomeLayout>
             }
           />
@@ -184,6 +195,7 @@ function App() {
           />
         </Routes>
       </Router>
+    </AuthProvider>
   );
 }
 

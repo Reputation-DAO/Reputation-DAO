@@ -2,6 +2,8 @@
 import { idlFactory } from '../../../../src/declarations/reputation_dao/reputation_dao.did.js';
 import type { _SERVICE } from '../../../../src/declarations/reputation_dao/reputation_dao.did.d.ts';
 import { Principal } from '@dfinity/principal';
+import { Actor, HttpAgent } from '@dfinity/agent';
+import { AuthClient } from '@dfinity/auth-client';
 
 // === DECAY SYSTEM TYPES ===
 export type TransactionType = 'Award' | 'Revoke' | 'Decay';
@@ -50,7 +52,7 @@ export interface Awarder {
 }
 
 //modify this canisterID based on where the dfx playground hosts your backend
-const canisterId = 'owyeu-jiaaa-aaaam-qdvwq-cai';
+const canisterId = 'olmji-7iaaa-aaaab-qab7a-cai';
 
 export const getPlugActor = async () => {
   if (!window.ic?.plug) {
@@ -124,6 +126,59 @@ export const isPlugConnected = async (): Promise<boolean> => {
     return await window.ic.plug.isConnected();
   } catch (error) {
     console.error('Error checking Plug connection:', error);
+    return false;
+  }
+};
+
+// ===== INTERNET IDENTITY FUNCTIONS =====
+export const getInternetIdentityActor = async (): Promise<_SERVICE> => {
+  const authClient = await AuthClient.create();
+  
+  if (!(await authClient.isAuthenticated())) {
+    throw new Error('User not authenticated with Internet Identity');
+  }
+
+  const identity = authClient.getIdentity();
+  const agent = new HttpAgent({ 
+    identity,
+    host: 'https://ic0.app'
+  });
+
+  // Only fetch root key in development
+  if (process.env.NODE_ENV !== 'production') {
+    try {
+      await agent.fetchRootKey();
+    } catch (error) {
+      console.warn('Failed to fetch root key:', error);
+    }
+  }
+
+  const actor = Actor.createActor<_SERVICE>(idlFactory, {
+    agent,
+    canisterId,
+  });
+
+  console.log('🆔 Internet Identity actor created successfully');
+  return actor;
+};
+
+export const getInternetIdentityPrincipal = async (): Promise<Principal> => {
+  const authClient = await AuthClient.create();
+  
+  if (!(await authClient.isAuthenticated())) {
+    throw new Error('User not authenticated with Internet Identity');
+  }
+
+  const identity = authClient.getIdentity();
+  return identity.getPrincipal();
+};
+
+export const isInternetIdentityConnected = async (): Promise<boolean> => {
+  try {
+    const authClient = await AuthClient.create();
+    return await authClient.isAuthenticated();
+  } catch (error) {
+    console.error('Error checking Internet Identity connection:', error);
     return false;
   }
 };
