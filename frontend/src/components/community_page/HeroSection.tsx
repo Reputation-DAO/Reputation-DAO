@@ -66,7 +66,7 @@ export default function HeroSection() {
             </Button>
             <Button
               component={MuiLink}
-              href="https://x.com/Reputation_Dao"
+              href="https://x.com/repDao28"
               target="_blank"
               rel="noopener noreferrer"
               variant="outlined"

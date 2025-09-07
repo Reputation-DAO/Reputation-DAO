@@ -72,8 +72,6 @@ export default function Hero() {
         sx={{
           position: 'relative',
           zIndex: 3,
-          position: 'relative',
-          zIndex: 10,
           textAlign: 'center',
           px: { xs: 2, sm: 3, lg: 4 },
         }}

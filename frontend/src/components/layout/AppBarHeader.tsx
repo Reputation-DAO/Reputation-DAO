@@ -82,6 +82,8 @@ const AppBarHeader: React.FC<AppBarHeaderProps> = ({ onMenuClick }) => {
           <Typography
             variant="h6"
             noWrap
+            onClick={() => (window.location.href = '/')}
+            style={{ cursor: 'pointer' }}
             sx={{
               fontWeight: 600,
               fontSize: '1.1rem',
