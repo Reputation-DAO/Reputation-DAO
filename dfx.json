@@ -5,6 +5,11 @@
       "type": "motoko",
       "id": "owyeu-jiaaa-aaaam-qdvwq-cai"
     },
+    "factoria": {
+      "main": "src/factoria/main.mo",
+      "type": "motoko"
+
+    },
     "frontend": {
       "type": "assets",
       "source": ["frontend/dist"],

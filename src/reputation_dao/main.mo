@@ -1,8 +1,6 @@
-// Reputation DAO Canister
-// main.mo
-// Soulbound reputation system for Discord trading community
-// Built for ICP in Motoko
-
+// ReputationChild.mo — Unit child canister for Reputation DAO (single-org)
+// Stripped + consolidated: single org, factory-friendly, with safety rails & analytics.
+// Motoko 0.10+
 
 import Debug "mo:base/Debug";
 import Principal "mo:base/Principal";
@@ -13,1518 +11,674 @@ import Int "mo:base/Int";
 import Array "mo:base/Array";
 import Buffer "mo:base/Buffer";
 import Iter "mo:base/Iter";
+import Char "mo:base/Char";
+import Nat64 "mo:base/Nat64";
+import Blob "mo:base/Blob";
 import Text "mo:base/Text";
+import Cycles "mo:base/ExperimentalCycles";
+import Nat32 "mo:base/Nat32";
 
 
-// Main Reputation DAO actor
-persistent actor ReputationDAO {
+// Actor class so Factory can pass the admin/owner at deploy time
+actor class ReputationChild(initOwner : Principal) = this {
+  // ——— Types ———
+  //Defining a type for TransactionType Enum
+  public type TransactionType = { #Award; #Revoke; #Decay };
 
-    // Transaction log entry type
-    public type TransactionType = {
-        #Award;
-        #Revoke;
-        #Decay;  // New type for decay transactions
+  //Transaction Item Object
+  public type Transaction = {
+    id: Nat;
+    transactionType: TransactionType;
+    from: Principal;
+    to: Principal;
+    amount: Nat;
+    timestamp: Nat; // seconds
+    reason: ?Text;
+  };
+
+  // Awarder Object
+  public type Awarder = { id: Principal; name: Text };
+
+  public type DecayConfig = {
+    decayRate: Nat;        // basis points; 100 = 1%
+    decayInterval: Nat;    // seconds between decays
+    minThreshold: Nat;     // no decay below this balance
+    gracePeriod: Nat;      // seconds since first activity
+    enabled: Bool;
+  };
+
+  public type UserDecayInfo = {
+    lastDecayTime: Nat;
+    registrationTime: Nat;
+    lastActivityTime: Nat;
+    totalDecayed: Nat;
+  };
+
+  public type Event = { id: Nat; kind: Text; payload: Blob; timestamp: Nat };
+
+  public type AwarderBreakdown = { awarder: Principal; total: Nat; lastAward: Nat };
+
+  // NEW: Dedicated top-up record (kept separate from reputation txns)
+  public type TopUp = { id: Nat; from: Principal; amount: Nat; timestamp: Nat };
+
+  // ——— Stable State ———
+  stable var owner : Principal = initOwner; // admin/owner of this child
+  stable var pendingOwner : ?Principal = null; // for two-step transfer
+
+  // Policy knobs
+  stable var paused : Bool = false; // 1) pause switch
+  stable var dailyMintLimit : Nat = 50; // per-awarder per 24h (default)
+  stable var perAwarderDailyLimit : Trie.Trie<Principal, Nat> = Trie.empty(); // 2) overrides
+  stable var blacklistT : Trie.Trie<Principal, Bool> = Trie.empty(); // 3) blacklist
+  stable var minCyclesAlert : Nat = 0; // cycles alert threshold
+  stable let VERSION : Text = "1.0.1";
+
+  // Balances & Awarders use Trie for O(log n)
+  stable var balances : Trie.Trie<Principal, Nat> = Trie.empty();
+  stable var trustedAwarders : Trie.Trie<Principal, Text> = Trie.empty();
+  stable var dailyMinted : Trie.Trie<Principal, Nat> = Trie.empty();
+  stable var lastMintTimestamp : Trie.Trie<Principal, Nat> = Trie.empty();
+
+  stable var userDecayInfo : Trie.Trie<Principal, UserDecayInfo> = Trie.empty();
+
+  stable var transactionHistory : [Transaction] = []; // ONLY Award/Revoke/Decay
+  stable var nextTransactionId : Nat = 1;
+  stable var totalDecayedPoints : Nat = 0;
+  stable var lastGlobalDecayProcess : Nat = 0;
+
+  // Dedicated cycles top-up log (separate from reputation txns)
+  stable var topUps : [TopUp] = [];
+  stable var nextTopUpId : Nat = 1;
+
+  stable var decayConfig : DecayConfig = {
+    decayRate = 500;        // 5%
+    decayInterval = 2_592_000; // 30 days
+    minThreshold = 10;
+    gracePeriod = 2_592_000;   // 30 days
+    enabled = false; // decay is turned off by default
+  };
+
+  // events / parent (DX)
+  stable var parent : ?Principal = null;
+  stable var events : [Event] = [];
+  stable var nextEventId : Nat = 1;
+
+  // ——— Utils ———
+  func now() : Nat { Int.abs(Time.now() / 1_000_000_000) }; // seconds
+  func pKey(p: Principal) : Trie.Key<Principal> { { key = p; hash = Principal.hash(p) } };
+
+  func getBalance_(p: Principal) : Nat {
+    switch (Trie.get(balances, pKey(p), Principal.equal)) { case (?b) b; case null 0 };
+  };
+
+  func putBalance_(p: Principal, v: Nat) { balances := Trie.put(balances, pKey(p), Principal.equal, v).0 };
+
+  func isTrusted_(p: Principal) : Bool {
+    switch (Trie.get(trustedAwarders, pKey(p), Principal.equal)) { case (?_) true; case null false };
+  };
+
+  func isBlacklisted_(p: Principal) : Bool {
+    switch (Trie.get(blacklistT, pKey(p), Principal.equal)) { case (?true) true; case _ false };
+  };
+
+  func effectiveDailyLimit_(awardee: Principal) : Nat {
+    switch (Trie.get(perAwarderDailyLimit, pKey(awardee), Principal.equal)) { case (?lim) lim; case null dailyMintLimit };
+  };
+
+  func bumpDaily_(awardee: Principal, amount: Nat) : { ok: Bool; mintedToday: Nat } {
+    let t = now();
+    let day = 86_400;
+    let lm = switch (Trie.get(lastMintTimestamp, pKey(awardee), Principal.equal)) { case (?x) x; case null 0 };
+    let minted = if (lm == 0 or t >= lm + day) { 0 } else switch (Trie.get(dailyMinted, pKey(awardee), Principal.equal)) { case (?x) x; case null 0 };
+    let limit = effectiveDailyLimit_(awardee);
+    if (minted + amount > limit) { { ok = false; mintedToday = minted } } else {
+      dailyMinted := Trie.put(dailyMinted, pKey(awardee), Principal.equal, minted + amount).0;
+      lastMintTimestamp := Trie.put(lastMintTimestamp, pKey(awardee), Principal.equal, t).0;
+      { ok = true; mintedToday = minted + amount }
     };
+  };
 
-    public type Transaction = {
-        id: Nat;
-        transactionType: TransactionType;
-        from: Principal;  // Who performed the action
-        to: Principal;    // Who received/lost points
-        amount: Nat;
-        timestamp: Nat;   // Unix timestamp
-        reason: ?Text;    // Optional reason for the transaction
+  func addTx(txType: TransactionType, from: Principal, to: Principal, amount: Nat, reason: ?Text) {
+    let tx : Transaction = {
+      id = nextTransactionId;
+      transactionType = txType;
+      from = from;
+      to = to;
+      amount = amount;
+      timestamp = now();
+      reason = reason;
     };
-    
-    public type Awarder = {
-      id: Principal;
-      name: Text;
+    let buf = Buffer.fromArray<Transaction>(transactionHistory);
+    buf.add(tx);
+    transactionHistory := Buffer.toArray(buf);
+    nextTransactionId += 1;
+  };
+
+  func addTopUp(from: Principal, amount: Nat) {
+    let t : TopUp = { id = nextTopUpId; from = from; amount = amount; timestamp = now() };
+    let buf = Buffer.fromArray<TopUp>(topUps); buf.add(t); topUps := Buffer.toArray(buf); nextTopUpId += 1;
+  };
+
+  func emit(kind: Text, payload: Blob) { // internal
+    let e : Event = { id = nextEventId; kind; payload; timestamp = now() };
+    let buf = Buffer.fromArray<Event>(events); buf.add(e); events := Buffer.toArray(buf); nextEventId += 1;
+  };
+
+  func initDecayInfo_(p: Principal) : UserDecayInfo {
+    switch (Trie.get(userDecayInfo, pKey(p), Principal.equal)) {
+      case (?info) info;
+      case null {
+        let t = now();
+        let info : UserDecayInfo = { lastDecayTime = t; registrationTime = t; lastActivityTime = t; totalDecayed = 0 };
+        userDecayInfo := Trie.put(userDecayInfo, pKey(p), Principal.equal, info).0; info
+      }
     };
+  };
 
-    // Decay configuration type
-    public type DecayConfig = {
-        decayRate: Nat;          // Decay rate in basis points (100 = 1%)
-        decayInterval: Nat;      // Decay interval in seconds (e.g., 2592000 = 30 days)
-        minThreshold: Nat;       // Minimum points below which no decay applies
-        gracePeriod: Nat;        // Grace period for new users in seconds (e.g., 2592000 = 30 days)
-        enabled: Bool;           // Whether decay is enabled
+  func calcDecay_(p: Principal, bal: Nat) : Nat {
+    if (not decayConfig.enabled) return 0;
+    if (bal < decayConfig.minThreshold) return 0;
+    let info = initDecayInfo_(p);
+    let t = now();
+    if (t < info.registrationTime + decayConfig.gracePeriod) return 0;
+    if (t < info.lastDecayTime + decayConfig.decayInterval) return 0;
+    let elapsed = if (t >= info.lastDecayTime) Nat.sub(t, info.lastDecayTime) else 0;
+    let periods = if (decayConfig.decayInterval > 0) elapsed / decayConfig.decayInterval else 1;
+    if (periods == 0) return 0;
+    let raw = (bal * decayConfig.decayRate * periods) / 10_000;
+    if (bal >= raw) {
+      let nb = Nat.sub(bal, raw);
+      if (nb < decayConfig.minThreshold and bal >= decayConfig.minThreshold) Nat.sub(bal, decayConfig.minThreshold) else raw
+    } else if (bal > decayConfig.minThreshold) { Nat.sub(bal, decayConfig.minThreshold) } else 0 ;
+  };
+
+  func touchActivity_(p: Principal) {
+    let info = initDecayInfo_(p);
+    let info2 : UserDecayInfo = { lastDecayTime = info.lastDecayTime; registrationTime = info.registrationTime; lastActivityTime = now(); totalDecayed = info.totalDecayed };
+    userDecayInfo := Trie.put(userDecayInfo, pKey(p), Principal.equal, info2).0;
+  };
+
+  func applyDecay_(p: Principal) : Nat {
+    let bal = getBalance_(p);
+    if (bal == 0) return 0;
+    let d = calcDecay_(p, bal);
+    if (d == 0) return 0;
+    let nb = if (bal >= d) Nat.sub(bal, d) else 0; putBalance_(p, nb);
+    let info = initDecayInfo_(p); let t = now();
+    let elapsed = if (t >= info.lastDecayTime) Nat.sub(t, info.lastDecayTime) else 0;
+    let k = if (decayConfig.decayInterval > 0) elapsed / decayConfig.decayInterval else 1;
+    let rolled = info.lastDecayTime + (k * decayConfig.decayInterval);
+    let info2 : UserDecayInfo = { lastDecayTime = rolled; registrationTime = info.registrationTime; lastActivityTime = info.lastActivityTime; totalDecayed = info.totalDecayed + d };
+    userDecayInfo := Trie.put(userDecayInfo, pKey(p), Principal.equal, info2).0;
+    totalDecayedPoints += d; addTx(#Decay, p, p, d, ?"Automatic point decay"); d
+  };
+
+  // ——— Admin / Policy ———
+  public shared({ caller }) func transferOwnership(newOwner: Principal) : async Text {
+    if (caller != owner) return "Error: Only owner"; owner := newOwner; "Success: owner updated"
+  };
+
+  public shared({ caller }) func nominateOwner(candidate: Principal) : async Text {
+    if (caller != owner) return "Error: Only owner"; pendingOwner := ?candidate; "Success: pending owner set"
+  };
+
+  public shared({ caller }) func acceptOwnership() : async Text {
+    switch (pendingOwner) {
+      case (?p) { if (caller != p) return "Error: Not nominated"; owner := p; pendingOwner := null; "Success: ownership accepted" };
+      case null { "Error: No pending owner" }
+    }
+  };
+
+  public shared({ caller }) func configureDecay(decayRate: Nat, decayInterval: Nat, minThreshold: Nat, gracePeriod: Nat, enabled: Bool) : async Text {
+    if (caller != owner) return "Error: Only owner";
+    decayConfig := { decayRate; decayInterval; minThreshold; gracePeriod; enabled }; "Success: Decay config updated"
+  };
+
+  public shared({ caller }) func setDailyMintLimit(limit: Nat) : async Text {
+    if (caller != owner) return "Error: Only owner"; dailyMintLimit := limit; "Success: Daily limit updated"
+  };
+
+  public shared({ caller }) func setPerAwarderDailyLimit(awardee: Principal, limit: Nat) : async Text {
+    if (caller != owner) return "Error: Only owner";
+    perAwarderDailyLimit := Trie.put(perAwarderDailyLimit, pKey(awardee), Principal.equal, limit).0; "Success: Per-awarder limit set"
+  };
+
+  public shared({ caller }) func blacklist(user: Principal, on: Bool) : async Text {
+    if (caller != owner) return "Error: Only owner";
+    let v = if (on) ?true else null; let (t, _) = Trie.replace(blacklistT, pKey(user), Principal.equal, v); blacklistT := t;
+    "Success: blacklist updated"
+  };
+
+  public shared({ caller }) func pause(p: Bool) : async Text {
+    if (caller != owner) return "Error: Only owner"; paused := p; "Success: pause=" # (if (p) "true" else "false")
+  };
+
+  public shared({ caller }) func setParent(canisterId: Principal) : async Text {
+    if (caller != owner) return "Error: Only owner"; parent := ?canisterId; "Success: parent set"
+  };
+
+  public shared({ caller }) func setMinCyclesAlert(threshold: Nat) : async Text {
+    if (caller != owner) return "Error: Only owner"; minCyclesAlert := threshold; "Success: alert set"
+  };
+
+  // ——— Award / Revoke ———
+  public shared({ caller }) func addTrustedAwarder(p: Principal, name: Text) : async Text {
+    if (caller != owner) return "Error: Only owner";
+    if (paused) return "Error: Paused";
+    if (isBlacklisted_(p)) return "Error: Awarder blacklisted";
+    switch (Trie.get(trustedAwarders, pKey(p), Principal.equal)) { case (?_) { return "Error: Exists" }; case null {} };
+    trustedAwarders := Trie.put(trustedAwarders, pKey(p), Principal.equal, name).0; "Success: Awarder added"
+  };
+
+  public shared({ caller }) func removeTrustedAwarder(p: Principal) : async Text {
+    if (caller != owner) return "Error: Only owner";
+    let (t1, _) = Trie.replace(trustedAwarders, pKey(p), Principal.equal, null); trustedAwarders := t1;
+    let (t2, _) = Trie.replace(dailyMinted, pKey(p), Principal.equal, null); dailyMinted := t2;
+    let (t3, _) = Trie.replace(lastMintTimestamp, pKey(p), Principal.equal, null); lastMintTimestamp := t3;
+    let (t4, _) = Trie.replace(perAwarderDailyLimit, pKey(p), Principal.equal, null); perAwarderDailyLimit := t4;
+    "Success: Awarder removed"
+  };
+
+  public shared({ caller }) func awardRep(to: Principal, amount: Nat, reason: ?Text) : async Text {
+    if (paused) return "Error: Paused";
+    if (amount == 0) return "Error: Amount must be > 0";
+    if (caller == to) return "Error: Cannot self-award";
+    if (isBlacklisted_(caller) or isBlacklisted_(to)) return "Error: Blacklisted principal";
+    if (not isTrusted_(caller)) return "Error: Not a trusted awarder";
+    ignore applyDecay_(to);
+    let bump = bumpDaily_(caller, amount);
+    if (not bump.ok) return "Error: Daily mint cap exceeded";
+    let bal = getBalance_(to); putBalance_(to, bal + amount);
+    addTx(#Award, caller, to, amount, reason); touchActivity_(to);
+    Debug.print("Awarded " # Nat.toText(amount) # " to " # Principal.toText(to)); "Success: " # Nat.toText(amount) # " points awarded"
+  };
+
+  public shared({ caller }) func multiAward(pairs: [(Principal, Nat, ?Text)], atomic: Bool) : async Text {
+    if (paused) return "Error: Paused";
+    if (not isTrusted_(caller)) return "Error: Not a trusted awarder";
+    // Precheck for atomic
+    if (atomic) {
+      // ensure all pass caps/blacklist upfront
+      for ((to, amount, _r) in pairs.vals()) {
+        if (amount == 0 or caller == to or isBlacklisted_(caller) or isBlacklisted_(to)) return "Error: Atomic precheck failed";
+        let tmp = bumpDaily_(caller, 0); // read current
+        let lim = effectiveDailyLimit_(caller);
+        if (tmp.mintedToday + amount > lim) return "Error: Daily cap would be exceeded";
+      }
     };
-
-    // User decay info type
-    public type UserDecayInfo = {
-        lastDecayTime: Nat;      // Last time decay was applied
-        registrationTime: Nat;   // When user first received points
-        lastActivityTime: Nat;   // Last time user had any transaction
-        totalDecayed: Nat;       // Total amount decayed over time
-    };
-
-    // Multi-Organization Types
-    public type OrgID = Text;
-    
-    public type OrgData = {
-        admin: Principal;
-        trustedAwarders: [(Principal, Text)];
-        userBalances: [(Principal, Nat)];
-        dailyMinted: [(Principal, Nat)];
-        lastMintTimestamp: [(Principal, Nat)];
-        userDecayInfo: [(Principal, UserDecayInfo)];
-        transactionHistory: [Transaction];
-        nextTransactionId: Nat;
-        totalDecayedPoints: Nat;
-        lastGlobalDecayProcess: Nat;
-    };
-
-    public type OrgStats = {
-        admin: Principal; 
-        awarderCount: Nat; 
-        userCount: Nat;
-        totalPoints: Nat;
-        totalTransactions: Nat;
-    };
-
-
-    // --- Legacy Stable State - DEPRECATED (use multi-org functions) ---
-
-    // Reputation balances: Principal -> Nat (DEPRECATED - use org-specific functions)
-    var _balances : Trie.Trie<Principal, Nat> = Trie.empty();
-
-    // Trusted awarders: Principal -> Text (DEPRECATED - use org-specific functions)
-    var _trustedAwarders : Trie.Trie<Principal, Text> = Trie.empty();
-
-    // Daily minted amount per awarder: Principal -> Nat (DEPRECATED - use org-specific functions)
-    var _dailyMinted : Trie.Trie<Principal, Nat> = Trie.empty();
-
-    // Last mint timestamp per awarder: Principal -> Nat (DEPRECATED - use org-specific functions) 
-    var _lastMintTimestamp : Trie.Trie<Principal, Nat> = Trie.empty();
-
-    // Transaction log storage (DEPRECATED - use org-specific functions)
-    var _transactionHistory : [Transaction] = [];
-    var _nextTransactionId : Nat = 1;
-
-    // --- DECAY SYSTEM STATE ---
-    
-    // Decay configuration
-    var decayConfig : DecayConfig = {
-        decayRate = 500;         // 5% decay rate (500 basis points)
-        decayInterval = 300;     // 5 minutes for testing (was 2592000 = 30 days)
-        minThreshold = 10;       // No decay below 10 points
-        gracePeriod = 300;       // 5 minutes grace period for testing (was 2592000 = 30 days)
-        enabled = true;          // Decay is enabled by default
-    };
-
-    // User decay information: Principal -> UserDecayInfo
-    var userDecayInfo : Trie.Trie<Principal, UserDecayInfo> = Trie.empty();
-
-    // Global decay statistics
-    var totalDecayedPoints : Nat = 0;
-    var lastGlobalDecayProcess : Nat = 0;
-
-    // Owner/admin principal (replace with your actual principal before deploy)
-
-
-    // TODO: Set your admin principal aka your plug id here 
-
-    var owner : Principal = Principal.fromText("ofkbl-m6bgx-xlgm3-ko4y6-mh7i4-kp6b4-sojbh-wyy2r-aznnp-gmqtb-xqe"); 
-
-    // --- MULTI-ORGANIZATION STATE ---
-    
-    // Organizations storage: OrgID -> OrgData
-    var organizations : Trie.Trie<Text, OrgData> = Trie.empty(); 
-
-    // --- AUTOMATIC DECAY TIMER ---
-
-
-    // Automatic decay processing function - now processes all organizations
-    private func processAutomaticDecay() : async () {
-        if (not decayConfig.enabled) return;
-
-        Debug.print("Processing automatic decay for all organizations...");
-
-        var totalProcessedUsers = 0;
-        var totalDecayed = 0;
-
-        // Process each organization
-        for ((orgId, orgData) in Trie.iter(organizations)) {
-            var orgProcessedUsers = 0;
-            var orgTotalDecayed = 0;
-
-            // Process each user in this organization
-            for ((user, balance) in orgData.userBalances.vals()) {
-                if (balance > 0) {
-                    let decayAmount = applyDecayToUserInOrg(orgId, user);
-                    if (decayAmount > 0) {
-                        orgProcessedUsers += 1;
-                        orgTotalDecayed += decayAmount;
-                    };
-                };
-            };
-
-            totalProcessedUsers += orgProcessedUsers;
-            totalDecayed += orgTotalDecayed;
-            
-            if (orgProcessedUsers > 0) {
-                Debug.print("Org " # orgId # ": processed " # debug_show(orgProcessedUsers) # " users, decayed " # debug_show(orgTotalDecayed) # " points");
-            };
-        };
-
-        lastGlobalDecayProcess := now();
-        Debug.print("Automatic decay processed " # debug_show(totalProcessedUsers) # " users across all orgs, total decayed: " # debug_show(totalDecayed));
-    };
-
-    // Heartbeat throttle: only process when full interval elapsed
-    // DISABLED: We now use transaction-based decay instead of automatic heartbeat decay
-    // system func heartbeat() : async () {
-    //     if (decayConfig.enabled and now() >= (lastGlobalDecayProcess + decayConfig.decayInterval)) {
-    //         await processAutomaticDecay();
-    //     };
-    // };
-
-    // On upgrade we just preserve state; no timer IDs to recreate
-    system func postupgrade() {
-        // Force immediate decay check after upgrade by rewinding lastGlobalDecayProcess
-        if (decayConfig.enabled) {
-            if (lastGlobalDecayProcess > 0) { lastGlobalDecayProcess := lastGlobalDecayProcess - decayConfig.decayInterval; };
-        };
-    };
-
-    // DISABLED: No longer using automatic decay timer - using transaction-based decay instead
-    // Restart logic after config changes: set lastGlobalDecayProcess so next heartbeat triggers soon
-    // private func restartDecayTimer() : async () {
-    //     if (decayConfig.enabled) {
-    //         // Set to an old time to trigger immediate processing on next heartbeat
-    //         if (lastGlobalDecayProcess > decayConfig.decayInterval) {
-    //             lastGlobalDecayProcess := lastGlobalDecayProcess - decayConfig.decayInterval;
-    //         } else {
-    //             lastGlobalDecayProcess := 0;
-    //         };
-    //     };
-    // };
-
-
-    // --- Utility functions and core logic ---
-
-
-    // Helper: Get current time (epoch seconds)
-
-
-    func now() : Nat {
-        Int.abs(Time.now() / 1_000_000_000)
-    };
-
-    // --- Multi-Organization Helper Functions ---
-    
-    // Helper: Create text key for Trie operations
-    private func textKey(t: Text) : Trie.Key<Text> {
-        { key = t; hash = Text.hash(t) }
-    };
-    
-    // Helper: Validate organization exists
-    private func validateOrgExists(orgId: OrgID) : ?OrgData {
-        Trie.find(organizations, textKey(orgId), Text.equal)
-    };
-    
-    // Helper: Update organization data
-    private func updateOrgData(orgId: OrgID, orgData: OrgData) {
-        organizations := Trie.replace(
-            organizations,
-            textKey(orgId),
-            Text.equal,
-            ?orgData
-        ).0;
-    };
-    
-    // Helper: Check if user is trusted awarder in organization
-    private func isOrgTrustedAwarder(orgData: OrgData, user: Principal) : Bool {
-        Array.find<(Principal, Text)>(
-            orgData.trustedAwarders,
-            func((p, _)) = Principal.equal(p, user)
-        ) != null
-    };
-    
-    // Helper: Get user balance in organization
-    private func getOrgUserBalance(orgData: OrgData, user: Principal) : Nat {
-        switch (Array.find<(Principal, Nat)>(
-            orgData.userBalances,
-            func((p, _)) = Principal.equal(p, user)
-        )) {
-            case (?(_, balance)) { balance };
-            case null { 0 };
+    var success : Nat = 0;
+    for ((to, amount, r) in pairs.vals()) {
+      if (amount == 0 or caller == to or isBlacklisted_(caller) or isBlacklisted_(to)) { if (atomic) return "Error: Atomic fail" } else {
+        let bump = bumpDaily_(caller, amount);
+        if (not bump.ok) { if (atomic) return "Error: Atomic daily cap fail" } else {
+          ignore applyDecay_(to); let bal = getBalance_(to); putBalance_(to, bal + amount); addTx(#Award, caller, to, amount, r); touchActivity_(to); success += 1
         }
+      }
     };
-    
-    // Helper: Find organization that user belongs to (as admin or trusted awarder)
-    private func getUserOrganization(user: Principal) : ?Text {
-        for ((orgId, orgData) in Trie.iter(organizations)) {
-            // Check if user is admin
-            if (Principal.equal(orgData.admin, user)) {
-                return ?orgId;
-            };
-            // Check if user is trusted awarder
-            if (isOrgTrustedAwarder(orgData, user)) {
-                return ?orgId;
-            };
+    "Success: awarded to " # Nat.toText(success) # " users"
+  };
+
+  public shared({ caller }) func revokeRep(from: Principal, amount: Nat, reason: ?Text) : async Text {
+    if (paused) return "Error: Paused";
+    if (caller != owner) return "Error: Only owner can revoke";
+    if (isBlacklisted_(from)) return "Error: Blacklisted principal";
+    if (amount == 0) return "Error: Amount must be > 0";
+    ignore applyDecay_(from);
+    let bal = getBalance_(from);
+    if (bal == 0) return "Error: User has no points";
+    if (bal < amount) return "Error: Insufficient balance to revoke";
+    putBalance_(from, Nat.sub(bal, amount)); addTx(#Revoke, caller, from, amount, reason); touchActivity_(from);
+    Debug.print("Revoked " # Nat.toText(amount) # " from " # Principal.toText(from)); "Success: " # Nat.toText(amount) # " points revoked"
+  };
+
+  public shared({ caller }) func resetUser(user: Principal, reason: ?Text) : async Text {
+    if (caller != owner) return "Error: Only owner";
+    putBalance_(user, 0); addTx(#Revoke, caller, user, 0, reason); touchActivity_(user); "Success: user reset"
+  };
+
+  // ——— Queries ———
+  public query func getBalance(p: Principal) : async Nat { getBalance_(p) };
+
+  public query func getTrustedAwarders() : async [Awarder] {
+    let buf = Buffer.Buffer<Awarder>(0);
+    for ((k, v) in Trie.iter(trustedAwarders)) { buf.add({ id = k; name = v }) };
+    Buffer.toArray(buf)
+  };
+
+  public query func getTransactionHistory() : async [Transaction] {
+    let n = transactionHistory.size();
+    Array.tabulate<Transaction>(
+      n,
+      func(i) = transactionHistory[n - 1 - i]  // flip the index
+    )
+  };
+
+
+  public query func getTransactionsPaged(offset: Nat, limit: Nat) : async [Transaction] {
+    let n = transactionHistory.size();
+    if (offset >= n) { return [] };
+
+    let end  = Nat.sub(n, offset);          // slice end (exclusive)
+    let take = Nat.min(limit, end);
+
+    Array.tabulate<Transaction>(
+      take,
+      func(i) = transactionHistory[end - 1 - i]  // reverse within the window
+    )
+  };
+
+
+  public query func getTransactionsByUser(user: Principal) : async [Transaction] {
+    Array.filter<Transaction>(transactionHistory, func(tx) { Principal.equal(tx.from, user) or Principal.equal(tx.to, user) })
+  };
+
+  public query func findTransactionsByReason(substr: Text, limit: Nat) : async [Transaction] {
+    if (limit == 0) { return []; };
+
+    let buf = Buffer.Buffer<Transaction>(0);
+    let n = transactionHistory.size();
+
+    var i : Nat = 0;
+    while (i < n and buf.size() < limit) {
+      let tx = transactionHistory[i];
+      switch (tx.reason) {
+        case (?r) {
+          if (textContains_(r, substr)) { buf.add(tx) };
         };
-        null
-    };
-    
-    // Helper: Update user balance in organization
-    private func updateOrgUserBalance(orgData: OrgData, user: Principal, newBalance: Nat) : OrgData {
-        let updatedBalances = Array.map<(Principal, Nat), (Principal, Nat)>(
-            orgData.userBalances,
-            func((p, balance)) = if (Principal.equal(p, user)) (p, newBalance) else (p, balance)
-        );
-        
-        // If user not found, add them
-        let finalBalances = if (Array.find<(Principal, Nat)>(
-            orgData.userBalances,
-            func((p, _)) = Principal.equal(p, user)
-        ) == null) {
-            Array.append(updatedBalances, [(user, newBalance)])
-        } else {
-            updatedBalances
-        };
-        
-        {
-            admin = orgData.admin;
-            trustedAwarders = orgData.trustedAwarders;
-            userBalances = finalBalances;
-            dailyMinted = orgData.dailyMinted;
-            lastMintTimestamp = orgData.lastMintTimestamp;
-            userDecayInfo = orgData.userDecayInfo;
-            transactionHistory = orgData.transactionHistory;
-            nextTransactionId = orgData.nextTransactionId;
-            totalDecayedPoints = orgData.totalDecayedPoints;
-            lastGlobalDecayProcess = orgData.lastGlobalDecayProcess;
-        }
+        case null {};
+      };
+      i += 1;
     };
 
-    // Helper: Add transaction to log
-    private func addTransaction(txType: TransactionType, from: Principal, to: Principal, amount: Nat, reason: ?Text) {
-        let transaction : Transaction = {
-            id = _nextTransactionId;
-            transactionType = txType;
-            from = from;
-            to = to;
-            amount = amount;
-            timestamp = now();
-            reason = reason;
-        };
-        
-        let buffer = Buffer.fromArray<Transaction>(_transactionHistory);
-        buffer.add(transaction);
-        _transactionHistory := Buffer.toArray(buffer);
-        _nextTransactionId += 1;
+    Buffer.toArray(buf)
+  };
+
+
+
+  func textContains_(hay: Text, needle: Text) : Bool {
+    // build char arrays
+    let hb = Buffer.Buffer<Char>(0);
+    for (c in hay.chars()) { hb.add(c) };
+    let nb = Buffer.Buffer<Char>(0);
+    for (c in needle.chars()) { nb.add(c) };
+
+    let H = Buffer.toArray(hb);
+    let N = Buffer.toArray(nb);
+
+    let hLen = H.size();
+    let nLen = N.size();
+
+    if (nLen == 0) return true;
+    if (nLen > hLen) return false;
+
+    let max = Nat.sub(hLen, nLen); // <=— safe subtraction to avoid that mc type errors
+
+    var i : Nat = 0;
+    label L loop {
+      if (i > max) break L;
+      var j : Nat = 0;
+      var ok = true;
+      label K loop {
+        if (j >= nLen) break K;
+        if (H[i + j] != N[j]) { ok := false; break K };
+        j += 1
+      };
+      if (ok) return true;
+      i += 1
+    };
+    false
+  };
+
+
+  public query func getTransactionById(id: Nat) : async ?Transaction { Array.find<Transaction>(transactionHistory, func(tx) { tx.id == id }) };
+  public query func getTransactionCount() : async Nat { transactionHistory.size() };
+  public query func getDecayConfig() : async DecayConfig { decayConfig };
+  public query func getUserDecayInfo(p: Principal) : async ?UserDecayInfo { Trie.get(userDecayInfo, pKey(p), Principal.equal) };
+  public query func previewDecayAmount(p: Principal) : async Nat { calcDecay_(p, getBalance_(p)) };
+
+  public query func getBalanceWithDetails(p: Principal) : async { rawBalance: Nat; currentBalance: Nat; pendingDecay: Nat; decayInfo: ?UserDecayInfo } {
+    let raw = getBalance_(p); let pending = calcDecay_(p, raw); let current = if (raw >= pending) Nat.sub(raw, pending) else 0; let info = Trie.get(userDecayInfo, pKey(p), Principal.equal);
+    { rawBalance = raw; currentBalance = current; pendingDecay = pending; decayInfo = info }
+  };
+
+  public query func getDecayStatistics() : async { totalDecayedPoints: Nat; lastGlobalDecayProcess: Nat; configEnabled: Bool } {
+    { totalDecayedPoints; lastGlobalDecayProcess; configEnabled = decayConfig.enabled }
+  };
+
+
+  public query func leaderboard(top: Nat, offset: Nat) : async [(Principal, Nat)] {
+    // collect pairs
+    let pairs = Buffer.Buffer<(Principal, Nat)>(0);
+    for ((p, v) in Trie.iter(balances)) { pairs.add((p, v)) };
+    let base : [(Principal, Nat)] = Buffer.toArray(pairs);
+
+    // selection sort (descending by balance) on mutable view
+    let mv : [var (Principal, Nat)] = Array.thaw<(Principal, Nat)>(base);
+    let n = mv.size();
+
+    var i : Nat = 0;
+    label outer loop {
+      if (i >= n) break outer;
+      var maxIdx : Nat = i;
+      var j : Nat = i + 1;
+      label inner loop {
+        if (j >= n) break inner;
+        if (mv[j].1 > mv[maxIdx].1) { maxIdx := j };
+        j += 1;
+      };
+      if (maxIdx != i) {
+        let tmp = mv[i];
+        mv[i] := mv[maxIdx];
+        mv[maxIdx] := tmp;
+      };
+      i += 1;
     };
 
-    // --- DECAY SYSTEM FUNCTIONS ---
+    let sorted : [(Principal, Nat)] = Array.freeze<(Principal, Nat)>(mv);
 
-    // Helper: Initialize user decay info if not exists
-    private func initializeUserDecayInfo(user: Principal) : UserDecayInfo {
-        let userKey = { key = user; hash = Principal.hash(user) };
-        let currentTime = now();
-        
-        switch (Trie.get<Principal, UserDecayInfo>(userDecayInfo, userKey, Principal.equal)) {
-            case (?info) info;
-            case null {
-                let newInfo : UserDecayInfo = {
-                    lastDecayTime = currentTime;
-                    registrationTime = currentTime;
-                    lastActivityTime = currentTime;
-                    totalDecayed = 0;
-                };
-                userDecayInfo := Trie.put<Principal, UserDecayInfo>(userDecayInfo, userKey, Principal.equal, newInfo).0;
-                newInfo
-            };
-        }
+    // paging without `-` operator on Nat
+    if (offset >= n) return [];
+    let remaining : Nat = Nat.sub(n, offset);                // safe subtraction
+    let end : Nat = if (top > remaining) n else offset + top;
+    Array.subArray<(Principal, Nat)>(sorted, offset, Nat.sub(end, offset))
+  };
+
+
+  public query func myStats(user: Principal) : async { balance: Nat; lifetimeAwarded: Nat; lifetimeRevoked: Nat; totalDecayed: Nat; lastActivity: Nat } {
+    var awarded : Nat = 0; var revoked : Nat = 0; var last : Nat = 0;
+    for (tx in transactionHistory.vals()) {
+      if (tx.to == user and tx.transactionType == #Award) { awarded += tx.amount; if (tx.timestamp > last) { last := tx.timestamp } };
+      if (tx.to == user and tx.transactionType == #Revoke) { revoked += tx.amount; if (tx.timestamp > last) { last := tx.timestamp } };
+      if (tx.to == user and tx.transactionType == #Decay) { if (tx.timestamp > last) { last := tx.timestamp } }
+    };
+    let dec = switch (Trie.get(userDecayInfo, pKey(user), Principal.equal)) { case (?i) i.totalDecayed; case null 0 };
+    { balance = getBalance_(user); lifetimeAwarded = awarded; lifetimeRevoked = revoked; totalDecayed = dec; lastActivity = last }
+  };
+
+  public query func awarderStats(awardee: Principal) : async [AwarderBreakdown] {
+    // aggregate awards to `awardee` by awarder
+    let map : Trie.Trie<Principal, (Nat, Nat)> = Trie.empty();
+    var tmp = map;
+    for (tx in transactionHistory.vals()) {
+      if (tx.transactionType == #Award and tx.to == awardee) {
+        let key = pKey(tx.from);
+        let cur = switch (Trie.get(tmp, key, Principal.equal)) { case (?v) v; case null (0, 0) };
+        let last = if (tx.timestamp > cur.1) tx.timestamp else cur.1;
+        tmp := Trie.put(tmp, key, Principal.equal, (cur.0 + tx.amount, last)).0;
+      }
+    };
+    let buf = Buffer.Buffer<AwarderBreakdown>(0);
+    for ((awarder, (total, last)) in Trie.iter(tmp)) { buf.add({ awarder = awarder; total = total; lastAward = last }) };
+    Buffer.toArray(buf)
+  };
+
+  public query func orgPulse(since: Nat) : async { awards: Nat; revokes: Nat; decays: Nat } {
+    var a : Nat = 0; var r : Nat = 0; var d : Nat = 0; for (tx in transactionHistory.vals()) { if (tx.timestamp >= since) {
+      switch (tx.transactionType) { case (#Award) { a += 1 }; case (#Revoke) { r += 1 }; case (#Decay) { d += 1 } }
+    } }; { awards = a; revokes = r; decays = d }
+  };
+
+
+  // Top-up queries
+  public query func getTopUpsPaged(offset: Nat, limit: Nat) : async [TopUp] {
+    let n = topUps.size();
+    if (offset >= n) return [];
+
+    // how many items remain after the offset
+    let remaining : Nat = Nat.sub(n, offset);
+
+    // choose how many to take safely
+    let take : Nat = if (limit > remaining) remaining else limit;
+
+    // starting index n - (offset + take), computed safely
+    let start : Nat = Nat.sub(n, offset + take);
+
+    Array.subArray<TopUp>(topUps, start, take)
+  };
+
+
+
+  public query func getTopUpCount() : async Nat { topUps.size() };
+
+  public query func version() : async Text { VERSION };
+
+
+  public query func health() : async {
+    paused: Bool;
+    cycles: Nat;
+    users: Nat;
+    txCount: Nat;
+    topUpCount: Nat;
+    decayConfigHash: Nat
+  } {
+    let cyclesNow : Nat = Cycles.balance();
+    let usersNow  : Nat = Trie.size(balances);
+    let txNow     : Nat = transactionHistory.size();
+    let topUpNow  : Nat = topUps.size();
+    let dhash     : Nat = decayHash_();
+
+    {
+      paused          = paused;
+      cycles          = cyclesNow;
+      users           = usersNow;
+      txCount         = txNow;
+      topUpCount      = topUpNow;
+      decayConfigHash = dhash;
+    }
+  };
+
+
+  // ——— Maintenance ———
+  public shared({ caller }) func processBatchDecay() : async Text {
+    if (caller != owner) return "Error: Only owner";
+    let pairs = Buffer.Buffer<(Principal, Nat)>(0); for (entry in Trie.iter(balances)) { pairs.add(entry) };
+    let arr = Buffer.toArray(pairs);
+    var usersProcessed : Nat = 0; var total : Nat = 0;
+    for ((p, bal) in arr.vals()) { if (bal > 0) { let d = applyDecay_(p); if (d > 0) { usersProcessed += 1; total += d } } };
+    lastGlobalDecayProcess := now(); Debug.print("Batch decay: " # Nat.toText(usersProcessed) # " users, " # Nat.toText(total) # " points");
+    "Success: Processed " # Nat.toText(usersProcessed) # " users; total decay " # Nat.toText(total)
+  };
+
+  public shared({ caller }) func triggerManualDecay() : async Text {
+    if (caller != owner) return "Error: Only owner"; await processBatchDecay()
+  };
+
+
+  // ——— Upgrade hooks ———
+  system func postupgrade() { if (decayConfig.enabled and lastGlobalDecayProcess > 0 and lastGlobalDecayProcess > decayConfig.decayInterval) { lastGlobalDecayProcess := lastGlobalDecayProcess - decayConfig.decayInterval } };
+
+
+  // === CYCLES ===
+  public func wallet_receive() : async Nat {
+    let avail = Cycles.available();
+    let accepted = Cycles.accept<system>(avail);   // <- add <system>
+    addTopUp(Principal.fromActor(this), accepted);
+    accepted
+  };
+
+
+
+  // this will be only used when canister is archieved back to pool
+  public shared({ caller }) func withdrawCycles(to: Principal, amount: Nat) : async Text {
+    if (caller != owner) return "Error: Only owner";
+    if (amount == 0) return "Error: Amount must be > 0";
+
+    // keep some reply buffer so we don't starve the canister
+    let replyBuffer : Nat = 100_000_000_000; // ~0.1T cycles (tune)
+    let bal = Cycles.balance();
+    if (bal <= replyBuffer or amount > bal - replyBuffer) {
+      return "Error: Insufficient cycles (balance=" # Nat.toText(bal) # ")";
     };
 
-    // Helper: Calculate decay amount for a user
-    private func calculateDecayAmount(user: Principal, currentBalance: Nat) : Nat {
-        if (not decayConfig.enabled) return 0;
-        if (currentBalance < decayConfig.minThreshold) return 0;
+    type Wallet = actor { wallet_receive : () -> async Nat };
+    let target : Wallet = actor (Principal.toText(to));
 
-        let _userKey = { key = user; hash = Principal.hash(user) };
-        let info = initializeUserDecayInfo(user);
-        let currentTime = now();
+    try {
+      Cycles.add(amount);                // <-- attach cycles (old moc-compatible)
+      let accepted = await target.wallet_receive();
+      if (accepted == amount) {
+        "Success: transferred " # Nat.toText(amount) # " cycles"
+      } else {
+        "Warning: target accepted " # Nat.toText(accepted) # " / " # Nat.toText(amount) # " cycles"
+      }
+    } catch (e) {
+      "Error: transfer failed"
+    }
+  };
 
-        // Check grace period
-        if (currentTime < info.registrationTime + decayConfig.gracePeriod) {
-            return 0;
-        };
 
-        // Check if decay interval has passed
-        if (currentTime < info.lastDecayTime + decayConfig.decayInterval) {
-            return 0;
-        };
+  //query function to check cycles balance in child
+  public query func cycles_balance() : async Nat { Cycles.balance() };
 
-        // Calculate number of decay periods passed (safe subtraction using Nat.sub)
-        let timeSinceLastDecay = if (currentTime >= info.lastDecayTime) {
-            Nat.sub(currentTime, info.lastDecayTime)
-        } else {
-            0
-        };
-        let decayPeriods = timeSinceLastDecay / decayConfig.decayInterval;
-        
-        if (decayPeriods == 0) return 0;
 
-        // Calculate simple decay amount (avoid complex loops)
-        let decayAmount = (currentBalance * decayConfig.decayRate * decayPeriods) / 10000;
-        
-        // Ensure we don't decay below minimum threshold
-        if (currentBalance >= decayAmount) {
-            let newBalance = Nat.sub(currentBalance, decayAmount);
-            if (newBalance < decayConfig.minThreshold and currentBalance >= decayConfig.minThreshold) {
-                return Nat.sub(currentBalance, decayConfig.minThreshold);
-            } else {
-                return decayAmount;
-            };
-        } else {
-            // If decay would take balance to 0, decay to minimum threshold instead
-            if (currentBalance > decayConfig.minThreshold) {
-                return Nat.sub(currentBalance, decayConfig.minThreshold);
-            } else {
-                return 0;
-            };
-        };
+  //a separate function to keep record of all sorts of cycles related transaction
+  public shared({ caller }) func topUp() : async Nat {
+    let avail = Cycles.available();
+    let accepted = Cycles.accept<system>(avail);   // <- add <system>
+    addTopUp(caller, accepted);
+    accepted
+  };
+
+
+  // ——— Snapshot / Audit ———
+  public query func snapshotHash() : async Nat { stateHash_() };
+
+  // ——— DX Events ———
+  public shared({ caller }) func emitEvent(kind: Text, payload: Blob) : async Text {
+    if (caller != owner and (switch (parent) { case (?p) caller != p; case null true })) return "Error: Not authorized";
+    emit(kind, payload); "Success: event emitted"
+  };
+
+  // ——— Internal hashing helpers ———
+  func mix64_(h: Nat64, v: Nat64) : Nat64 { (h ^ v) * 0x0000000001000001 };
+
+  func decayHash_() : Nat {
+    var h : Nat64 = 0xCBF29CE484222325;
+    h := mix64_(h, Nat64.fromNat(decayConfig.decayRate));
+    h := mix64_(h, Nat64.fromNat(decayConfig.decayInterval));
+    h := mix64_(h, Nat64.fromNat(decayConfig.minThreshold));
+    h := mix64_(h, Nat64.fromNat(decayConfig.gracePeriod));
+    h := mix64_(h, if (decayConfig.enabled) 1 else 0);
+    Nat64.toNat(h)
+  };
+
+  func stateHash_() : Nat {
+    var h : Nat64 = 0xCBF29CE484222325;
+
+    // balances
+    for ((p, v) in Trie.iter(balances)) {
+      // use Principal.hash(p) (Hash/Nat32) -> Nat -> Nat64
+      h := mix64_(h, Nat64.fromNat(Nat32.toNat(Principal.hash(p))));
+      h := mix64_(h, Nat64.fromNat(v));
     };
 
-    // Helper: Apply decay to a user
-    private func applyDecayToUser(user: Principal) : Nat {
-        let userKey = { key = user; hash = Principal.hash(user) };
-        let currentBalance = switch (Trie.get<Principal, Nat>(_balances, userKey, Principal.equal)) {
-            case (?b) b;
-            case null 0;
-        };
-
-        if (currentBalance == 0) return 0;
-
-        let decayAmount = calculateDecayAmount(user, currentBalance);
-        if (decayAmount == 0) return 0;
-
-        let newBalance = if (currentBalance >= decayAmount) {
-            Nat.sub(currentBalance, decayAmount)
-        } else {
-            0
-        };
-        
-        // Update balance
-        _balances := Trie.put<Principal, Nat>(_balances, userKey, Principal.equal, newBalance).0;
-
-        // Update user decay info with precise interval rollover
-        let info = initializeUserDecayInfo(user);
-        let currentTime = now();
-        
-        // Calculate how many complete intervals have passed
-        let timeSinceLastDecay = if (currentTime >= info.lastDecayTime) {
-            Nat.sub(currentTime, info.lastDecayTime)
-        } else { 0 };
-        
-        let intervalsElapsed = if (decayConfig.decayInterval > 0) {
-            timeSinceLastDecay / decayConfig.decayInterval
-        } else { 1 };
-        
-        // Roll lastDecayTime forward by complete intervals to prevent drift
-        let newLastDecayTime = info.lastDecayTime + (intervalsElapsed * decayConfig.decayInterval);
-        
-        let updatedInfo = {
-            lastDecayTime = newLastDecayTime;
-            registrationTime = info.registrationTime;
-            lastActivityTime = info.lastActivityTime;
-            totalDecayed = info.totalDecayed + decayAmount;
-        };
-        userDecayInfo := Trie.put<Principal, UserDecayInfo>(userDecayInfo, userKey, Principal.equal, updatedInfo).0;
-
-        // Update global statistics
-        totalDecayedPoints += decayAmount;
-
-        // Log the decay transaction
-        addTransaction(#Decay, user, user, decayAmount, ?"Automatic point decay");
-
-        Debug.print("Applied decay: " # Nat.toText(decayAmount) # " points to user " # Principal.toText(user));
-        
-        decayAmount
-    };
-
-    // Apply decay to a user within a specific organization
-    private func applyDecayToUserInOrg(orgId: OrgID, user: Principal) : Nat {
-        switch (validateOrgExists(orgId)) {
-            case null { return 0; }; // Organization doesn't exist
-            case (?orgData) {
-                // Get user's balance in this organization
-                let userBalance = switch (Array.find<(Principal, Nat)>(orgData.userBalances, func(entry) = Principal.equal(entry.0, user))) {
-                    case null { 0 };
-                    case (?(_, balance)) { balance };
-                };
-
-                if (userBalance == 0) return 0;
-
-                let decayAmount = calculateDecayAmountInOrg(orgId, user, userBalance);
-                if (decayAmount == 0) return 0;
-
-                let newBalance = if (userBalance >= decayAmount) {
-                    Nat.sub(userBalance, decayAmount)
-                } else {
-                    0
-                };
-
-                // Update the user's balance in the organization
-                let updatedUserBalances = Array.map<(Principal, Nat), (Principal, Nat)>(
-                    orgData.userBalances,
-                    func(entry: (Principal, Nat)) : (Principal, Nat) {
-                        if (Principal.equal(entry.0, user)) {
-                            (user, newBalance)
-                        } else {
-                            entry
-                        }
-                    }
-                );
-
-                // Update user decay info in the organization
-                let currentTime = now();
-                let info = getOrInitUserDecayInfoInOrg(orgId, user);
-                
-                // Calculate how many complete intervals have passed
-                let timeSinceLastDecay = if (currentTime >= info.lastDecayTime) {
-                    Nat.sub(currentTime, info.lastDecayTime)
-                } else { 0 };
-                
-                let intervalsElapsed = if (decayConfig.decayInterval > 0) {
-                    timeSinceLastDecay / decayConfig.decayInterval
-                } else { 1 };
-                
-                // Roll lastDecayTime forward by complete intervals to prevent drift
-                let newLastDecayTime = info.lastDecayTime + (intervalsElapsed * decayConfig.decayInterval);
-                
-                let updatedDecayInfo = {
-                    lastDecayTime = newLastDecayTime;
-                    registrationTime = info.registrationTime;
-                    lastActivityTime = info.lastActivityTime;
-                    totalDecayed = info.totalDecayed + decayAmount;
-                };
-
-                let updatedUserDecayInfo = Array.map<(Principal, UserDecayInfo), (Principal, UserDecayInfo)>(
-                    orgData.userDecayInfo,
-                    func(entry: (Principal, UserDecayInfo)) : (Principal, UserDecayInfo) {
-                        if (Principal.equal(entry.0, user)) {
-                            (user, updatedDecayInfo)
-                        } else {
-                            entry
-                        }
-                    }
-                );
-
-                // Add decay transaction to organization's history
-                let decayTransaction : Transaction = {
-                    id = orgData.nextTransactionId;
-                    transactionType = #Decay;
-                    from = user;
-                    to = user;
-                    amount = decayAmount;
-                    timestamp = now();
-                    reason = ?"Automatic point decay";
-                };
-
-                let updatedTransactionHistory = Array.append(orgData.transactionHistory, [decayTransaction]);
-
-                // Update organization data
-                let updatedOrgData: OrgData = {
-                    admin = orgData.admin;
-                    trustedAwarders = orgData.trustedAwarders;
-                    userBalances = updatedUserBalances;
-                    dailyMinted = orgData.dailyMinted;
-                    lastMintTimestamp = orgData.lastMintTimestamp;
-                    userDecayInfo = updatedUserDecayInfo;
-                    transactionHistory = updatedTransactionHistory;
-                    nextTransactionId = orgData.nextTransactionId + 1;
-                    totalDecayedPoints = orgData.totalDecayedPoints + decayAmount;
-                    lastGlobalDecayProcess = orgData.lastGlobalDecayProcess;
-                };
-
-                organizations := Trie.put<OrgID, OrgData>(organizations, textKey(orgId), Text.equal, updatedOrgData).0;
-
-                Debug.print("Applied decay in org " # orgId # ": " # Nat.toText(decayAmount) # " points to user " # Principal.toText(user));
-                
-                decayAmount
-            };
-        };
-    };
-
-    // Calculate decay amount for a user within a specific organization
-    private func calculateDecayAmountInOrg(orgId: OrgID, user: Principal, currentBalance: Nat) : Nat {
-        if (not decayConfig.enabled) return 0;
-        if (currentBalance < decayConfig.minThreshold) return 0;
-
-        let info = getOrInitUserDecayInfoInOrg(orgId, user);
-        let currentTime = now();
-
-        // Check grace period
-        if (currentTime < info.registrationTime + decayConfig.gracePeriod) {
-            return 0;
-        };
-
-        // Check if decay interval has passed
-        if (currentTime < info.lastDecayTime + decayConfig.decayInterval) {
-            return 0;
-        };
-
-        // Calculate number of decay periods passed
-        let timeSinceLastDecay = if (currentTime >= info.lastDecayTime) {
-            Nat.sub(currentTime, info.lastDecayTime)
-        } else {
-            0
-        };
-        let decayPeriods = timeSinceLastDecay / decayConfig.decayInterval;
-        
-        if (decayPeriods == 0) return 0;
-
-        // Calculate simple decay amount
-        let decayAmount = (currentBalance * decayConfig.decayRate * decayPeriods) / 10000;
-        
-        // Ensure we don't decay below minimum threshold
-        if (currentBalance >= decayAmount) {
-            let newBalance = Nat.sub(currentBalance, decayAmount);
-            if (newBalance < decayConfig.minThreshold and currentBalance >= decayConfig.minThreshold) {
-                return Nat.sub(currentBalance, decayConfig.minThreshold);
-            } else {
-                return decayAmount;
-            };
-        } else {
-            // If decay would take balance to 0, decay to minimum threshold instead
-            if (currentBalance > decayConfig.minThreshold) {
-                return Nat.sub(currentBalance, decayConfig.minThreshold);
-            } else {
-                return 0;
-            };
-        };
-    };
-
-    // Get or initialize user decay info within a specific organization
-    private func getOrInitUserDecayInfoInOrg(orgId: OrgID, user: Principal) : UserDecayInfo {
-        switch (validateOrgExists(orgId)) {
-            case null {
-                // Return default if org doesn't exist
-                let currentTime = now();
-                {
-                    lastDecayTime = currentTime;
-                    registrationTime = currentTime;
-                    lastActivityTime = currentTime;
-                    totalDecayed = 0;
-                }
-            };
-            case (?orgData) {
-                switch (Array.find<(Principal, UserDecayInfo)>(orgData.userDecayInfo, func(entry) = Principal.equal(entry.0, user))) {
-                    case (?(_, info)) { info };
-                    case null {
-                        // Initialize new decay info for this user in this org
-                        let currentTime = now();
-                        let newInfo : UserDecayInfo = {
-                            lastDecayTime = currentTime;
-                            registrationTime = currentTime;
-                            lastActivityTime = currentTime;
-                            totalDecayed = 0;
-                        };
-                        
-                        // Add to organization's userDecayInfo
-                        let updatedUserDecayInfo = Array.append(orgData.userDecayInfo, [(user, newInfo)]);
-                        let updatedOrgData: OrgData = {
-                            admin = orgData.admin;
-                            trustedAwarders = orgData.trustedAwarders;
-                            userBalances = orgData.userBalances;
-                            dailyMinted = orgData.dailyMinted;
-                            lastMintTimestamp = orgData.lastMintTimestamp;
-                            userDecayInfo = updatedUserDecayInfo;
-                            transactionHistory = orgData.transactionHistory;
-                            nextTransactionId = orgData.nextTransactionId;
-                            totalDecayedPoints = orgData.totalDecayedPoints;
-                            lastGlobalDecayProcess = orgData.lastGlobalDecayProcess;
-                        };
-                        organizations := Trie.put<OrgID, OrgData>(organizations, textKey(orgId), Text.equal, updatedOrgData).0;
-                        
-                        newInfo
-                    };
-                };
-            };
-        };
-    };
-
- /// Register a new organization
-    public shared(msg) func registerOrg(orgId: OrgID) : async Text {
-        // Check if org already exists
-        switch (validateOrgExists(orgId)) {
-            case (?_) { return "Error: Organization already exists" };
-            case null { };
-        };
-
-        let caller = msg.caller;
-
-        // Create new organization data
-        let orgData: OrgData = {
-            admin = caller;
-            trustedAwarders = [(caller, "Admin")]; // Admin is also a trusted awarder by default
-            userBalances = [];
-            dailyMinted = [];
-            lastMintTimestamp = [];
-            userDecayInfo = [];
-            transactionHistory = [];
-            nextTransactionId = 1;
-            totalDecayedPoints = 0;
-            lastGlobalDecayProcess = 0;
-        };
-
-        updateOrgData(orgId, orgData);
-        "Success: Organization registered successfully"
-    };
-
-    // --- 1️⃣ awardRep: Award reputation in an organization ---
-public shared({caller}) func awardRep(orgId: OrgID, to: Principal, amount: Nat, reason: ?Text) : async Text {
-    Debug.print("awardRep called by " # Principal.toText(caller));
-    
-    if (amount == 0) {
-        return "Error: Amount must be greater than 0";
-    };
-
-    switch (validateOrgExists(orgId)) {
-        case null { return "Error: Organization does not exist" };
-        case (?orgData) {
-            // Check if caller is a trusted awarder
-            if (not isOrgTrustedAwarder(orgData, caller)) {
-                return "Error: Caller is not a trusted awarder";
-            };
-
-            // Check: cannot award to self (this is valid - awarders can award to others)
-            if (Principal.equal(caller, to)) {
-                return "Error: Cannot award reputation to yourself";
-            };
-
-            // Check daily mint limit
-            let currentTime = now();
-            let dailyLimit: Nat = 50; // Standardized daily limit
-            
-            let lastMintTime = switch (Array.find<(Principal, Nat)>(
-                orgData.lastMintTimestamp,
-                func((p, _)) = Principal.equal(p, caller)
-            )) {
-                case (?(_, time)) { time };
-                case null { 0 };
-            };
-            
-            let dailyMintedAmount = if (currentTime >= lastMintTime + 86400 or lastMintTime == 0) { // 24 hours
-                0
-            } else {
-                switch (Array.find<(Principal, Nat)>(
-                    orgData.dailyMinted,
-                    func((p, _)) = Principal.equal(p, caller)
-                )) {
-                    case (?(_, minted)) { minted };
-                    case null { 0 };
-                }
-            };
-
-            if (dailyMintedAmount + amount > dailyLimit) {
-                return "Error: Daily mint cap exceeded";
-            };
-
-            // Apply decay calculation first before awarding
-            let _decayAmount = applyDecayToUserInOrg(orgId, to);
-
-            // Refresh org data after decay application
-            switch (validateOrgExists(orgId)) {
-                case null { return "Error: Organization was modified during processing" };
-                case (?refreshedOrgData) {
-                    // Update user balance
-                    let currentBalance = getOrgUserBalance(refreshedOrgData, to);
-                    let updatedOrgData = updateOrgUserBalance(refreshedOrgData, to, currentBalance + amount);
-                    
-                    // Update daily minted tracking
-                    let updatedDailyMinted = Array.map<(Principal, Nat), (Principal, Nat)>(
-                        updatedOrgData.dailyMinted,
-                        func((p, minted)) = if (Principal.equal(p, caller)) (p, dailyMintedAmount + amount) else (p, minted)
-                    );
-                    
-                    let finalDailyMinted = if (Array.find<(Principal, Nat)>(
-                        updatedOrgData.dailyMinted,
-                        func((p, _)) = Principal.equal(p, caller)
-                    ) == null) {
-                        Array.append(updatedDailyMinted, [(caller, amount)])
-                    } else {
-                        updatedDailyMinted
-                    };
-                    
-                    // Update last mint timestamp
-                    let updatedLastMintTime = Array.map<(Principal, Nat), (Principal, Nat)>(
-                        updatedOrgData.lastMintTimestamp,
-                        func((p, time)) = if (Principal.equal(p, caller)) (p, currentTime) else (p, time)
-                    );
-                    
-                    let finalLastMintTime = if (Array.find<(Principal, Nat)>(
-                        updatedOrgData.lastMintTimestamp,
-                        func((p, _)) = Principal.equal(p, caller)
-                    ) == null) {
-                        Array.append(updatedLastMintTime, [(caller, currentTime)])
-                    } else {
-                        updatedLastMintTime
-                    };
-                    
-                    // Create transaction record
-                    let transaction: Transaction = {
-                        id = updatedOrgData.nextTransactionId;
-                        transactionType = #Award;
-                        from = caller;
-                        to = to;
-                        amount = amount;
-                        timestamp = currentTime;
-                        reason = reason;
-                    };
-                    
-                    let finalOrgData = {
-                        admin = updatedOrgData.admin;
-                        trustedAwarders = updatedOrgData.trustedAwarders;
-                        userBalances = updatedOrgData.userBalances;
-                        dailyMinted = finalDailyMinted;
-                        lastMintTimestamp = finalLastMintTime;
-                        userDecayInfo = updatedOrgData.userDecayInfo;
-                        transactionHistory = Array.append(updatedOrgData.transactionHistory, [transaction]);
-                        nextTransactionId = updatedOrgData.nextTransactionId + 1;
-                        totalDecayedPoints = updatedOrgData.totalDecayedPoints;
-                        lastGlobalDecayProcess = updatedOrgData.lastGlobalDecayProcess;
-                    };
-                    
-                    updateOrgData(orgId, finalOrgData);
-                    Debug.print("Rep awarded: " # Nat.toText(amount) # " to " # Principal.toText(to));
-                    return "Success: " # Nat.toText(amount) # " reputation points awarded to " # Principal.toText(to) # ".";
-                }; // close refreshedOrgData case
-            }; // close nested switch
-        }; // close orgData case
-    }; // close main switch
-}; // close function
-    
-    // --- 2️⃣ revokeRep: Revoke reputation from a user in an organization (admin only) ---
-public shared({caller}) func revokeRep(orgId: OrgID, from: Principal, amount: Nat, reason: ?Text) : async Text {
-    if (amount == 0) {
-        return "Error: Amount must be greater than 0";
-    };
-
-    switch (validateOrgExists(orgId)) {
-        case null { return "Error: Organization does not exist" };
-        case (?orgData) {
-            // Only admin can revoke reputation
-            if (not Principal.equal(caller, orgData.admin)) {
-                return "Error: Only admin can revoke reputation";
-            };
-
-            // Apply decay calculation first before revoking
-            let _decayAmount = applyDecayToUserInOrg(orgId, from);
-
-            // Refresh org data after decay application
-            switch (validateOrgExists(orgId)) {
-                case null { return "Error: Organization was modified during processing" };
-                case (?refreshedOrgData) {
-                    let currentBalance = getOrgUserBalance(refreshedOrgData, from);
-                    
-                    // Check if user has enough reputation to revoke
-                    if (currentBalance < amount) {
-                        return "Error: User does not have enough reputation points (has " # Nat.toText(currentBalance) # ", trying to revoke " # Nat.toText(amount) # ")";
-                    };
-                    
-                    // Only revoke if user has sufficient balance
-                    if (currentBalance == 0) {
-                        return "Error: User has no reputation points to revoke";
-                    };
-                    
-                    let newBalance = Nat.sub(currentBalance, amount);
-
-                    let updatedOrgData = updateOrgUserBalance(refreshedOrgData, from, newBalance);
-                    
-                    // Create transaction record
-                    let transaction: Transaction = {
-                        id = updatedOrgData.nextTransactionId;
-                        transactionType = #Revoke;
-                        from = caller;
-                        to = from;
-                        amount = amount;
-                        timestamp = now();
-                        reason = reason;
-                    };
-                    
-                    let finalOrgData = {
-                        admin = updatedOrgData.admin;
-                        trustedAwarders = updatedOrgData.trustedAwarders;
-                        userBalances = updatedOrgData.userBalances;
-                        dailyMinted = updatedOrgData.dailyMinted;
-                        lastMintTimestamp = updatedOrgData.lastMintTimestamp;
-                        userDecayInfo = updatedOrgData.userDecayInfo;
-                        transactionHistory = Array.append(updatedOrgData.transactionHistory, [transaction]);
-                        nextTransactionId = updatedOrgData.nextTransactionId + 1;
-                        totalDecayedPoints = updatedOrgData.totalDecayedPoints;
-                        lastGlobalDecayProcess = updatedOrgData.lastGlobalDecayProcess;
-                    };
-                    
-                    updateOrgData(orgId, finalOrgData);
-                    Debug.print("Rep revoked: " # Nat.toText(amount) # " from " # Principal.toText(from));
-                    return "Success: " # Nat.toText(amount) # " reputation points revoked from " # Principal.toText(from) # ".";
-                }; // close refreshedOrgData case
-            }; // close nested switch
-        }; // close orgData case
-    }; // close main switch
-}; // close function
-
-
-    // --- 3️⃣ addTrustedAwarder: Add a trusted awarder to an organization (admin only) ---
-public shared({caller}) func addTrustedAwarder(orgId: OrgID, p: Principal, name: Text) : async Text {
-    switch (validateOrgExists(orgId)) {
-        case null { return "Error: Organization does not exist" };
-        case (?orgData) {
-            // Only admin can add trusted awarders
-            if (not Principal.equal(caller, orgData.admin)) {
-                return "Error: Only admin can add trusted awarders";
-            };
-
-            // Check if awarder already exists
-            let awarderExists = Array.find<(Principal, Text)>(orgData.trustedAwarders, func (a: (Principal, Text)) : Bool {
-                Principal.equal(a.0, p)
-            });
-
-            switch (awarderExists) {
-                case (?_) { return "Error: Awarder already exists for this organization" };
-                case null {
-                    let newAwarder: (Principal, Text) = (p, name);
-                    
-                    let updatedOrgData = {
-                        admin = orgData.admin;
-                        trustedAwarders = Array.append(orgData.trustedAwarders, [newAwarder]);
-                        userBalances = orgData.userBalances;
-                        dailyMinted = orgData.dailyMinted;
-                        lastMintTimestamp = orgData.lastMintTimestamp;
-                        userDecayInfo = orgData.userDecayInfo;
-                        transactionHistory = orgData.transactionHistory;
-                        nextTransactionId = orgData.nextTransactionId;
-                        totalDecayedPoints = orgData.totalDecayedPoints;
-                        lastGlobalDecayProcess = orgData.lastGlobalDecayProcess;
-                    };
-                    
-                    updateOrgData(orgId, updatedOrgData);
-                    Debug.print("Trusted awarder added: " # Principal.toText(p) # " with name: " # name # " to org: " # orgId);
-                    return "Success: Awarder added to organization " # orgId;
-                };
-            };
-        };
-    };
-};
-
-    // --- 4️⃣ removeTrustedAwarder: Remove a trusted awarder from an organization (admin only) ---
-public shared({caller}) func removeTrustedAwarder(orgId: OrgID, p: Principal) : async Text {
-    switch (validateOrgExists(orgId)) {
-        case null { return "Error: Organization does not exist" };
-        case (?orgData) {
-            // Only admin can remove trusted awarders
-            if (not Principal.equal(caller, orgData.admin)) {
-                return "Error: Only admin can remove trusted awarders";
-            };
-
-            // Find and remove the awarder
-            let filteredAwarders = Array.filter<(Principal, Text)>(orgData.trustedAwarders, func (a: (Principal, Text)) : Bool {
-                not Principal.equal(a.0, p)
-            });
-
-            // Check if awarder was actually removed
-            if (Array.size(filteredAwarders) == Array.size(orgData.trustedAwarders)) {
-                return "Error: Awarder not found in this organization";
-            };
-            
-            let updatedOrgData = {
-                admin = orgData.admin;
-                trustedAwarders = filteredAwarders;
-                userBalances = orgData.userBalances;
-                dailyMinted = orgData.dailyMinted;
-                lastMintTimestamp = orgData.lastMintTimestamp;
-                userDecayInfo = orgData.userDecayInfo;
-                transactionHistory = orgData.transactionHistory;
-                nextTransactionId = orgData.nextTransactionId;
-                totalDecayedPoints = orgData.totalDecayedPoints;
-                lastGlobalDecayProcess = orgData.lastGlobalDecayProcess;
-            };
-            
-            updateOrgData(orgId, updatedOrgData);
-            Debug.print("Trusted awarder removed: " # Principal.toText(p) # " from org: " # orgId);
-            return "Success: Awarder removed from organization " # orgId;
-        };
-    };
-};
-
-    // --- 5️⃣ getBalance: Query user's reputation balance in an organization (with decay applied) ---
-    public query func getBalance(orgId: OrgID, p: Principal) : async ?Nat {
-        switch (validateOrgExists(orgId)) {
-            case null { null };
-            case (?orgData) {
-                let currentBalance = getOrgUserBalance(orgData, p);
-                ?currentBalance
-            };
-        };
-    };
-
-    // basically to get already registered awarders for an organization
-    public query func getTrustedAwarders(orgId: OrgID) : async ?[Awarder] {
-        switch (validateOrgExists(orgId)) {
-            case null { null };
-            case (?orgData) {
-                let awarders = Array.map<(Principal, Text), Awarder>(
-                    orgData.trustedAwarders,
-                    func((p: Principal, name: Text)) : Awarder {
-                        { id = p; name = name }
-                    }
-                );
-                ?awarders
-            };
-        };
-    };
-
-
-
-
-
-
-
-
-
-
-
-
-// MARKKK
-    // --- 6️⃣ getTransactionHistory: Get all transactions for an organization ---
-    public query func getTransactionHistory(orgId: OrgID) : async ?[Transaction] {
-        switch (validateOrgExists(orgId)) {
-            case null { null };
-            case (?orgData) { 
-                ?orgData.transactionHistory 
-            };
-        };
-    };
-
-    // --- 7️⃣ getTransactionsByUser: Get transactions for a specific user in an organization ---
-    public query func getTransactionsByUser(orgId: OrgID, user: Principal) : async ?[Transaction] {
-        switch (validateOrgExists(orgId)) {
-            case null { null };
-            case (?orgData) {
-                let userTransactions = Array.filter<Transaction>(orgData.transactionHistory, func(tx: Transaction) : Bool {
-                    Principal.equal(tx.from, user) or Principal.equal(tx.to, user)
-                });
-                ?userTransactions
-            };
-        };
-    };
-
-    // --- 8️⃣ getTransactionById: Get a specific transaction by ID in an organization ---
-    public query func getTransactionById(orgId: OrgID, id: Nat) : async ?Transaction {
-        switch (validateOrgExists(orgId)) {
-            case null { null };
-            case (?orgData) {
-                Array.find<Transaction>(orgData.transactionHistory, func(tx: Transaction) : Bool {
-                    tx.id == id
-                })
-            };
-        };
-    };
-
-    // --- 9️⃣ getTransactionCount: Get total number of transactions for an organization ---
-    public query func getTransactionCount(orgId: OrgID) : async ?Nat {
-        switch (validateOrgExists(orgId)) {
-            case null { null };
-            case (?orgData) { 
-                ?orgData.transactionHistory.size()
-            };
-        };
-    };
-
-    // --- GLOBAL TRANSACTION FUNCTIONS (for decay system compatibility) ---
-
-    // Get all transactions from all organizations (for decay system)
-    public query func getAllTransactions() : async [Transaction] {
-        var allTransactions : [Transaction] = [];
-        
-        for ((orgId, orgData) in Trie.iter(organizations)) {
-            allTransactions := Array.append(allTransactions, orgData.transactionHistory);
-        };
-        
-        // Sort by timestamp (newest first)
-        Array.sort<Transaction>(allTransactions, func(a: Transaction, b: Transaction) : {#less; #equal; #greater} {
-            if (a.timestamp > b.timestamp) { #less }
-            else if (a.timestamp < b.timestamp) { #greater }
-            else { #equal }
-        })
-    };
-
- 
-
-    // --- ORGANIZATION-SPECIFIC DECAY FUNCTIONS ---
-
-    // Get decay statistics for a specific organization
-    public query func getOrgDecayStatistics(orgId: OrgID) : async ?{
-        totalDecayedPoints: Nat;
-        lastGlobalDecayProcess: Nat;
-        configEnabled: Bool;
-        userCount: Nat;
-        totalPoints: Nat;
-    } {
-        switch (validateOrgExists(orgId)) {
-            case null { null };
-            case (?orgData) {
-                let userCount = orgData.userBalances.size();
-                var totalPoints = 0;
-                
-                for ((user, balance) in orgData.userBalances.vals()) {
-                    totalPoints += balance;
-                };
-                
-                ?{
-                    totalDecayedPoints = orgData.totalDecayedPoints;
-                    lastGlobalDecayProcess = orgData.lastGlobalDecayProcess;
-                    configEnabled = decayConfig.enabled;
-                    userCount = userCount;
-                    totalPoints = totalPoints;
-                }
-            };
-        };
-    };
-
-    // Get transaction history for a specific organization (including decay transactions)
-    public query func getOrgTransactionHistory(orgId: OrgID) : async ?[Transaction] {
-        switch (validateOrgExists(orgId)) {
-            case null { null };
-            case (?orgData) { 
-                // Sort by timestamp (newest first)
-                let sorted = Array.sort<Transaction>(orgData.transactionHistory, func(a: Transaction, b: Transaction) : {#less; #equal; #greater} {
-                    if (a.timestamp > b.timestamp) { #less }
-                    else if (a.timestamp < b.timestamp) { #greater }
-                    else { #equal }
-                });
-                ?sorted 
-            };
-        };
-    };
-
-    // Get user balances for a specific organization
-    public query func getOrgUserBalances(orgId: OrgID) : async ?[(Principal, Nat)] {
-        switch (validateOrgExists(orgId)) {
-            case null { null };
-            case (?orgData) { ?orgData.userBalances };
-        };
-    };
-
-    // Get decay analytics for a specific organization
-    public query func getOrgDecayAnalytics(orgId: OrgID) : async ?{
-        totalUsers: Nat;
-        usersWithDecay: Nat;
-        totalPointsDecayed: Nat;
-        averageDecayPerUser: Nat;
-        recentDecayTransactions: [Transaction];
-    } {
-        switch (validateOrgExists(orgId)) {
-            case null { null };
-            case (?orgData) {
-                let totalUsers = orgData.userBalances.size();
-                var usersWithDecay = 0;
-                
-                // Count users who have had decay applied
-                for ((user, decayInfo) in orgData.userDecayInfo.vals()) {
-                    if (decayInfo.totalDecayed > 0) {
-                        usersWithDecay += 1;
-                    };
-                };
-                
-                let averageDecay = if (totalUsers > 0) {
-                    orgData.totalDecayedPoints / totalUsers
-                } else { 0 };
-                
-                // Get recent decay transactions (last 10)
-                let decayTransactions = Array.filter<Transaction>(orgData.transactionHistory, func(tx: Transaction) : Bool {
-                    switch (tx.transactionType) {
-                        case (#Decay) { true };
-                        case (_) { false };
-                    }
-                });
-                
-                let recentDecayTxs = if (decayTransactions.size() > 10) {
-                    let sorted = Array.sort<Transaction>(decayTransactions, func(a: Transaction, b: Transaction) : {#less; #equal; #greater} {
-                        if (a.timestamp > b.timestamp) { #less }
-                        else if (a.timestamp < b.timestamp) { #greater }
-                        else { #equal }
-                    });
-                    Array.subArray<Transaction>(sorted, 0, 10)
-                } else { decayTransactions };
-                
-                ?{
-                    totalUsers = totalUsers;
-                    usersWithDecay = usersWithDecay;
-                    totalPointsDecayed = orgData.totalDecayedPoints;
-                    averageDecayPerUser = averageDecay;
-                    recentDecayTransactions = recentDecayTxs;
-                }
-            };
-        };
-    };
-
-    // --- DECAY SYSTEM PUBLIC FUNCTIONS ---
-
-    // 🔟 Configure decay settings (Owner only)
-    public shared({caller}) func configureDecay(
-        decayRate: Nat, 
-        decayInterval: Nat, 
-        minThreshold: Nat, 
-        gracePeriod: Nat, 
-        enabled: Bool
-    ) : async Text {
-        if (not Principal.equal(caller, owner)) {
-            return "Error: Only owner can configure decay settings.";
-        };
-
-        decayConfig := {
-            decayRate = decayRate;
-            decayInterval = decayInterval;
-            minThreshold = minThreshold;
-            gracePeriod = gracePeriod;
-            enabled = enabled;
-        };
-
-        // DISABLED: No longer using automatic decay timer - using transaction-based decay instead
-        // ignore restartDecayTimer();
-
-        Debug.print("Decay configuration updated");
-        return "Success: Decay configuration updated.";
-    };
-
-    // 🔟 Configure organization-specific decay settings (Organization admin only)
-    public shared({caller}) func configureOrgDecay(
-        orgId: OrgID,
-        decayRate: Nat, 
-        decayInterval: Nat, 
-        minThreshold: Nat, 
-        gracePeriod: Nat, 
-        enabled: Bool
-    ) : async Text {
-        switch (validateOrgExists(orgId)) {
-            case null { return "Error: Organization does not exist" };
-            case (?orgData) {
-                // Check if caller is organization admin
-                if (not Principal.equal(caller, orgData.admin)) {
-                    return "Error: Only organization admin can configure decay settings.";
-                };
-
-                // Update global decay config (affects all organizations for now)
-                // In a more advanced system, each org could have its own config
-                decayConfig := {
-                    decayRate = decayRate;
-                    decayInterval = decayInterval;
-                    minThreshold = minThreshold;
-                    gracePeriod = gracePeriod;
-                    enabled = enabled;
-                };
-
-                Debug.print("Organization decay configuration updated by admin " # Principal.toText(caller) # " for org " # orgId);
-                return "Success: Decay configuration updated for organization " # orgId # ".";
-            };
-        };
-    };
-
-    // 1️⃣1️⃣ Get current decay configuration
-    public query func getDecayConfig() : async DecayConfig {
-        decayConfig
-    };
-
-    // 1️⃣2️⃣ Get raw balance (before decay calculation)
-    public query func getRawBalance(p: Principal) : async Nat {
-        let pKey = { key = p; hash = Principal.hash(p) };
-        switch (Trie.get<Principal, Nat>(_balances, pKey, Principal.equal)) {
-            case (?b) b;
-            case null 0;
-        }
-    };
-
-    // 1️⃣3️⃣ Preview decay amount for a user
-    public query func previewDecayAmount(p: Principal) : async Nat {
-        let pKey = { key = p; hash = Principal.hash(p) };
-        let currentBalance = switch (Trie.get<Principal, Nat>(_balances, pKey, Principal.equal)) {
-            case (?b) b;
-            case null 0;
-        };
-        calculateDecayAmount(p, currentBalance)
-    };
-
-    // 1️⃣4️⃣ Get user decay information
-    public query func getUserDecayInfo(p: Principal) : async ?UserDecayInfo {
-        let pKey = { key = p; hash = Principal.hash(p) };
-        Trie.get<Principal, UserDecayInfo>(userDecayInfo, pKey, Principal.equal)
-    };
-
-    // 1️⃣5️⃣ Apply decay to a specific user (Owner only)
-    public shared({caller}) func applyDecayToSpecificUser(p: Principal) : async Text {
-        if (not Principal.equal(caller, owner)) {
-            return "Error: Only owner can manually apply decay.";
-        };
-
-        let decayAmount = applyDecayToUser(p);
-        if (decayAmount == 0) {
-            return "No decay applied - user not eligible for decay.";
-        };
-
-        return "Success: Applied " # Nat.toText(decayAmount) # " points decay to user.";
-    };
-
-    // --- MULTI-ORGANIZATION PUBLIC FUNCTIONS ---
-
-
-
-
-
-
-
-
-
-
-   
-
-
-
-
-
-
-
-
-
-
-
-
-    // --- MULTI-ORGANIZATION QUERY FUNCTIONS ---
-
-    /// Get user balance in an organization
-    public query func getOrgBalance(orgId: OrgID, user: Principal) : async ?Nat {
-        switch (validateOrgExists(orgId)) {
-            case (?orgData) { ?getOrgUserBalance(orgData, user) };
-            case null { null };
-        }
-    };
-
-    /// Check if user is a trusted awarder in an organization
-    public query func isOrgTrustedAwarderQuery(orgId: OrgID, user: Principal) : async ?Bool {
-        switch (validateOrgExists(orgId)) {
-            case (?orgData) { ?isOrgTrustedAwarder(orgData, user) };
-            case null { null };
-        }
-    };
-
-    /// Get organization admin
-    public query func getOrgAdmin(orgId: OrgID) : async ?Principal {
-        switch (validateOrgExists(orgId)) {
-            case (?orgData) { ?orgData.admin };
-            case null { null };
-        }
-    };
-
-    /// Get all trusted awarders for an organization
-    public query func getOrgTrustedAwarders(orgId: OrgID) : async ?[Awarder] {
-        switch (validateOrgExists(orgId)) {
-            case (?orgData) {
-                let awarders = Array.map<(Principal, Text), Awarder>(
-                    orgData.trustedAwarders,
-                    func((p, name)) = { id = p; name = name }
-                );
-                ?awarders
-            };
-            case null { null };
-        }
-    };
-
-    /// Get organization transaction history
-    public query func getOrgTransactions(orgId: OrgID) : async ?[Transaction] {
-        switch (validateOrgExists(orgId)) {
-            case (?orgData) { ?orgData.transactionHistory };
-            case null { null };
-        }
-    };
-
-    /// Get all organizations
-    public query func getAllOrgs() : async [OrgID] {
-        let orgIds = Buffer.Buffer<Text>(0);
-        for ((orgId, _) in Trie.iter(organizations)) {
-            orgIds.add(orgId);
-        };
-        Buffer.toArray(orgIds)
-    };
-
-    /// Get organization stats
-    public query func getOrgStats(orgId: OrgID) : async ?OrgStats {
-        switch (validateOrgExists(orgId)) {
-            case (?orgData) {
-                let totalPoints = Array.foldLeft<(Principal, Nat), Nat>(
-                    orgData.userBalances,
-                    0,
-                    func(acc, (_, balance)) = acc + balance
-                );
-                
-                ?{
-                    admin = orgData.admin;
-                    awarderCount = Array.size(orgData.trustedAwarders);
-                    userCount = Array.size(orgData.userBalances);
-                    totalPoints = totalPoints;
-                    totalTransactions = Array.size(orgData.transactionHistory);
-                }
-            };
-            case null { null };
-        }
-    };
-
-    // 1️⃣6️⃣ Batch process decay for all users (Owner only)
-    public shared({caller}) func processBatchDecay() : async Text {
-        if (not Principal.equal(caller, owner)) {
-            return "Error: Only owner can process batch decay.";
-        };
-
-        let balanceEntries = Iter.toArray(Trie.iter(_balances));
-        var usersProcessed = 0;
-        var totalDecayApplied = 0;
-
-        for ((principal, balance) in balanceEntries.vals()) {
-            if (balance > 0) {
-                let decayAmount = applyDecayToUser(principal);
-                if (decayAmount > 0) {
-                    usersProcessed += 1;
-                    totalDecayApplied += decayAmount;
-                };
-            };
-        };
-
-        lastGlobalDecayProcess := now();
-        
-        Debug.print("Batch decay processed: " # Nat.toText(usersProcessed) # " users, " # Nat.toText(totalDecayApplied) # " points decayed");
-        return "Success: Processed " # Nat.toText(usersProcessed) # " users with total decay of " # Nat.toText(totalDecayApplied) # " points.";
-    };
-
-    // 1️⃣7️⃣ Get decay statistics - aggregated from all organizations
-    public query func getDecayStatistics() : async {
-        totalDecayedPoints: Nat;
-        lastGlobalDecayProcess: Nat;
-        configEnabled: Bool;
-    } {
-        var totalDecayed = 0;
-        
-        // Aggregate decay statistics from all organizations
-        for ((orgId, orgData) in Trie.iter(organizations)) {
-            totalDecayed += orgData.totalDecayedPoints;
-        };
-        
-        {
-            totalDecayedPoints = totalDecayed;
-            lastGlobalDecayProcess = lastGlobalDecayProcess;
-            configEnabled = decayConfig.enabled;
-        }
-    };
-
-    // 1️⃣8️⃣ Get balance with decay details
-    public query func getBalanceWithDetails(p: Principal) : async {
-        rawBalance: Nat;
-        currentBalance: Nat;
-        pendingDecay: Nat;
-        decayInfo: ?UserDecayInfo;
-    } {
-        let pKey = { key = p; hash = Principal.hash(p) };
-        let rawBalance = switch (Trie.get<Principal, Nat>(_balances, pKey, Principal.equal)) {
-            case (?b) b;
-            case null 0;
-        };
-        
-        let pendingDecay = calculateDecayAmount(p, rawBalance);
-        let currentBalance = if (rawBalance >= pendingDecay) {
-            Nat.sub(rawBalance, pendingDecay)
-        } else {
-            0
-        };
-        
-        let decayInfo = Trie.get<Principal, UserDecayInfo>(userDecayInfo, pKey, Principal.equal);
-        
-        {
-            rawBalance = rawBalance;
-            currentBalance = currentBalance;
-            pendingDecay = pendingDecay;
-            decayInfo = decayInfo;
-        }
-    };
-
-    // 1️⃣9️⃣ Manual decay trigger (for testing) - Owner only
-    public shared({caller}) func triggerManualDecay() : async Text {
-        if (not Principal.equal(caller, owner)) {
-            return "Error: Only owner can trigger manual decay.";
-        };
-        
-        await processAutomaticDecay();
-        return "Success: Manual decay processing completed.";
-    };
-
-    // --- AUTO-INJECT ORGANIZATION FUNCTIONS ---
-    // These functions automatically determine the caller's organization
-    
-    // Auto-inject awardRep - automatically uses caller's organization
-    public shared({caller}) func autoAwardRep(to: Principal, amount: Nat, reason: ?Text) : async Text {
-        switch (getUserOrganization(caller)) {
-            case null { return "Error: Caller is not associated with any organization" };
-            case (?orgId) { 
-                Debug.print("Auto-injecting orgId: " # orgId # " for caller: " # Principal.toText(caller));
-                await awardRep(orgId, to, amount, reason)
-            };
-        }
-    };
-    
-    // Auto-inject revokeRep - automatically uses caller's organization  
-    public shared({caller}) func autoRevokeRep(from: Principal, amount: Nat, reason: ?Text) : async Text {
-        switch (getUserOrganization(caller)) {
-            case null { return "Error: Caller is not associated with any organization" };
-            case (?orgId) { 
-                Debug.print("Auto-injecting orgId: " # orgId # " for caller: " # Principal.toText(caller));
-                await revokeRep(orgId, from, amount, reason)
-            };
-        }
-    };
-    
-    // Get caller's organization ID
-    public shared({caller}) func getMyOrganization() : async ?Text {
-        getUserOrganization(caller)
-    };
-    
-    // Check if caller is admin of their organization
-    public shared({caller}) func isMyOrgAdmin() : async Bool {
-        switch (getUserOrganization(caller)) {
-            case null { false };
-            case (?orgId) {
-                switch (validateOrgExists(orgId)) {
-                    case null { false };
-                    case (?orgData) { Principal.equal(orgData.admin, caller) };
-                }
-            };
-        }
-    };
-    
-    // Auto-inject functions for transaction queries
-    
-    // Get transactions for caller's organization
-    public shared({caller}) func getMyOrgTransactions() : async ?[Transaction] {
-        switch (getUserOrganization(caller)) {
-            case null { null };
-            case (?orgId) { await getTransactionHistory(orgId) };
-        }
-    };
-    
-    // Get caller's balance in their organization
-    public shared({caller}) func getMyBalance() : async ?Nat {
-        switch (getUserOrganization(caller)) {
-            case null { null };
-            case (?orgId) { await getBalance(orgId, caller) };
-        }
-    };
-    
-    // Get transactions by user in caller's organization
-    public shared({caller}) func getMyTransactionsByUser(user: Principal) : async ?[Transaction] {
-        switch (getUserOrganization(caller)) {
-            case null { null };
-            case (?orgId) { await getTransactionsByUser(orgId, user) };
-        }
-    };
-
-};
+    // config knobs
+    h := mix64_(h, Nat64.fromNat(decayHash_()));                 // decayHash_ returns Nat -> OK
+    h := mix64_(h, Nat64.fromNat(dailyMintLimit));               // Nat -> OK
+    h := mix64_(h, Nat64.fromNat(Trie.size(trustedAwarders)));   // Nat -> OK
+    h := mix64_(h, Nat64.fromNat(if (paused) 1 else 0));         // make sure it's Nat, then to Nat64
+
+    Nat64.toNat(h)
+  };
+
+}

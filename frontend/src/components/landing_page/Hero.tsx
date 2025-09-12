@@ -92,7 +92,7 @@ export default function Hero() {
         </Typography>
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="center">
-          <MuiLink href="https://www.youtube.com/watch?v=f5_kVgIzl_E" target="_blank" underline="none">
+          <MuiLink href="https://www.youtube.com/watch?v=IXAITmG1rrE" target="_blank" underline="none">
             <Button variant="contained" sx={{
               bgcolor: 'hsl(var(--primary))',
               color: 'hsl(var(--primary-foreground))',
