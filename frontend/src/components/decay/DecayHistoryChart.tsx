@@ -243,7 +243,7 @@ const DecayHistoryChart: React.FC<DecayHistoryChartProps> = ({ className }) => {
                 labelLine={false}
                 outerRadius={80}
                 dataKey="value"
-                label={({ name, percent }) => `${name} ${( (percent ?? 0) * 100 ).toFixed(0)}%`}
+                label={({ name, percent }: any) => `${name} ${( (percent ?? 0) * 100 ).toFixed(0)}%`}
               >
                 {pieChartData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
               </Pie>
