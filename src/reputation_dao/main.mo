@@ -650,7 +650,9 @@ actor class ReputationChild(initOwner : Principal) = this {
   };
 
   // ——— Internal hashing helpers ———
-  func mix64_(h: Nat64, v: Nat64) : Nat64 { (h ^ v) * 0x0000000001000001 };
+  let FNV_PRIME : Nat64 = 0x0000000001000001;
+  func mix64_(h: Nat64, v: Nat64) : Nat64 { (h ^ v) *% FNV_PRIME };  // wrap multiply
+
 
   func decayHash_() : Nat {
     var h : Nat64 = 0xCBF29CE484222325;

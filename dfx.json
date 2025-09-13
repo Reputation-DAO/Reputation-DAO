@@ -3,7 +3,8 @@
     "reputation_dao": {
       "main": "src/reputation_dao/main.mo",
       "type": "motoko",
-      "id": "owyeu-jiaaa-aaaam-qdvwq-cai"
+      "id": "owyeu-jiaaa-aaaam-qdvwq-cai",
+      "optimize": "size"
     },
     "factoria": {
       "main": "src/factoria/main.mo",

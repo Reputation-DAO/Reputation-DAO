@@ -256,19 +256,18 @@ actor ReputationFactory {
 
   /// Create or reuse from pool for given owner; `init_arg` must candid-encode the SAME SINGLE arg the child expects (owner).
   public shared({ caller }) func createOrReuseChildFor(
-    owner             : Principal,
-    cycles_for_create : Nat,
-    controllers       : [Principal],
-    init_arg          : Blob,    // candid-encoded (owner)
-    note              : Text
+    owner: Principal,
+    cycles_for_create: Nat,
+    controllers: [Principal],
+    note: Text
   ) : async Principal {
     requireAdmin(caller);
 
     let defaultCtrls = [Principal.fromActor(ReputationFactory), owner];
+    let arg : Blob = to_candid(owner);  // <- factory encodes the arg
 
     if (pool.size() > 0) {
       switch (pool.removeLast()) {
-        case null { /* race: fall through to fresh create */ };
         case (?cid) {
           await IC.stop_canister({ canister_id = cid });
           await IC.update_settings({
@@ -278,7 +277,12 @@ actor ReputationFactory {
               compute_allocation = null; memory_allocation = null; freezing_threshold = null;
             }
           });
-          await IC.install_code({ mode = #reinstall; canister_id = cid; wasm_module = requireWasm(); arg = init_arg });
+          await IC.install_code({
+            mode = #reinstall;
+            canister_id = cid;
+            wasm_module = requireWasm();
+            arg = arg                       // <- use factory-built blob
+          });
           await IC.start_canister({ canister_id = cid });
 
           switch (byId.get(cid)) { case (?old) { removeOwnerIndex(old.owner, cid) }; case null {} };
@@ -287,8 +291,9 @@ actor ReputationFactory {
 
           storePool := Buffer.toArray(pool);
           return cid;
-        }
-      };
+        };
+        case null {};
+      }
     };
 
     // fresh create
@@ -300,7 +305,7 @@ actor ReputationFactory {
     });
     let cid = res.canister_id;
 
-    await IC.install_code({ mode = #install; canister_id = cid; wasm_module = requireWasm(); arg = init_arg });
+    await IC.install_code({ mode = #install; canister_id = cid; wasm_module = requireWasm(); arg = arg });
     await IC.start_canister({ canister_id = cid });
 
     let rec : Child = { id = cid; owner; created_at = nowNs(); note; status = #Active };
