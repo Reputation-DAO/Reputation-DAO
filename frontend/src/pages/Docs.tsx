@@ -1,237 +1,186 @@
-// @ts-nocheck (remove once you add proper types to all sections)
-import React, { useState } from 'react';
-import {
-  Box,
-  CssBaseline,
-  Paper,
-  Typography,
-  List,
-  ListItemButton,
-  ListItemText,
-  Container,
-  keyframes,
-} from '@mui/material';
+import Navigation from "@/components/ui/navigation";
+import Footer from "@/components/layout/Footer";
+import { Book, Code, Zap, Database, Shield, Users } from "lucide-react";
 
-import DocsContentGettingStarted from '../components/docs/GettingStarted';
-import DocsContentArchitecture from '../components/docs/Architecture';
-import DocsContentSmartContract from '../components/docs/SmartContract';
-import DocsContentAPI from '../components/docs/API';
-import DocsContentIntegrationGuide from '../components/docs/IntegrationGuide';
-import DocsContentGovernance from '../components/docs/Governance';
-
-const navItems = [
-  'Getting Started',
-  'Architecture Overview',
-  'Smart Contracts',
-  'API Reference',
-  'Integration Guide (Plug, Internet Identity, Stoic)',
-  'Governance Rules',
-];
-
-const contentComponents = [
-  <DocsContentGettingStarted />,
-  <DocsContentArchitecture />,
-  <DocsContentSmartContract />,
-  <DocsContentAPI />,
-  <DocsContentIntegrationGuide />,
-  <DocsContentGovernance />,
-];
-
-// Heartbeat glow animation
-const heartbeatGlow = keyframes`
-  0% {
-    opacity: 0.06;
-    filter: blur(25px);
-  }
-  20% {
-    opacity: 0.14;
-    filter: blur(40px);
-  }
-  50% {
-    opacity: 0.36;
-    filter: blur(50px);
-  }
-  80% {
-    opacity: 0.14;
-    filter: blur(40px);
-  }
-  100% {
-    opacity: 0.06;
-    filter: blur(25px);
-  }
-`;
-
-export default function DocsLayout() {
-  const [activeIndex, setActiveIndex] = useState(0);
+const Docs = () => {
+  const docSections = [
+    {
+      title: "Getting Started",
+      description: "Learn the basics of Reputation DAO and how to get started building with our protocol.",
+      icon: Book,
+      items: [
+        "Introduction to Reputation DAO",
+        "Quick Start Guide",
+        "Core Concepts",
+        "Installation & Setup"
+      ]
+    },
+    {
+      title: "API Reference",
+      description: "Complete API documentation with examples and integration guides.",
+      icon: Code,
+      items: [
+        "REST API",
+        "GraphQL API", 
+        "WebSocket Events",
+        "Authentication"
+      ]
+    },
+    {
+      title: "Smart Contracts",
+      description: "Learn how to interact with our smart contracts and build custom integrations.",
+      icon: Zap,
+      items: [
+        "Contract Architecture",
+        "Deployment Guide",
+        "Function Reference",
+        "Event Handling"
+      ]
+    },
+    {
+      title: "SDKs & Libraries",
+      description: "Official SDKs and community libraries for popular programming languages.",
+      icon: Database,
+      items: [
+        "JavaScript SDK",
+        "Python SDK",
+        "Rust SDK",
+        "Community Libraries"
+      ]
+    },
+    {
+      title: "Security",
+      description: "Security best practices, audit reports, and vulnerability disclosure.",
+      icon: Shield,
+      items: [
+        "Security Model",
+        "Audit Reports",
+        "Best Practices",
+        "Bug Bounty Program"
+      ]
+    },
+    {
+      title: "Community",
+      description: "Governance, contributions, and community resources.",
+      icon: Users,
+      items: [
+        "Governance Process",
+        "Contributing Guide",
+        "Community Forums",
+        "Developer Support"
+      ]
+    }
+  ];
 
   return (
-    <Box
-      sx={{
-        position: 'relative', // for glow positioning
-        bgcolor: 'hsl(var(--background))',
-        color: 'hsl(var(--foreground))',
-        overflow: 'hidden', // hide glow overflow
-        minHeight: '100vh',
-      }}
-    >
-      <CssBaseline />
+    <div className="min-h-screen bg-background">
+      <Navigation />
+      
+      <main className="pt-16">
+        {/* Hero Section */}
+        <section className="py-24 bg-gradient-to-b from-primary-light/10 to-background">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h1 className="text-4xl sm:text-6xl font-bold mb-6 bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent">
+              Documentation
+            </h1>
+            <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto">
+              Everything you need to build with Reputation DAO. From quick start guides to advanced integrations.
+            </p>
+            
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <button className="px-8 py-4 bg-gradient-to-r from-primary to-primary-glow text-white rounded-xl hover:scale-105 transition-all duration-300 hover:shadow-[var(--shadow-glow)]">
+                Quick Start
+              </button>
+              <button className="px-8 py-4 border border-primary/30 text-primary rounded-xl hover:bg-primary/5 transition-all duration-300">
+                API Reference
+              </button>
+            </div>
+          </div>
+        </section>
 
-      {/* Left Glow */}
-      <Box
-        sx={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100px',
-          height: '100%',
-          background: 'hsl(var(--primary))',
-          animation: `${heartbeatGlow} 10s ease-in-out infinite`,
-          zIndex: 0,
-          pointerEvents: 'none',
-          mixBlendMode: 'screen',
-          borderRadius: '0 100px 100px 0',
-        }}
-      />
+        {/* Documentation Sections */}
+        <section className="py-24">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {docSections.map((section, index) => {
+                const IconComponent = section.icon;
+                return (
+                  <div 
+                    key={section.title}
+                    className="glass-card p-8 hover-lift group cursor-pointer"
+                    style={{ animationDelay: `${index * 100}ms` }}
+                  >
+                    <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-primary/20 transition-colors duration-300">
+                      <IconComponent className="w-6 h-6 text-primary" />
+                    </div>
+                    
+                    <h3 className="text-2xl font-bold mb-4 text-foreground group-hover:text-primary transition-colors duration-300">
+                      {section.title}
+                    </h3>
+                    
+                    <p className="text-muted-foreground mb-6 leading-relaxed">
+                      {section.description}
+                    </p>
+                    
+                    <ul className="space-y-2">
+                      {section.items.map((item, itemIndex) => (
+                        <li key={itemIndex} className="flex items-center gap-3 text-sm text-muted-foreground hover:text-primary transition-colors duration-300 cursor-pointer">
+                          <div className="w-1.5 h-1.5 bg-primary rounded-full" />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
 
-      {/* Right Glow */}
-      <Box
-        sx={{
-          position: 'absolute',
-          top: 0,
-          right: 0,
-          width: '100px',
-          height: '100%',
-          background: 'hsl(var(--primary))',
-          animation: `${heartbeatGlow} 10s ease-in-out infinite`,
-          zIndex: 0,
-          pointerEvents: 'none',
-          mixBlendMode: 'screen',
-          borderRadius: '100px 0 0 100px',
-        }}
-      />
-
-      {/* Main Docs Content */}
-      <Container
-        maxWidth={false}
-        disableGutters
-        sx={{
-          display: 'flex',
-          py: 4,
-          px: 5,
-          gap: 4,
-          position: 'relative',
-          zIndex: 1, // keep content above glow
-        }}
-      >
-        {/* Sidebar */}
-        <Paper
-          component="aside"
-          elevation={6}
-          sx={{
-            width: 260,
-            flexShrink: 0,
-            bgcolor: 'hsl(var(--background))',
-            border: '1px solid hsl(var(--border))',
-            py: 3,
-            px: 2,
-            display: 'flex',
-            flexDirection: 'column',
-            borderRadius: 'calc(var(--radius) * 1.5)',
-            height: 'calc(100vh - 28px)',
-            position: 'sticky',
-            top: 96,
-            boxShadow:
-              '0 4px 20px rgba(0, 0, 0, 0.05), inset 0 0 0 1px hsl(var(--border))',
-            backdropFilter: 'blur(8px)',
-            overflow: 'hidden',
-          }}
-        >
-          <Typography
-            variant="subtitle2"
-            sx={{
-              fontWeight: 700,
-              letterSpacing: 0.5,
-              mb: 2,
-              fontSize: 14,
-              px: 1,
-              color: 'hsl(var(--foreground))',
-              textTransform: 'uppercase',
-            }}
-          >
-            Documentation
-          </Typography>
-
-          <List dense disablePadding>
-            {navItems.map((text, idx) => (
-              <ListItemButton
-                key={idx}
-                selected={idx === activeIndex}
-                onClick={() => setActiveIndex(idx)}
-                sx={{
-                  py: 1,
-                  px: 1.5,
-                  borderRadius: 'var(--radius)',
-                  color: 'hsl(var(--foreground))',
-                  fontWeight: idx === activeIndex ? 600 : 500,
-                  transition: 'all 0.25s ease',
-                  '&.Mui-selected': {
-                    bgcolor: 'hsl(var(--primary) / 0.15)',
-                    color: 'hsl(var(--foreground))',
-                    boxShadow: 'inset 0 0 0 1px hsl(var(--primary))',
-                  },
-                  '&:hover': {
-                    bgcolor: 'hsl(var(--primary) / 0.08)',
-                    transform: 'translateX(4px)',
-                  },
-                }}
-              >
-                <ListItemText
-                  primaryTypographyProps={{
-                    fontSize: 13,
-                    fontWeight: idx === activeIndex ? 600 : 500,
-                  }}
-                  primary={text}
-                />
-              </ListItemButton>
-            ))}
-          </List>
-        </Paper>
-
-        {/* Docs Content */}
-        <Box
-          component={Paper}
-          elevation={4}
-          sx={{
-            flexGrow: 1,
-            bgcolor: 'hsl(var(--background))',
-            border: '1px solid hsl(var(--border))',
-            px: 5,
-            py: 3,
-            color: 'hsl(var(--foreground))',
-            borderRadius: 'var(--radius)',
-            height: 'calc(100vh - 28px)',
-            overflowY: 'auto',
-            '&::-webkit-scrollbar': {
-              width: '6px',
-            },
-            '&::-webkit-scrollbar-track': {
-              background: 'transparent',
-            },
-            '&::-webkit-scrollbar-thumb': {
-              backgroundColor: 'hsl(var(--primary) / 0.7)',
-              borderRadius: '4px',
-              transition: 'background-color 0.2s ease',
-            },
-            '&::-webkit-scrollbar-thumb:hover': {
-              backgroundColor: 'hsl(var(--primary))',
-            },
-            scrollbarWidth: 'thin',
-            scrollbarColor: 'hsl(var(--primary) / 0.7) transparent',
-          }}
-        >
-          {contentComponents[activeIndex]}
-        </Box>
-      </Container>
-    </Box>
+        {/* Popular Resources */}
+        <section className="py-24 bg-gradient-to-b from-background to-secondary/20">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl font-bold mb-4 text-foreground">
+                Popular Resources
+              </h2>
+              <p className="text-xl text-muted-foreground">
+                Most accessed documentation and guides
+              </p>
+            </div>
+            
+            <div className="grid md:grid-cols-2 gap-8">
+              <div className="glass-card p-8 hover-lift">
+                <h3 className="text-2xl font-bold mb-4 text-foreground">
+                  Quick Start Tutorial
+                </h3>
+                <p className="text-muted-foreground mb-6">
+                  Get up and running with Reputation DAO in under 10 minutes.
+                </p>
+                <button className="text-primary font-medium hover:underline">
+                  Start Tutorial →
+                </button>
+              </div>
+              
+              <div className="glass-card p-8 hover-lift">
+                <h3 className="text-2xl font-bold mb-4 text-foreground">
+                  Integration Examples
+                </h3>
+                <p className="text-muted-foreground mb-6">
+                  Real-world examples of platforms using Reputation DAO.
+                </p>
+                <button className="text-primary font-medium hover:underline">
+                  View Examples →
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+      
+      <Footer />
+    </div>
   );
-}
+};
+
+export default Docs;

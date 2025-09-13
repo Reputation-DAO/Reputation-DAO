@@ -1,96 +1,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Card, Box } from "@mui/material";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Wallet, Shield, Zap, ArrowRight, CheckCircle } from "lucide-react";
-import { useAuth } from '../contexts/AuthContext';
-import { styled } from '@mui/material/styles';
-
-// Hook to detect dark mode from CSS classes
-const useDarkMode = () => {
-  const [isDark, setIsDark] = useState(false);
-
-  useEffect(() => {
-    const checkDarkMode = () => {
-      setIsDark(document.documentElement.classList.contains('dark'));
-    };
-
-    checkDarkMode();
-    
-    // Create observer to watch for class changes
-    const observer = new MutationObserver(checkDarkMode);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['class']
-    });
-
-    return () => observer.disconnect();
-  }, []);
-
-  return isDark;
-};
-
-const StyledCard = styled(Card)(() => {
-  const isDark = document.documentElement.classList.contains('dark');
-  return {
-    padding: '24px',
-    cursor: 'pointer',
-    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-    position: 'relative',
-    overflow: 'hidden',
-    background: isDark 
-      ? 'rgba(255, 255, 255, 0.05)'
-      : 'rgba(255, 255, 255, 0.9)',
-    backdropFilter: 'blur(10px)',
-    border: isDark
-      ? '1px solid rgba(255, 255, 255, 0.1)'
-      : '1px solid rgba(0, 0, 0, 0.08)',
-    borderRadius: '16px',
-    boxShadow: isDark
-      ? '0 4px 12px rgba(0, 0, 0, 0.3)'
-      : '0 4px 12px rgba(0, 0, 0, 0.1)',
-    '&:hover': {
-      transform: 'scale(1.02)',
-      boxShadow: isDark
-        ? '0 8px 25px rgba(0, 0, 0, 0.4)'
-        : '0 8px 25px rgba(0, 0, 0, 0.15)',
-    },
-  };
-});
-
-const IconContainer = styled(Box)(() => {
-  const isDark = document.documentElement.classList.contains('dark');
-  return {
-    width: '48px',
-    height: '48px',
-    borderRadius: '12px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: isDark
-      ? 'rgba(59, 130, 246, 0.2)'
-      : 'rgba(59, 130, 246, 0.1)',
-    transition: 'all 0.3s ease',
-    '&:hover': {
-      background: isDark
-        ? 'rgba(59, 130, 246, 0.3)'
-        : 'rgba(59, 130, 246, 0.2)',
-      transform: 'scale(1.1)',
-    },
-  };
-});
-
-const RecommendedBadge = styled(Box)({
-  position: 'absolute',
-  top: 0,
-  right: 0,
-  background: '#3b82f6',
-  color: 'white',
-  padding: '4px 12px',
-  fontSize: '12px',
-  borderRadius: '0 16px 0 12px',
-  fontWeight: 600,
-  zIndex: 1,
-});
+import Navigation from "@/components/ui/navigation";
+import { usePlugConnection } from "../hooks/usePlugConnection";
+import { useRole } from "../contexts/RoleContext";
 
 const WalletOption = ({ icon: Icon, name, description, isRecommended, isConnected, onConnect, isLoading }: {
   icon: any;
@@ -100,142 +15,92 @@ const WalletOption = ({ icon: Icon, name, description, isRecommended, isConnecte
   isConnected?: boolean;
   onConnect: () => void;
   isLoading?: boolean;
-}) => {
-  const isDark = useDarkMode();
-  
-  return (
-  <StyledCard>
+}) => (
+  <Card className="glass-card p-6 cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-[var(--shadow-glow)] group relative overflow-hidden">
     {isRecommended && (
-      <RecommendedBadge>
+      <div className="absolute top-0 right-0 bg-gradient-to-r from-primary to-primary-glow text-white px-3 py-1 text-xs rounded-bl-lg">
         Recommended
-      </RecommendedBadge>
+      </div>
     )}
     
-    <Box display="flex" alignItems="center" gap={2} mb={2}>
-      <IconContainer>
-        <Icon size={24} color="#3b82f6" />
-      </IconContainer>
-      <Box>
-        <Box 
-          fontSize="18px" 
-          fontWeight="600" 
-          mb={0.5}
-          sx={{
-            color: isDark ? '#ffffff' : '#1a1a1a'
-          }}
-        >
-          {name}
-        </Box>
-        <Box 
-          fontSize="14px"
-          sx={{
-            color: isDark ? '#b0b0b0' : '#666666'
-          }}
-        >
-          {description}
-        </Box>
-      </Box>
-    </Box>
+    <div className="flex items-center gap-4 mb-4">
+      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/10 to-primary-glow/10 flex items-center justify-center group-hover:from-primary/20 group-hover:to-primary-glow/20 transition-all duration-300">
+        <Icon className="w-6 h-6 text-primary group-hover:scale-110 transition-transform duration-300" />
+      </div>
+      <div>
+        <h3 className="text-lg font-semibold text-foreground">{name}</h3>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </div>
+    </div>
     
     <Button 
       onClick={onConnect}
       disabled={isLoading || isConnected}
-      variant={isConnected ? "outlined" : "contained"}
-      fullWidth
-      sx={{
-        borderRadius: '12px',
-        py: 1.5,
-        textTransform: 'none',
-        fontWeight: 600,
-        fontSize: '16px',
-        transition: 'all 0.3s ease',
-        backgroundColor: isConnected ? 'transparent' : '#3b82f6',
-        color: isConnected ? '#3b82f6' : 'white',
-        border: isConnected ? '2px solid #3b82f6' : '2px solid #3b82f6',
-        '&:hover': {
-          transform: 'translateY(-2px)',
-          backgroundColor: isConnected ? 'rgba(59, 130, 246, 0.1)' : '#2563eb',
-          borderColor: isConnected ? '#2563eb' : '#2563eb',
-        },
-        '&:disabled': {
-          backgroundColor: isConnected ? 'transparent' : '#94a3b8',
-          color: isConnected ? '#94a3b8' : 'white',
-          borderColor: '#94a3b8',
-          transform: 'none',
-        },
-      }}
+      variant={isConnected ? "secondary" : "hero"}
+      className="w-full group-hover:scale-105 transition-transform duration-200"
     >
       {isLoading ? (
-        <Box display="flex" alignItems="center">
-          <Box
-            sx={{
-              width: 16,
-              height: 16,
-              border: '2px solid transparent',
-              borderTop: '2px solid currentColor',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite',
-              mr: 1,
-            }}
-          />
+        <>
+          <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin mr-2" />
           Connecting...
-        </Box>
+        </>
       ) : isConnected ? (
-        <Box display="flex" alignItems="center">
-          <CheckCircle size={16} style={{ marginRight: 8 }} />
+        <>
+          <CheckCircle className="w-4 h-4 mr-2" />
           Connected
-        </Box>
+        </>
       ) : (
-        <Box display="flex" alignItems="center">
+        <>
           Connect
-          <ArrowRight size={16} style={{ marginLeft: 8 }} />
-        </Box>
+          <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform duration-200" />
+        </>
       )}
     </Button>
-  </StyledCard>
-  );
-};
+  </Card>
+);
 
 const Auth = () => {
   const navigate = useNavigate();
+  const { isConnected, connect, disconnect, isLoading, principal, checkConnection } = usePlugConnection();
+  const { userRole, loading: roleLoading } = useRole();
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
-  const [connectedWallet, setConnectedWallet] = useState<string | null>(null);
-  const { login, error } = useAuth();
-  const isDark = useDarkMode();
+  const [showConnected, setShowConnected] = useState(false);
+
+  // Check connection status on mount without triggering connection
+  useEffect(() => {
+    checkConnection();
+  }, []);
+
+  // Show connected state without auto-redirect
+  useEffect(() => {
+    if (isConnected && principal && !roleLoading) {
+      setShowConnected(true);
+    }
+  }, [isConnected, principal, roleLoading]);
 
   const handleWalletConnect = async (walletType: string) => {
-    setIsConnecting(walletType);
-    
-    try {
-      if (walletType === 'ii') {
-        // Internet Identity login
-        await login();
-        setConnectedWallet(walletType);
-        
-        // Redirect to Internet Identity specific org selector
-        setTimeout(() => {
-          navigate('/org-selector-ii');
-        }, 1000);
-      } else if (walletType === 'plug') {
-        // Plug wallet connection - redirect to original org selector
-        setTimeout(() => {
-          navigate('/org-selector');
-        }, 1000);
-        setConnectedWallet(walletType);
-      } else {
-        // Other wallets - simulate connection
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        setConnectedWallet(walletType);
-        
-        setTimeout(() => {
-          navigate('/org-selector');
-        }, 1000);
+    if (walletType === "plug") {
+      setIsConnecting(walletType);
+      try {
+        await connect();
+        // Connection success is handled by the useEffect above
+      } catch (error) {
+        console.error('Failed to connect Plug wallet:', error);
+        setIsConnecting(null);
       }
-      
-    } catch (error) {
-      console.error(`Failed to connect ${walletType}:`, error);
-    } finally {
-      setIsConnecting(null);
+    } else {
+      // Handle other wallet types (Internet Identity, etc.) here
+      setIsConnecting(walletType);
+      try {
+        // Simulate connection for now
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        console.log(`Connected with ${walletType}`);
+        // Will need to implement other wallet connections later
+      } catch (error) {
+        console.error(`Failed to connect ${walletType}:`, error);
+      } finally {
+        setIsConnecting(null);
+      }
     }
   };
 
@@ -245,270 +110,154 @@ const Auth = () => {
       name: "Plug Wallet",
       description: "Connect with Plug wallet for Internet Computer",
       isRecommended: true,
-      isConnected: connectedWallet === "plug",
+      isConnected: isConnected,
       onConnect: () => handleWalletConnect("plug")
     },
     {
       icon: Shield,
       name: "Internet Identity",
       description: "Secure authentication with Internet Identity",
-      isConnected: connectedWallet === "ii",
+      isConnected: false, // Will implement II later
       onConnect: () => handleWalletConnect("ii")
+    },
+    {
+      icon: Wallet,
+      name: "Stoic Wallet",
+      description: "Connect with Stoic wallet",
+      isConnected: false, // Will implement later
+      onConnect: () => handleWalletConnect("stoic")
     }
   ];
 
   return (
-    <Box 
-      sx={{
-        minHeight: '100vh',
-        background: isDark 
-          ? 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)'
-          : 'linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%)',
-        position: 'relative',
-        overflow: 'hidden'
-      }}
-    >
-    
+    <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-muted/20">
+      <Navigation />
       
-      {/* Background Effects */}
-      <Box 
-        sx={{
-          position: 'absolute',
-          inset: 0,
-          overflow: 'hidden',
-          pointerEvents: 'none'
-        }}
-      >
-        <Box 
-          sx={{
-            position: 'absolute',
-            top: '25%',
-            left: '25%',
-            width: '384px',
-            height: '384px',
-            background: 'rgba(59, 130, 246, 0.05)',
-            borderRadius: '50%',
-            filter: 'blur(60px)',
-            animation: 'pulse 4s ease-in-out infinite'
-          }}
-        />
-        <Box 
-          sx={{
-            position: 'absolute',
-            bottom: '25%',
-            right: '25%',
-            width: '384px',
-            height: '384px',
-            background: 'rgba(147, 51, 234, 0.05)',
-            borderRadius: '50%',
-            filter: 'blur(60px)',
-            animation: 'pulse 4s ease-in-out infinite',
-            animationDelay: '1s'
-          }}
-        />
-      </Box>
+      <div className="relative pt-20">
+        {/* Background Effects */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl animate-pulse-glow" />
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-primary-glow/5 rounded-full blur-3xl animate-pulse-glow" style={{ animationDelay: '1s' }} />
+        </div>
 
-      <Box sx={{ position: 'relative', maxWidth: '1024px', mx: 'auto', px: 2, py: 10 }}>
-        {/* Header */}
-        <Box sx={{ textAlign: 'center', mb: 8 }}>
-          <Box 
-            sx={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 64,
-              height: 64,
-              background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-              borderRadius: '16px',
-              mb: 3,
-              animation: 'pulse 2s ease-in-out infinite'
-            }}
-          >
-            <Shield size={32} color="white" />
-          </Box>
-          
-          <Box 
-            component="h1"
-            sx={{
-              fontSize: { xs: '2.5rem', md: '3rem' },
-              fontWeight: 'bold',
-              mb: 3,
-              background: isDark
-                ? 'linear-gradient(135deg, #f8fafc, #e2e8f0)'
-                : 'linear-gradient(135deg, #1f2937, #374151)',
-              backgroundClip: 'text',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent'
-            }}
-          >
-            Connect Your Wallet
-          </Box>
-          
-          <Box 
-            sx={{
-              fontSize: '1.25rem',
-              color: isDark ? '#cbd5e1' : '#4b5563',
-              maxWidth: '600px',
-              mx: 'auto',
-              mb: 4
-            }}
-          >
-            Choose your wallet to access the Reputation DAO dashboard and start building your on-chain reputation.
-          </Box>
-        </Box>
+        <div className="relative max-w-4xl mx-auto px-4 py-20">
+          {/* Header */}
+          <div className="text-center mb-16 animate-fade-in">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary to-primary-glow rounded-2xl mb-6 animate-pulse-glow">
+              <Shield className="w-8 h-8 text-white" />
+            </div>
+            
+            <h1 className="text-4xl md:text-5xl font-bold mb-6 bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent">
+              Connect Your Wallet
+            </h1>
+            
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
+              Choose your wallet to access the Reputation DAO dashboard and start building your on-chain reputation.
+            </p>
+          </div>
 
-        {/* Display error if any */}
-        {error && (
-          <Box 
-            sx={{
-              mb: 4,
-              p: 2,
-              background: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid rgba(239, 68, 68, 0.2)',
-              borderRadius: '8px',
-              color: '#dc2626',
-              textAlign: 'center'
-            }}
-          >
-            {error}
-          </Box>
-        )}
+          {/* Connected Status - Show if already connected */}
+          {isConnected && principal && (
+            <div className="max-w-2xl mx-auto mb-8">
+              <Card className="glass-card p-6 bg-green-500/10 border-green-500/20">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
+                      <CheckCircle className="w-6 h-6 text-green-500" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-foreground">Wallet Connected</h3>
+                      <p className="text-sm text-muted-foreground font-mono">
+                        {principal.toString().slice(0, 8)}...{principal.toString().slice(-8)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={disconnect}
+                      className="text-red-500 border-red-500/20 hover:bg-red-500/10"
+                    >
+                      Disconnect
+                    </Button>
+                    <Button
+                      onClick={() => navigate('/org-selector')}
+                      className="bg-green-500 hover:bg-green-600 text-white"
+                    >
+                      Continue
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          )}
 
-        {/* Wallet Options */}
-        <Box sx={{ display: 'grid', gap: 3, maxWidth: '600px', mx: 'auto' }}>
-          {walletOptions.map((option, index) => (
-            <Box 
-              key={option.name}
-              sx={{
-                animation: `fadeInUp 0.6s ease-out ${index * 0.1}s both`
-              }}
-            >
-              <WalletOption
-                {...option}
-                isLoading={isConnecting === option.name.toLowerCase().replace(' ', '')}
-              />
-            </Box>
-          ))}
-        </Box>
+          {/* Wallet Options */}
+          <div className="grid gap-6 max-w-2xl mx-auto">
+            {walletOptions.map((option, index) => (
+              <div 
+                key={option.name}
+                className="animate-fade-in"
+                style={{ animationDelay: `${index * 0.1}s` }}
+              >
+                <WalletOption
+                  {...option}
+                  isLoading={isConnecting === option.name.toLowerCase().replace(' ', '')}
+                />
+              </div>
+            ))}
+          </div>
 
-        {/* Security Notice */}
-        <Box 
-          sx={{
-            mt: 8,
-            p: 3,
-            maxWidth: '600px',
-            mx: 'auto',
-            background: isDark
-              ? 'rgba(255, 255, 255, 0.05)'
-              : 'rgba(255, 255, 255, 0.8)',
-            backdropFilter: 'blur(10px)',
-            border: isDark
-              ? '1px solid rgba(255, 255, 255, 0.1)'
-              : '1px solid rgba(0, 0, 0, 0.1)',
-            borderRadius: '16px',
-            animation: 'fadeInUp 0.6s ease-out 0.4s both'
-          }}
-        >
-          <Box display="flex" alignItems="flex-start" gap={2}>
-            <Shield size={24} color="#3b82f6" style={{ marginTop: 4, flexShrink: 0 }} />
-            <Box>
-              <Box 
-                fontWeight="600" 
-                mb={1}
-                sx={{
-                  color: isDark ? '#ffffff' : '#1f2937'
-                }}
-              >
-                Secure & Privacy-First
-              </Box>
-              <Box 
-                fontSize="14px"
-                sx={{
-                  color: isDark ? '#cbd5e1' : '#6b7280'
-                }}
-              >
-                Your wallet connection is secure and private. We never store your private keys or sensitive information. 
-                Your reputation data is stored on-chain and remains under your control.
-              </Box>
-            </Box>
-          </Box>
-        </Box>
+          {/* Security Notice */}
+          <div className="mt-16 p-6 glass-card max-w-2xl mx-auto animate-fade-in" style={{ animationDelay: '0.4s' }}>
+            <div className="flex items-start gap-4">
+              <Shield className="w-6 h-6 text-primary flex-shrink-0 mt-1" />
+              <div>
+                <h3 className="font-semibold text-foreground mb-2">Secure & Privacy-First</h3>
+                <p className="text-sm text-muted-foreground">
+                  Your wallet connection is secure and private. We never store your private keys or sensitive information. 
+                  Your reputation data is stored on-chain and remains under your control.
+                </p>
+              </div>
+            </div>
+          </div>
 
-        {/* Features Preview */}
-        <Box 
-          sx={{
-            mt: 8,
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
-            gap: 3,
-            maxWidth: '1024px',
-            mx: 'auto'
-          }}
-        >
-          {[
-            {
-              icon: Zap,
-              title: "Instant Access",
-              description: "Connect and access your dashboard immediately"
-            },
-            {
-              icon: Shield,
-              title: "Secure Storage",
-              description: "Your reputation is stored securely on-chain"
-            },
-            {
-              icon: Wallet,
-              title: "Multi-Wallet",
-              description: "Support for multiple wallet providers"
-            }
-          ].map((feature, index) => (
-            <Box 
-              key={feature.title}
-              sx={{
-                textAlign: 'center',
-                p: 3,
-                animation: `fadeInUp 0.6s ease-out ${0.5 + index * 0.1}s both`
-              }}
-            >
-              <Box 
-                sx={{
-                  width: 48,
-                  height: 48,
-                  background: isDark
-                    ? 'rgba(59, 130, 246, 0.1)'
-                    : 'rgba(59, 130, 246, 0.15)',
-                  borderRadius: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  mx: 'auto',
-                  mb: 2
-                }}
+          {/* Features Preview */}
+          <div className="mt-16 grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+            {[
+              {
+                icon: Zap,
+                title: "Instant Access",
+                description: "Connect and access your dashboard immediately"
+              },
+              {
+                icon: Shield,
+                title: "Secure Storage",
+                description: "Your reputation is stored securely on-chain"
+              },
+              {
+                icon: Wallet,
+                title: "Multi-Wallet",
+                description: "Support for multiple wallet providers"
+              }
+            ].map((feature, index) => (
+              <div 
+                key={feature.title}
+                className="text-center p-6 animate-fade-in"
+                style={{ animationDelay: `${0.5 + index * 0.1}s` }}
               >
-                <feature.icon size={24} color="#3b82f6" />
-              </Box>
-              <Box 
-                fontWeight="600" 
-                mb={1}
-                sx={{
-                  color: isDark ? '#ffffff' : '#1f2937'
-                }}
-              >
-                {feature.title}
-              </Box>
-              <Box 
-                fontSize="14px"
-                sx={{
-                  color: isDark ? '#cbd5e1' : '#6b7280'
-                }}
-              >
-                {feature.description}
-              </Box>
-            </Box>
-          ))}
-        </Box>
-      </Box>
-    </Box>
+                <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mx-auto mb-4">
+                  <feature.icon className="w-6 h-6 text-primary" />
+                </div>
+                <h3 className="font-semibold text-foreground mb-2">{feature.title}</h3>
+                <p className="text-sm text-muted-foreground">{feature.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
 

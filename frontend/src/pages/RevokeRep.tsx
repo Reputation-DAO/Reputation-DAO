@@ -1,389 +1,516 @@
-import React, { useState, useEffect } from 'react';
-import ProtectedPage from '../components/layout/ProtectedPage';
-import { Principal } from '@dfinity/principal';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Principal } from "@dfinity/principal";
+import { useRole } from "@/contexts/RoleContext";
+import { usePlugConnection } from "@/hooks/usePlugConnection";
+import { getPlugActor, revokeRep, getTransactionsByUser } from "@/components/canister/reputationDao";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
+import { toast } from "sonner";
 import {
-  Box,
-  Typography,
-  Button,
-  Alert,
-  Snackbar,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle
-} from '@mui/material';
-import {
-  RemoveCircle,
+  UserMinus,
+  AlertTriangle,
+  TrendingDown,
+  User,
+  Shield,
+  Info,
+  History
+} from "lucide-react";
 
-} from '@mui/icons-material';
-import { getPlugActor } from '../components/canister/reputationDao';
-import  RevokeReputationCard  from '../components/Dashboard/revokerep/RevokeForm';
-import  RevocationSummary  from '../components/Dashboard/revokerep/RevokeSum';
-import  RevocationRecent  from '../components/Dashboard/revokerep/RecentRevoke';
-
-interface RevokeTransaction {
-  id: string;
-  recipient: string;
-  amount: number;
+interface RevokeFormData {
+  recipientAddress: string;
+  reputationAmount: string;
+  category: string;
   reason: string;
-  date: string;
-  status: 'pending' | 'completed' | 'failed';
+}
+
+interface RecentRevocation {
+  id: string;
+  recipientName: string;
+  recipientAddress: string;
+  amount: number;
+  category: string;
+  reason: string;
+  timestamp: Date;
   revokedBy: string;
 }
 
-interface BackendTransaction {
-  id: bigint;
-  transactionType: { Award: null } | { Revoke: null };
-  from: Principal;
-  to: Principal;
-  amount: bigint;
-  timestamp: bigint;
-  reason: [] | [string];
-}
+const revocationCategories = [
+  "Misconduct",
+  "Policy Violation",
+  "Spam",
+  "Inactive Participation",
+  "Fraudulent Activity",
+  "Community Guidelines Violation",
+  "Code of Conduct Breach",
+  "Other"
+];
 
-const RevokeRep: React.FC = () => {
-  const [recipient, setRecipient] = useState('');
-  const [amount, setAmount] = useState('');
-  const [reason, setReason] = useState('');
-  const [category, setCategory] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [confirmDialog, setConfirmDialog] = useState(false);
-  const [totalPointsRevoked , setTotalPointsRevoked] = useState(0);
-  const [totalRevocations, setTotalRevocations] = useState(0);
-  const [recentRevocations, setRecentRevocations] = useState<RevokeTransaction[]>([]);
-  const [orgId, setOrgId] = useState<string | null>(null);
-  const [snackbar, setSnackbar] = useState<{
-    open: boolean;
-    message: string;
-    severity: 'success' | 'error' | 'warning' | 'info';
-  }>({ open: false, message: '', severity: 'success' });
+const RevokeRep = () => {
+  const navigate = useNavigate();
+  const { userRole, isAdmin, isAwarder } = useRole();
+  const { isConnected, principal } = usePlugConnection({ autoCheck: true });
+  const [formData, setFormData] = useState<RevokeFormData>({
+    recipientAddress: '',
+    reputationAmount: '',
+    category: '',
+    reason: ''
+  });
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [recentRevocations, setRecentRevocations] = useState<RecentRevocation[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  // Get orgId from localStorage
+  // Load recent revocations
   useEffect(() => {
-    const storedOrgId = localStorage.getItem('selectedOrgId');
-    if (storedOrgId) {
-      setOrgId(storedOrgId);
-    }
-  }, []);
-
-  // Load recent revocations when orgId is available
-  useEffect(() => {
-    if (orgId) {
-      loadRecentRevocations();
-    }
-  }, [orgId]);
-
-  // Load recent revocations from blockchain
-  const loadRecentRevocations = async () => {
-    if (!orgId) return;
-    try {
-      console.log('🔄 Loading recent revoke transactions...');
-      console.log('🔗 Getting Plug actor connection...');
-      const actor = await getPlugActor();
-      console.log('✅ Actor connected:', !!actor);
-
-      console.log('📞 Calling getTransactionHistory() with orgId:', orgId);
-      const transactionsResult = await actor.getTransactionHistory(orgId);
-
-      // Handle Motoko optional array (? [Transaction]) exactly like AwardRep
-      const transactions: BackendTransaction[] = Array.isArray(transactionsResult)
-        ? (transactionsResult[0] || [])
-        : (transactionsResult || []);
-
-      console.log('📊 Raw transactions for revocations:', transactions);
-      console.log('📊 Total transactions count:', transactions.length);
-
-      if (!Array.isArray(transactions)) {
-        console.warn('⚠️ Transactions is not an array:', transactions);
-        setRecentRevocations([]);
-        setTotalPointsRevoked(0);
-        setTotalRevocations(0);
-        return;
-      }
-
-      // Filter and convert revoke transactions (last 10, newest first)
-      const revokeTransactions: RevokeTransaction[] = transactions
-        .filter(tx => tx.transactionType && 'Revoke' in tx.transactionType)
-        .slice(-10)
-        .map(tx => {
-          const timestamp = Number(tx.timestamp);
-          const date = timestamp > 0
-            ? new Date(timestamp * 1000).toISOString().split('T')[0] // seconds → ms
-            : new Date().toISOString().split('T')[0];
-
-          return {
-            id: tx.id.toString(),
-            recipient: tx.to.toString(),
+    const loadRecentRevocations = async () => {
+      if (!isConnected || !principal) return;
+      
+      try {
+        const principalObj = Principal.fromText(principal);
+        const transactions = await getTransactionsByUser(principalObj);
+        
+        // Filter revocation transactions and format
+        const revocations = transactions
+          .filter(tx => tx.transactionType && typeof tx.transactionType === 'object' && tx.transactionType && 'Revoke' in tx.transactionType)
+          .slice(0, 5) // Get last 5 revocations
+          .map((tx, index) => ({
+            id: `rev-${index}`,
+            recipientName: `User ${tx.to.toString().slice(0, 8)}`,
+            recipientAddress: tx.to.toString(),
             amount: Number(tx.amount),
-            reason: (tx.reason && tx.reason.length > 0) ? tx.reason[0]! : 'No reason provided',
-            date,
-            status: 'completed' as const,
+            category: "General", // Default category since backend doesn't have this
+            reason: tx.reason.length > 0 ? tx.reason[0] : "No reason provided",
+            timestamp: new Date(Number(tx.timestamp) / 1000000), // Convert nanoseconds to milliseconds
             revokedBy: tx.from.toString()
-          };
-        })
-        .reverse();
+          }));
+          
+        setRecentRevocations(revocations);
+      } catch (error) {
+        console.error("Error loading recent revocations:", error);
+      }
+    };
 
-      console.log('🎯 Processed revoke transactions:', revokeTransactions);
-      console.log('🎯 Revoke transactions count:', revokeTransactions.length);
+    loadRecentRevocations();
+  }, [isConnected, principal]);
 
-      setRecentRevocations(revokeTransactions);
+  const [stats] = useState({
+    totalRevocations: recentRevocations.length,
+    totalREPRevoked: recentRevocations.reduce((sum, rev) => sum + rev.amount, 0),
+    monthlyRevocations: recentRevocations.filter(rev => 
+      new Date(rev.timestamp).getMonth() === new Date().getMonth()
+    ).length
+  });
 
-      // Totals
-      const totalPointsRevoked = revokeTransactions.reduce((sum, tx) => sum + tx.amount, 0);
-      setTotalPointsRevoked(totalPointsRevoked);
-      setTotalRevocations(revokeTransactions.length);
-
-    } catch (error) {
-      console.error('❌ Error loading recent revocations:', error);
-      setRecentRevocations([]);
-      setTotalPointsRevoked(0);
-      setTotalRevocations(0);
-      setSnackbar({
-        open: true,
-        message: 'Failed to load recent revocations from blockchain. The canister may be empty or connection failed.',
-        severity: 'warning'
-      });
-    }
+  const handleInputChange = (field: keyof RevokeFormData, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleRevokeSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!recipient || !amount || !reason) {
-      setSnackbar({
-        open: true,
-        message: 'Please fill in all required fields',
-        severity: 'warning'
-      });
+    
+    if (!formData.recipientAddress || !formData.reputationAmount || !formData.category || !formData.reason) {
+      toast.error("Please fill in all required fields");
       return;
     }
 
-    // Validate Principal ID format
-    try {
-      Principal.fromText(recipient);
-    } catch {
-      setSnackbar({
-        open: true,
-        message: 'Invalid Principal ID format',
-        severity: 'error'
-      });
+    if (!isConnected || !principal) {
+      toast.error("Please connect your wallet first");
       return;
     }
 
-    // Validate amount
-    const numAmount = parseInt(amount);
-    if (isNaN(numAmount) || numAmount <= 0) {
-      setSnackbar({
-        open: true,
-        message: 'Amount must be a positive number',
-        severity: 'error'
-      });
+    if (!showConfirmation) {
+      setShowConfirmation(true);
       return;
     }
-
-    setConfirmDialog(true);
-  };
-
-  const handleConfirmRevoke = async () => {
-    setConfirmDialog(false);
-    setIsLoading(true);
 
     try {
-      const actor = await getPlugActor();
-      if (!actor) {
-        throw new Error('Failed to connect to blockchain. Please ensure you are logged in.');
-      }
-
-      const recipientPrincipal = Principal.fromText(recipient);
-      const numAmount = parseInt(amount);
-
-      console.log('Revoking reputation:', {
-        to: recipientPrincipal.toString(),
-        amount: numAmount,
-        reason: reason
-      });
-
-      const orgId = localStorage.getItem('selectedOrgId')?.trim();
-      if (!orgId) {
-        throw new Error('No orgId found in localStorage');
-      }
-
-      console.log('📞 Calling revokeRep() - auto-injecting orgId...');
-      const result = await actor.revokeRep(orgId, recipientPrincipal, BigInt(numAmount), [reason]);
-      console.log('✅ Revoke result:', result);
-
-      // Backend string error pattern handling (mirrors Award)
-      if (typeof result === 'string' && result.startsWith('Error:')) {
-        console.error('❌ Backend returned error:', result);
-        setSnackbar({
-          open: true,
-          message: result,
-          severity: 'error'
-        });
+      setLoading(true);
+      
+      // Get organization ID from localStorage
+      const selectedOrgId = localStorage.getItem('selectedOrgId');
+      if (!selectedOrgId) {
+        toast.error("No organization selected. Please select an organization first.");
         return;
       }
 
-      setSnackbar({
-        open: true,
-        message: `Successfully revoked ${amount} reputation points from ${recipient}`,
-        severity: 'success'
+      // Parse recipient principal
+      const recipientPrincipal = Principal.fromText(formData.recipientAddress);
+      const amount = parseInt(formData.reputationAmount);
+      
+      console.log('🔄 Revoking reputation:', {
+        orgId: selectedOrgId,
+        recipient: recipientPrincipal.toString(),
+        amount,
+        reason: formData.reason
       });
 
-      // Reset form
-      setRecipient('');
-      setAmount('');
-      setReason('');
-      setCategory('');
-
-      // Reload recent revocations immediately (no setTimeout needed)
-      await loadRecentRevocations();
-
-    } catch (error: any) {
-      console.error('❌ Error revoking reputation:', error);
-      let errorMessage = 'Failed to revoke reputation. Please try again.';
-      if (error?.message) {
-        // mirror Award-style surface of backend reasons
-        if (error.message.includes('Not a trusted awarder')) {
-          errorMessage = 'You are not authorized to revoke reputation points.';
-        } else if (error.message.includes('Daily mint cap exceeded')) {
-          errorMessage = 'Daily limit exceeded.';
-        } else if (error.message.includes('Cannot revoke from yourself')) {
-          errorMessage = 'You cannot revoke reputation points from yourself.';
-        } else {
-          errorMessage = error.message;
-        }
+      // Call backend revokeRep function
+      const result = await revokeRep(selectedOrgId, recipientPrincipal, amount, formData.reason);
+      
+      // Check if result indicates an error
+      if (typeof result === 'string') {
+        console.error('❌ Backend returned error:', result);
+        toast.error(`Failed to revoke reputation: ${result}`);
+        return;
       }
-      setSnackbar({
-        open: true,
-        message: errorMessage,
-        severity: 'error'
+      
+      console.log('✅ Reputation revoked successfully:', result);
+      toast.success(`Successfully revoked ${amount} REP points from ${formData.recipientAddress}`);
+      
+      // Reset form
+      setFormData({
+        recipientAddress: '',
+        reputationAmount: '',
+        category: '',
+        reason: ''
       });
+      setShowConfirmation(false);
+      
+      // Reload recent revocations to show the new one
+      const principalObj = Principal.fromText(principal);
+      const transactions = await getTransactionsByUser(principalObj);
+      const revocations = transactions
+        .filter(tx => tx.transactionType && typeof tx.transactionType === 'object' && tx.transactionType && 'Revoke' in tx.transactionType)
+        .slice(0, 5)
+        .map((tx, index) => ({
+          id: `rev-${index}`,
+          recipientName: `User ${tx.to.toString().slice(0, 8)}`,
+          recipientAddress: tx.to.toString(),
+          amount: Number(tx.amount),
+          category: "General",
+          reason: tx.reason.length > 0 ? tx.reason[0] : "No reason provided",
+          timestamp: new Date(Number(tx.timestamp) / 1000000),
+          revokedBy: tx.from.toString()
+        }));
+      setRecentRevocations(revocations);
+      
+    } catch (error) {
+      console.error("❌ Error revoking reputation:", error);
+      if (error instanceof Error) {
+        if (error.message.includes("Invalid principal")) {
+          toast.error("Invalid recipient address. Please check the principal format.");
+        } else if (error.message.includes("Organization does not exist")) {
+          toast.error("Organization not found. Please check your organization selection.");
+        } else if (error.message.includes("User not authorized")) {
+          toast.error("You don't have permission to revoke reputation in this organization.");
+        } else {
+          toast.error(`Failed to revoke reputation: ${error.message}`);
+        }
+      } else {
+        toast.error("Failed to revoke reputation. Please try again.");
+      }
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleCloseSnackbar = () => {
-    setSnackbar(prev => ({ ...prev, open: false }));
+  const handleDisconnect = () => {
+    navigate('/auth');
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed': return 'success';
-      case 'pending': return 'warning';
-      case 'failed': return 'error';
-      default: return 'default';
-    }
-  };
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-muted/20 flex items-center justify-center">
+        <Card className="glass-card p-8 max-w-md mx-auto text-center">
+          <AlertTriangle className="w-12 h-12 text-orange-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-foreground mb-2">Access Denied</h2>
+          <p className="text-muted-foreground mb-4">
+            You don't have permission to revoke reputation points. Only admins can revoke reputation.
+          </p>
+          <Button onClick={() => navigate('/dashboard')}>
+            Return to Dashboard
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
   return (
-    <Box sx={{ 
-      p: 3, 
-      backgroundColor: 'hsl(var(--background))',
-      minHeight: '100vh'
-    }}>
-      <Typography 
-        variant="h4" 
-        sx={{ 
-          mb: 3, 
-          color: 'hsl(var(--foreground))',
-          fontWeight: 600,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2
-        }}
-      >
-        <RemoveCircle sx={{ color: 'hsl(var(--destructive))' }} />
-        Revoke Reputation
-      </Typography>
-
-      <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', lg: 'row' } }}>
-        {/* Revoke Form */}
-        <RevokeReputationCard
-          recipient={recipient}
-          setRecipient={setRecipient}
-          amount={amount}
-          setAmount={setAmount}
-          category={category}
-          setCategory={setCategory}
-          reason={reason}
-          setReason={setReason}
-          isLoading={isLoading}
-          handleRevokeSubmit={handleRevokeSubmit}
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
+        <DashboardSidebar 
+          userRole={userRole.toLowerCase() as 'admin' | 'awarder' | 'member'}
+          userName={`User ${principal?.slice(0, 8) || 'Unknown'}`}
+          userPrincipal={principal || ''}
+          onDisconnect={handleDisconnect}
         />
+        
+        <div className="flex-1">
+          {/* Header */}
+          <header className="h-16 border-b border-border/40 flex items-center px-6 glass-header">
+            <SidebarTrigger className="mr-4" />
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500/20 to-red-600/20 flex items-center justify-center">
+                <UserMinus className="w-4 h-4 text-red-600" />
+              </div>
+              <div>
+                <h1 className="text-lg font-semibold text-foreground">Revoke Reputation</h1>
+                <p className="text-xs text-muted-foreground">Remove reputation points for violations</p>
+              </div>
+            </div>
+          </header>
 
+          {/* Main Content */}
+          <main className="p-6">
+            <div className="max-w-7xl mx-auto">
+              <div className="grid lg:grid-cols-3 gap-6">
+                {/* Revoke Form */}
+                <div className="lg:col-span-2 space-y-6">
+                  <Card className="glass-card p-6 animate-fade-in">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500/20 to-red-600/20 flex items-center justify-center">
+                        <UserMinus className="w-5 h-5 text-red-600" />
+                      </div>
+                      <div>
+                        <h2 className="text-lg font-semibold text-foreground">Revoke Reputation Points</h2>
+                        <p className="text-sm text-muted-foreground">Remove reputation for policy violations</p>
+                      </div>
+                    </div>
 
-        {/* Revocation Summary */}
-        <RevocationSummary 
-  totalRevocations={totalRevocations} 
-  totalPointsRevoked={totalPointsRevoked} 
-/>
+                    <Alert className="mb-6 border-orange-500/20 bg-orange-500/5">
+                      <AlertTriangle className="h-4 w-4 text-orange-600" />
+                      <AlertDescription className="text-orange-800 dark:text-orange-200">
+                        <strong>Warning:</strong> Revoking reputation points is a serious action that cannot be easily undone. 
+                        Please ensure you have valid reasons and proper authorization.
+                      </AlertDescription>
+                    </Alert>
 
-      </Box>
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                      <div className="grid md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="recipientAddress" className="text-sm font-medium text-foreground">
+                            Recipient Address *
+                          </Label>
+                          <div className="relative">
+                            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                            <Input
+                              id="recipientAddress"
+                              placeholder="Enter Principal ID (e.g. rdmx6-jaaaa-aaaah-qcaiq-cai)"
+                              value={formData.recipientAddress}
+                              onChange={(e) => handleInputChange('recipientAddress', e.target.value)}
+                              className="pl-10 glass-input"
+                              required
+                            />
+                          </div>
+                        </div>
 
-      {/* Recent Revocations */}
-      <RevocationRecent
-  recentRevocations={recentRevocations} 
-  getStatusColor={getStatusColor} 
-/>
+                        <div className="space-y-2">
+                          <Label htmlFor="reputationAmount" className="text-sm font-medium text-foreground">
+                            Reputation Amount *
+                          </Label>
+                          <div className="relative">
+                            <UserMinus className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                            <Input
+                              id="reputationAmount"
+                              type="number"
+                              placeholder="Enter amount to revoke"
+                              value={formData.reputationAmount}
+                              onChange={(e) => handleInputChange('reputationAmount', e.target.value)}
+                              className="pl-10 glass-input"
+                              min="1"
+                              required
+                            />
+                          </div>
+                        </div>
+                      </div>
 
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-foreground">Revocation Category *</Label>
+                        <Select value={formData.category} onValueChange={(value) => handleInputChange('category', value)}>
+                          <SelectTrigger className="glass-input">
+                            <SelectValue placeholder="Select revocation category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {revocationCategories.map((category) => (
+                              <SelectItem key={category} value={category}>
+                                {category}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-      {/* Confirmation Dialog */}
-      <Dialog
-        open={confirmDialog}
-        onClose={() => setConfirmDialog(false)}
-        aria-labelledby="confirm-dialog-title"
-        aria-describedby="confirm-dialog-description"
-      >
-        <DialogTitle id="confirm-dialog-title" sx={{ color: 'hsl(var(--foreground))' }}>
-          Confirm Reputation Revocation
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText id="confirm-dialog-description" sx={{ color: 'hsl(var(--muted-foreground))' }}>
-            Are you sure you want to revoke <strong>{amount} reputation points</strong> from <strong>{recipient}</strong>?
-            This action requires administrative approval and will be logged for audit purposes.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmDialog(false)} sx={{ color: 'hsl(var(--muted-foreground))' }}>
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleConfirmRevoke} 
-            sx={{ 
-              color: 'hsl(var(--destructive))',
-              fontWeight: 600
-            }}
-            autoFocus
-          >
-            Confirm Revocation
-          </Button>
-        </DialogActions>
-      </Dialog>
+                      <div className="space-y-2">
+                        <Label htmlFor="reason" className="text-sm font-medium text-foreground">
+                          Reason for Revocation *
+                        </Label>
+                        <Textarea
+                          id="reason"
+                          placeholder="Provide detailed explanation for the revocation..."
+                          value={formData.reason}
+                          onChange={(e) => handleInputChange('reason', e.target.value)}
+                          className="glass-input min-h-[120px] resize-none"
+                          required
+                        />
+                      </div>
 
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={handleCloseSnackbar}
-      >
-        <Alert 
-          onClose={handleCloseSnackbar} 
-          severity={snackbar.severity}
-          sx={{ width: '100%' }}
-        >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-    </Box>
+                      <div className="flex items-center gap-2 p-4 bg-red-500/5 border border-red-500/10 rounded-lg">
+                        <Shield className="w-5 h-5 text-red-600 flex-shrink-0" />
+                        <p className="text-sm text-muted-foreground">
+                          All revocations are logged and require administrative approval.
+                        </p>
+                      </div>
+
+                      {showConfirmation && (
+                        <Alert className="border-red-500/20 bg-red-500/5">
+                          <AlertTriangle className="h-4 w-4 text-red-600" />
+                          <AlertDescription className="text-red-800 dark:text-red-200">
+                            Are you sure you want to revoke <strong>{formData.reputationAmount} REP</strong> from this address? 
+                            This action will be permanently recorded.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+
+                      <div className="flex gap-3">
+                        {showConfirmation ? (
+                          <>
+                            <Button 
+                              type="submit" 
+                              variant="destructive" 
+                              size="lg" 
+                              className="flex-1 group"
+                              disabled={loading}
+                            >
+                              {loading ? (
+                                <>
+                                  <div className="w-4 h-4 border-2 border-white border-r-transparent rounded-full animate-spin mr-2" />
+                                  Revoking...
+                                </>
+                              ) : (
+                                <>
+                                  <UserMinus className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                                  Confirm Revocation
+                                </>
+                              )}
+                            </Button>
+                            <Button 
+                              type="button" 
+                              variant="outline" 
+                              size="lg" 
+                              onClick={() => setShowConfirmation(false)}
+                              disabled={loading}
+                            >
+                              Cancel
+                            </Button>
+                          </>
+                        ) : (
+                          <Button 
+                            type="submit" 
+                            variant="destructive" 
+                            size="lg" 
+                            className="w-full group"
+                            disabled={loading}
+                          >
+                            <UserMinus className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                            Revoke Reputation
+                          </Button>
+                        )}
+                      </div>
+                    </form>
+                  </Card>
+                </div>
+
+                {/* Sidebar Stats & Recent Revocations */}
+                <div className="space-y-6">
+                  {/* Revocation Summary */}
+                  <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: '0.1s' }}>
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500/20 to-red-600/20 flex items-center justify-center">
+                        <TrendingDown className="w-4 h-4 text-red-600" />
+                      </div>
+                      <h3 className="font-semibold text-foreground">Revocation Summary</h3>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between p-3 glass-card rounded-lg">
+                        <span className="text-sm text-muted-foreground">Total Revocations</span>
+                        <Badge variant="destructive" className="font-mono">
+                          {stats.totalRevocations}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center justify-between p-3 glass-card rounded-lg">
+                        <span className="text-sm text-muted-foreground">Total REP Revoked</span>
+                        <Badge variant="destructive" className="font-mono">
+                          {stats.totalREPRevoked} REP
+                        </Badge>
+                      </div>
+                      <div className="flex items-center justify-between p-3 glass-card rounded-lg">
+                        <span className="text-sm text-muted-foreground">This Month</span>
+                        <Badge variant="secondary" className="font-mono">
+                          {stats.monthlyRevocations}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 p-3 bg-orange-500/5 border border-orange-500/10 rounded-lg">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Info className="w-4 h-4 text-orange-600" />
+                        <span className="text-sm font-medium text-orange-800 dark:text-orange-200">Notice</span>
+                      </div>
+                      <p className="text-xs text-orange-700 dark:text-orange-300">
+                        All revocations are logged and require administrative approval.
+                      </p>
+                    </div>
+                  </Card>
+
+                  {/* Recent Revocations */}
+                  <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: '0.2s' }}>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-semibold text-foreground">Recent Revocations</h3>
+                      <Button variant="ghost" size="sm" onClick={() => navigate('/transaction-log')}>
+                        View all
+                      </Button>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      {recentRevocations.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <History className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                          <p className="text-sm">No revocations yet</p>
+                        </div>
+                      ) : (
+                        recentRevocations.map((revocation) => (
+                          <div key={revocation.id} className="p-3 glass-card rounded-lg hover:shadow-md transition-all duration-200 border-l-2 border-red-500/30">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-medium text-foreground text-sm">
+                                {revocation.recipientName}
+                              </span>
+                              <Badge variant="destructive" className="text-xs">
+                                -{revocation.amount} REP
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
+                              {revocation.reason}
+                            </p>
+                            <div className="flex items-center justify-between">
+                              <Badge variant="outline" className="text-xs border-red-500/20 text-red-600">
+                                {revocation.category}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {revocation.timestamp.toLocaleDateString()}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </Card>
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
   );
 };
 
-const RevokeRepWithProtection: React.FC = () => {
-  return (
-    <ProtectedPage>
-      <RevokeRep />
-    </ProtectedPage>
-  );
-};
-
-export default RevokeRepWithProtection;
+export default RevokeRep;

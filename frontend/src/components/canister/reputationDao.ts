@@ -1,9 +1,33 @@
-
-import { idlFactory } from '../../../../src/declarations/reputation_dao/reputation_dao.did.js';
-import type { _SERVICE } from '../../../../src/declarations/reputation_dao/reputation_dao.did.d.ts';
+import { idlFactory } from '../../declarations/reputation_dao/reputation_dao.did.js';
+import type { _SERVICE } from '../../declarations/reputation_dao/reputation_dao.did.d.ts';
 import { Principal } from '@dfinity/principal';
 import { Actor, HttpAgent } from '@dfinity/agent';
 import { AuthClient } from '@dfinity/auth-client';
+
+// Routes where Plug should be completely blocked
+const RESTRICTED_ROUTES = ['/', '/docs', '/blog', '/community'];
+
+// Helper function to check if current route allows Plug
+const isPlugAllowedOnCurrentRoute = (): boolean => {
+  const currentPath = window.location.pathname;
+  const isRestricted = RESTRICTED_ROUTES.includes(currentPath);
+  if (isRestricted) {
+    console.log(`🚫 Plug access blocked on route: ${currentPath}`);
+  }
+  return !isRestricted;
+};
+
+// Helper function to get the selected organization
+const getSelectedOrgId = (): string => {
+  const orgId = localStorage.getItem('selectedOrgId');
+  if (!orgId) {
+    throw new Error('No organization selected. Please select an organization first.');
+  }
+  return orgId;
+};
+
+// Canister ID for the reputation DAO
+const CANISTER_ID = "6xhyy-ryaaa-aaaab-qacqa-cai";
 
 // === DECAY SYSTEM TYPES ===
 export type TransactionType = 'Award' | 'Revoke' | 'Decay';
@@ -52,9 +76,14 @@ export interface Awarder {
 }
 
 //modify this canisterID based on where the dfx playground hosts your backend
-const canisterId = '3f6pv-baaaa-aaaab-qacoq-cai';
+const canisterId = 'ysmdh-qyaaa-aaaab-qacga-cai';
 
 export const getPlugActor = async () => {
+  // Block Plug access on restricted routes
+  if (!isPlugAllowedOnCurrentRoute()) {
+    throw new Error('Plug access is not allowed on this route');
+  }
+
   if (!window.ic?.plug) {
     throw new Error('Plug extension not found');
   }
@@ -80,14 +109,14 @@ export const getPlugActor = async () => {
       console.log('✅ Using existing Plug connection');
     }
 
-    // 2. Create agent with playground network host (only if needed)
+    // 2. Create agent with IC host (playground canisters run on IC mainnet)
     const agent = window.ic.plug.agent;
     if (!agent) {
       console.log('🌐 Creating new agent...');
       await window.ic.plug.createAgent({
-        host: 'https://ic0.app', // Playground network uses IC mainnet infrastructure
+        host: 'https://ic0.app', // IC mainnet host for playground canisters
       });
-      console.log('🌐 Agent created with playground host');
+      console.log('🌐 Agent created with IC host');
     } else {
       console.log('🌐 Using existing agent');
     }
@@ -102,11 +131,18 @@ export const getPlugActor = async () => {
     
     // Test the connection by calling a simple query
     try {
-      const transactionCount = await actor.getTransactionCount();
+      // Try a simple canister call to test connectivity
+      const orgId = localStorage.getItem('selectedOrgId') || 'default';
+      console.log('🔍 Testing connection with orgId:', orgId);
+      const transactionCount = await actor.getTransactionCount(orgId);
       console.log('🔄 Connection test successful. Transaction count:', transactionCount);
-    } catch (testError) {
+    } catch (testError: any) {
       console.warn('⚠️ Connection test failed:', testError);
-      // Don't throw here, let the caller handle it
+      // For playground network, connection test failures are often due to network latency
+      // Don't throw here, let the caller handle it - the actor might still work
+      if (testError.message?.includes('Reply not received')) {
+        console.log('💡 This might be a network timeout issue, but the actor should still work');
+      }
     }
     
     return actor;
@@ -118,6 +154,11 @@ export const getPlugActor = async () => {
 
 // Utility function to check if Plug is connected
 export const isPlugConnected = async (): Promise<boolean> => {
+  // Block Plug access on restricted routes
+  if (!isPlugAllowedOnCurrentRoute()) {
+    return false;
+  }
+
   if (!window.ic?.plug) {
     return false;
   }
@@ -141,7 +182,7 @@ export const getInternetIdentityActor = async (): Promise<_SERVICE> => {
   const identity = authClient.getIdentity();
   const agent = new HttpAgent({ 
     identity,
-    host: 'https://ic0.app'
+    host: 'https://ic0.app' // IC mainnet host for playground canisters
   });
 
   // Only fetch root key in development
@@ -185,24 +226,28 @@ export const isInternetIdentityConnected = async (): Promise<boolean> => {
 
 // Utility function to get current principal
 export const getCurrentPrincipal = async () => {
+  // Block Plug access on restricted routes
+  if (!isPlugAllowedOnCurrentRoute()) {
+    throw new Error('Plug access is not allowed on this route');
+  }
+
   try {
-    if (!window.ic?.plug) {
-      console.log('❌ Plug extension not found');
-      return null;
-    }
-    
     const isConnected = await isPlugConnected();
     if (!isConnected) {
-      console.log('❌ Plug is not connected');
-      return null;
+      throw new Error('Plug wallet not connected');
     }
     
-    const principal = await window.ic.plug.agent.getPrincipal();
+    if (!window.ic?.plug?.agent) {
+      throw new Error('Plug agent not found');
+    }
+    
+    // Type assertion for the agent's getPrincipal method
+    const principal = await (window.ic.plug.agent as any).getPrincipal();
     console.log('✅ Got principal:', principal.toString());
     return principal;
   } catch (error) {
     console.error('❌ Error getting current principal:', error);
-    return null;
+    throw error;
   }
 };
 
@@ -284,11 +329,11 @@ export const getBalanceWithDetails = async (principal: Principal): Promise<Balan
       rawBalance: Number(details.rawBalance),
       currentBalance: Number(details.currentBalance),
       pendingDecay: Number(details.pendingDecay),
-      decayInfo: details.decayInfo ? {
-        lastDecayTime: Number(details.decayInfo.lastDecayTime),
-        registrationTime: Number(details.decayInfo.registrationTime),
-        lastActivityTime: Number(details.decayInfo.lastActivityTime),
-        totalDecayed: Number(details.decayInfo.totalDecayed),
+      decayInfo: details.decayInfo && details.decayInfo.length > 0 ? {
+        lastDecayTime: Number(details.decayInfo[0].lastDecayTime),
+        registrationTime: Number(details.decayInfo[0].registrationTime),
+        lastActivityTime: Number(details.decayInfo[0].lastActivityTime),
+        totalDecayed: Number(details.decayInfo[0].totalDecayed),
       } : undefined,
     };
   } catch (error) {
@@ -411,9 +456,14 @@ export const getTransactionHistory = async (): Promise<Transaction[]> => {
 export const getTransactionsByUser = async (principal: Principal): Promise<Transaction[]> => {
   try {
     const actor = await getPlugActor();
-    const transactions = await actor.getTransactionsByUser(principal);
+    const orgId = getSelectedOrgId();
+    const transactions = await actor.getTransactionsByUser(orgId, principal);
     
-    return transactions.map((tx: any) => ({
+    if (!transactions || transactions.length === 0) {
+      return [];
+    }
+    
+    return transactions[0].map((tx: any) => ({
       id: Number(tx.id),
       transactionType: Object.keys(tx.transactionType)[0] as TransactionType,
       from: tx.from,
@@ -493,8 +543,9 @@ export const getDecayAnalytics = async (): Promise<any> => {
 export const getBalance = async (principal: Principal): Promise<number> => {
   try {
     const actor = await getPlugActor();
-    const balance = await actor.getBalance(principal);
-    return Number(balance);
+    const orgId = getSelectedOrgId();
+    const balance = await actor.getBalance(orgId, principal);
+    return balance && balance.length > 0 ? Number(balance[0]) : 0;
   } catch (error) {
     console.error('Error fetching balance:', error);
     return 0;
@@ -604,5 +655,175 @@ export const getOrgDecayAnalytics = async (orgId: string): Promise<any> => {
   } catch (error) {
     console.error('Error fetching org decay analytics:', error);
     return null;
+  }
+};
+
+// === DAO FUNCTIONALITY ===
+
+// Award reputation points
+// Award reputation points
+export const awardRep = async (
+  recipient: string,
+  amount: number,
+  reason?: string
+): Promise<any> => {
+  try {
+    const actor = await getPlugActor();
+    const orgId = getSelectedOrgId();
+    const recipientPrincipal = Principal.fromText(recipient);
+    
+    return await actor.awardRep(
+      orgId,
+      recipientPrincipal,
+      BigInt(amount),
+      reason ? [reason] : []
+    );
+  } catch (error) {
+    console.error('Error awarding reputation:', error);
+    throw error;
+  }
+};
+
+// Award reputation points with explicit orgId (for admin use)
+export const awardRepWithOrgId = async (
+  orgId: string,
+  recipient: Principal,
+  amount: number,
+  reason?: string
+): Promise<string> => {
+  try {
+    const actor = await getPlugActor();
+    return await actor.awardRep(
+      orgId,
+      recipient,
+      BigInt(amount),
+      reason ? [reason] : []
+    );
+  } catch (error) {
+    console.error('Error awarding reputation:', error);
+    throw error;
+  }
+};
+
+// Revoke reputation points
+export const revokeRep = async (
+  orgId: string,
+  user: Principal,
+  amount: number,
+  reason?: string
+): Promise<string> => {
+  try {
+    const actor = await getPlugActor();
+    return await actor.revokeRep(
+      orgId,
+      user,
+      BigInt(amount),
+      reason ? [reason] : []
+    );
+  } catch (error) {
+    console.error('Error revoking reputation:', error);
+    throw error;
+  }
+};
+
+// Add trusted awarder
+export const addTrustedAwarder = async (
+  orgId: string,
+  awarder: Principal,
+  name: string
+): Promise<string> => {
+  try {
+    const actor = await getPlugActor();
+    return await actor.addTrustedAwarder(orgId, awarder, name);
+  } catch (error) {
+    console.error('Error adding trusted awarder:', error);
+    throw error;
+  }
+};
+
+// Remove trusted awarder
+export const removeTrustedAwarder = async (
+  orgId: string,
+  awarder: Principal
+): Promise<string> => {
+  try {
+    const actor = await getPlugActor();
+    return await actor.removeTrustedAwarder(orgId, awarder);
+  } catch (error) {
+    console.error('Error removing trusted awarder:', error);
+    throw error;
+  }
+};
+
+// Get trusted awarders for an organization
+export const getTrustedAwarders = async (orgId: string): Promise<Awarder[]> => {
+  try {
+    const actor = await getPlugActor();
+    const awarders = await actor.getTrustedAwarders(orgId);
+    return awarders[0] || [];
+  } catch (error) {
+    console.error('Error fetching trusted awarders:', error);
+    return [];
+  }
+};
+
+// Create/Register a new organization
+export const createOrganization = async (
+  orgId: string,
+  orgName: string,
+  description: string
+): Promise<string> => {
+  try {
+    const actor = await getPlugActor();
+    return await actor.registerOrg(orgId);
+  } catch (error) {
+    console.error('Error creating organization:', error);
+    throw error;
+  }
+};
+
+// Get organizations for a user (using available canister methods)
+export const getUserOrganizations = async (user: Principal): Promise<string[]> => {
+  try {
+    const actor = await getPlugActor();
+    // Use getAllOrgs and filter based on user permissions
+    const orgs = await actor.getAllOrgs();
+    return orgs || [];
+  } catch (error) {
+    console.error('Error fetching user organizations:', error);
+    return [];
+  }
+};
+
+// Get all organizations
+export const getAllOrganizations = async (): Promise<Array<{id: string; name: string; description: string}>> => {
+  try {
+    const actor = await getPlugActor();
+    const orgs = await actor.getAllOrgs();
+    
+    // Convert org names to full objects with basic info
+    const orgDetails = await Promise.all(
+      orgs.map(async (orgId: string) => {
+        try {
+          const stats = await actor.getOrgStats(orgId);
+          return {
+            id: orgId,
+            name: orgId,
+            description: stats && stats.length > 0 ? `Admin: ${stats[0].admin.toString().slice(0, 8)}...` : 'No description'
+          };
+        } catch (error) {
+          return {
+            id: orgId,
+            name: orgId,
+            description: 'Organization details unavailable'
+          };
+        }
+      })
+    );
+    
+    return orgDetails;
+  } catch (error) {
+    console.error('Error fetching organizations:', error);
+    return [];
   }
 };

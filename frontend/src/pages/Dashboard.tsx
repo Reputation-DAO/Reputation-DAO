@@ -1,370 +1,545 @@
-// @ts-nocheck
-import React, { useState, useEffect } from 'react';
-import { Principal } from '@dfinity/principal';
-import { useNavigate } from 'react-router-dom';
-import {
-  Box,
-  Typography,
-  CircularProgress,
-  Alert,
-  IconButton,
-} from '@mui/material';
-import {
-  People as Users,
-  NorthEast as ArrowUpRight,
-  Refresh,
-  History,
-  TrendingUp,
-} from '@mui/icons-material';
-import { getPlugActor } from '../components/canister/reputationDao';
-import { useRole } from '../contexts/RoleContext';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Principal } from "@dfinity/principal";
+import { useRole } from "@/contexts/RoleContext";
+import { usePlugConnection } from "@/hooks/usePlugConnection";
+import { getBalance } from "@/components/canister/reputationDao";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "sonner";
+import { 
+  Star, 
+  Users, 
+  TrendingUp, 
+  Award, 
+  Settings, 
+  Plus,
+  Activity,
+  Crown,
+  Shield,
+  User,
+  ArrowUpRight,
+  Calendar,
+  Target,
+  BarChart3,
+  LayoutDashboard
+} from "lucide-react";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 
-import StatCard from '../components/Dashboard/statscard';
-import ActivityCard from '../components/Dashboard/cards/ActivityCard';
-import ActivityChartCard from '../components/Dashboard/cards/ActivityChartCard';
-import SystemFeaturesCard from '../components/Dashboard/cards/SystemFeaturesCard';
-import TopMembersCard from '../components/Dashboard/cards/TopMemberCard';
-import TrustedAwardersCard from '../components/Dashboard/cards/TrustedAwarderCard';
-
-import ProtectedPage from '../components/layout/ProtectedPage';
-
-
-interface Transaction {
-  id: number;
-  transactionType: { Award: null } | { Revoke: null };
-  from: Principal;
-  to: Principal;
-  amount: number | bigint;
-  timestamp: number | bigint;
-  reason: string | null;
+interface ReputationActivity {
+  id: string;
+  type: 'awarded' | 'revoked' | 'earned';
+  points: number;
+  reason: string;
+  timestamp: Date;
+  from?: string;
+  to?: string;
 }
 
-interface Balance {
-  principal: Principal;
-  balance: number;
-}
-
-interface Awarder {
-  id: Principal;
+interface Member {
+  id: string;
   name: string;
+  principal: string;
+  reputation: number;
+  role: 'admin' | 'awarder' | 'member';
+  joinDate: Date;
+  lastActive: Date;
 }
 
-interface DashboardData {
-  transactions: Transaction[];
-  balances: Balance[];
-  awarders: Awarder[];
-  transactionCount: number;
-  userReputation: number;
-  userTransactions: Transaction[];
-}
+const RoleIcon = ({ role }: { role: string }) => {
+  switch (role) {
+    case 'admin':
+      return <Crown className="w-4 h-4 text-yellow-500" />;
+    case 'awarder':
+      return <Shield className="w-4 h-4 text-blue-500" />;
+    default:
+      return <User className="w-4 h-4 text-green-500" />;
+  }
+};
 
-interface ChartData {
-  date: string;
-  awards: number;
-  revokes: number;
-  net: number;
-}
+const StatCard = ({ title, value, icon: Icon, trend, description }: {
+  title: string;
+  value: string | number;
+  icon: any;
+  trend?: string;
+  description?: string;
+}) => (
+  <Card className="glass-card p-6 hover:shadow-[var(--shadow-glow)] transition-all duration-300 group">
+    <div className="flex items-center justify-between mb-4">
+      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/10 to-primary-glow/10 flex items-center justify-center group-hover:from-primary/20 group-hover:to-primary-glow/20 transition-all duration-300">
+        <Icon className="w-6 h-6 text-primary group-hover:scale-110 transition-transform duration-300" />
+      </div>
+      {trend && (
+        <Badge variant="secondary" className="text-green-600 bg-green-600/10">
+          <ArrowUpRight className="w-3 h-3 mr-1" />
+          {trend}
+        </Badge>
+      )}
+    </div>
+    <div>
+      <h3 className="text-2xl font-bold text-foreground mb-1">{value}</h3>
+      <p className="text-sm font-medium text-muted-foreground mb-1">{title}</p>
+      {description && (
+        <p className="text-xs text-muted-foreground">{description}</p>
+      )}
+    </div>
+  </Card>
+);
 
-const Dashboard: React.FC = React.memo(() => {
-  const navigate = useNavigate();
-
-  
-  // Get role information from context
-  const { userRole, userName, currentPrincipal } = useRole();
-  
-  // Get organization ID from localStorage
-  const [orgId, setOrgId] = useState<string | null>(null);
-  
-  useEffect(() => {
-    const storedOrgId = localStorage.getItem('selectedOrgId');
-    if (storedOrgId) {
-      setOrgId(storedOrgId);
-      // Trigger role refresh when organization changes
-      window.dispatchEvent(new CustomEvent('orgChanged'));
-    } else {
-      // Redirect to org selector if no org selected
-      navigate('/org-selector');
-    }
-  }, [navigate]);
-  
-
-  const [data, setData] = useState<DashboardData>({
-    transactions: [],
-    balances: [],
-    awarders: [],
-    transactionCount: 0,
-    userReputation: 0,
-    userTransactions: [],
-  });
-  const [chartData, setChartData] = useState<ChartData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [isLoadingData, setIsLoadingData] = useState(false);
-
-  const formatTime = (timestamp: number | bigint): string => {
-    const now = Date.now() / 1000;
-    const ts = typeof timestamp === 'bigint' ? Number(timestamp) : timestamp;
-    const diff = now - ts;
-    if (diff < 60) return 'just now';
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-    return `${Math.floor(diff / 86400)}d ago`;
-  };
-
-  const getUserDisplayName = (principal: Principal): string => {
-    const pText = principal.toString();
-    const awarder = data.awarders.find(a => a.id.toString() === pText);
-    if (awarder) return awarder.name;
-    if (pText === '3d34m-ksxgd-46a66-2ibf7-kutsn-jg3vv-2yfjf-anbwh-u4lpl-tqu7d-yae') return 'Admin';
-    return `${pText.slice(0, 5)}...${pText.slice(-3)}`;
-  };
-
-  const processChartData = (transactions: Transaction[]): ChartData[] => {
-    const last7 = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date();
-      d.setDate(d.getDate() - (6 - i));
-      return d.toISOString().split('T')[0];
-    });
-
-    const daily = last7.map(date => ({
-      date: new Date(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-      awards: 0,
-      revokes: 0,
-      net: 0,
-    }));
-
-    transactions.forEach(tx => {
-      const txDate = new Date((typeof tx.timestamp === 'bigint' ? Number(tx.timestamp) : tx.timestamp) * 1000);
-      const txDateStr = txDate.toISOString().split('T')[0];
-      const idx = last7.indexOf(txDateStr);
-      if (idx !== -1) {
-        const amt = typeof tx.amount === 'bigint' ? Number(tx.amount) : tx.amount;
-        if ('Award' in tx.transactionType) {
-          daily[idx].awards += amt;
-          daily[idx].net += amt;
-        } else {
-          daily[idx].revokes += amt;
-          daily[idx].net -= amt;
-        }
-      }
-    });
-
-    return daily;
-  };
-
-  const loadDashboardData = async () => {
-
-    if (isLoadingData || !orgId) return; // Prevent multiple simultaneous loads and ensure orgId exists
+const ActivityItem = ({ activity }: { activity: ReputationActivity }) => (
+  <div className="flex items-center gap-4 p-4 glass-card rounded-lg hover:shadow-md transition-all duration-200">
+    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+      activity.type === 'awarded' ? 'bg-green-500/10 text-green-600' :
+      activity.type === 'revoked' ? 'bg-red-500/10 text-red-600' :
+      'bg-blue-500/10 text-blue-600'
+    }`}>
+      <Star className="w-5 h-5" />
+    </div>
     
+    <div className="flex-1">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="font-medium text-foreground">
+          {activity.type === 'awarded' ? '+' : activity.type === 'revoked' ? '-' : '+'}{activity.points} points
+        </span>
+        <Badge variant="outline" className="text-xs">
+          {activity.type}
+        </Badge>
+      </div>
+      <p className="text-sm text-muted-foreground">{activity.reason}</p>
+      {(activity.from || activity.to) && (
+        <p className="text-xs text-muted-foreground mt-1">
+          {activity.from && `From: ${activity.from}`}
+          {activity.to && `To: ${activity.to}`}
+        </p>
+      )}
+    </div>
+    
+    <div className="text-xs text-muted-foreground">
+      {activity.timestamp.toLocaleDateString()}
+    </div>
+  </div>
+);
 
-    try {
-      setIsLoadingData(true);
-      setError(null);
-      const actor = await getPlugActor();
-      if (!actor) throw new Error('Failed to connect to blockchain');
+const MemberItem = ({ member }: { member: Member }) => (
+  <div className="flex items-center gap-4 p-4 glass-card rounded-lg hover:shadow-md transition-all duration-200">
+    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-primary-glow/20 flex items-center justify-center">
+      <User className="w-5 h-5 text-primary" />
+    </div>
+    
+    <div className="flex-1">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="font-medium text-foreground">{member.name}</span>
+        <Badge variant="secondary" className="flex items-center gap-1">
+          <RoleIcon role={member.role} />
+          {member.role}
+        </Badge>
+      </div>
+      <p className="text-sm text-muted-foreground">{member.principal.slice(0, 20)}...</p>
+    </div>
+    
+    <div className="text-right">
+      <div className="font-medium text-foreground">{member.reputation} rep</div>
+      <div className="text-xs text-muted-foreground">
+        Active {new Date(member.lastActive).toLocaleDateString()}
+      </div>
+    </div>
+  </div>
+);
 
-
-      // Simply verify the organization exists - don't restrict access
-      // The role-based UI will handle what data to show based on user permissions
-      try {
-        const orgCheckResult = await actor.getTransactionCount(orgId);
-        const orgExists = Array.isArray(orgCheckResult) ? orgCheckResult[0] !== null : orgCheckResult !== null;
-        
-        if (!orgExists) {
-          throw new Error('Organization does not exist');
-        }
-      } catch (error) {
-        console.warn('Organization verification failed:', error);
-        throw new Error('Access denied: Organization does not exist or is not accessible');
-      }
-
-      // Fetch all data in parallel with orgId parameter
-      const [
-        transactionsResult,
-        transactionCountResult,
-        awardersResult,
-      ] = await Promise.all([
-        actor.getTransactionHistory(orgId),
-        actor.getTransactionCount(orgId),
-        actor.getTrustedAwarders(orgId),
-      ]);
-
-      // Handle optional array results from Motoko
-      const transactions = Array.isArray(transactionsResult) ? transactionsResult[0] || [] : transactionsResult || [];
-      const transactionCount = Array.isArray(transactionCountResult) ? transactionCountResult[0] || 0 : transactionCountResult || 0;
-      const awarders = Array.isArray(awardersResult) ? awardersResult[0] || [] : awardersResult || [];
-
-      // Get balances by fetching transaction history and calculating
-
-      const balanceMap = new Map<string, number>();
-      transactions.forEach((tx: any) => {
-        const toKey = tx.to.toString();
-        const amt = typeof tx.amount === 'bigint' ? Number(tx.amount) : Number(tx.amount);
-        if ('Award' in tx.transactionType) {
-          balanceMap.set(toKey, (balanceMap.get(toKey) || 0) + amt);
-        } else {
-          balanceMap.set(toKey, (balanceMap.get(toKey) || 0) - amt);
-        }
-      });
-
-      const balances = Array.from(balanceMap.entries())
-        .map(([p, bal]) => ({ principal: Principal.fromText(p), balance: bal }))
-        .filter(b => b.balance > 0)
-        .sort((a, b) => b.balance - a.balance)
-        .slice(0, 10);
-
-      const currentUser = currentPrincipal?.toString();
-      let userReputation = 0;
-      let userTransactions: Transaction[] = [];
-
-      if (currentUser) {
-        userReputation = balanceMap.get(currentUser) || 0;
-        userTransactions = transactions.filter((tx: any) =>
-          tx.to.toString() === currentUser || tx.from.toString() === currentUser
-        );
-      }
-
-      setData({
-        transactions: transactions.slice(0, 10),
-        balances,
-        awarders,
-        transactionCount: Number(transactionCount),
-        userReputation,
-        userTransactions: userTransactions.slice(0, 10),
-      });
-
-      const chartTx = userRole === 'User' ? userTransactions : transactions;
-      setChartData(processChartData(chartTx));
-    } catch (err) {
-      console.error(err);
-      setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-      setIsLoadingData(false);
-    }
-  };
-
-
-  // Load data on component mount and when orgId changes
+const Dashboard = () => {
+  const navigate = useNavigate();
+  const { userRole, loading: roleLoading } = useRole();
+  const { isConnected, principal } = usePlugConnection({ autoCheck: true });
+  const [userName] = useState("John Doe");
+  const [userBalance, setUserBalance] = useState(0);
+  const [loading, setLoading] = useState(false);
+  
+  // Debug logging
   useEffect(() => {
-    if (orgId) {
-      loadDashboardData();
-    }
-  }, [orgId]); // Run when orgId is set
-
-  // Refresh data
-  const handleRefresh = () => {
-    if (isLoadingData) return; // Prevent refresh while loading
-    setRefreshing(true);
-    loadDashboardData();
+    console.log('🏠 Dashboard mounted with state:', {
+      isConnected,
+      principal: principal?.toString(),
+      userRole,
+      roleLoading,
+      selectedOrgId: localStorage.getItem('selectedOrgId')
+    });
+  }, [isConnected, principal, userRole, roleLoading]);
+  
+  // Load user's balance
+  useEffect(() => {
+    const loadBalance = async () => {
+      if (isConnected && principal) {
+        try {
+          setLoading(true);
+          const principalObj = Principal.fromText(principal);
+          const balance = await getBalance(principalObj);
+          if (typeof balance === 'number') {
+            setUserBalance(balance);
+          }
+        } catch (error) {
+          console.error("Error loading balance:", error);
+          toast.error("Failed to load reputation balance");
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+    loadBalance();
+  }, [isConnected, principal]);
+  
+  const handleDisconnect = () => {
+    navigate('/auth');
   };
+  
+  const [recentActivity] = useState<ReputationActivity[]>([]);
 
+  const [members] = useState<Member[]>([]);
 
-  if (loading) {
+  useEffect(() => {
+    // Add a small delay to avoid redirecting during connection state updates
+    const timer = setTimeout(() => {
+      const selectedOrgId = localStorage.getItem('selectedOrgId');
+      const userRole = localStorage.getItem('userRole');
+      
+      console.log('🔍 Dashboard redirect check:', {
+        isConnected,
+        principal: principal?.toString(),
+        selectedOrgId,
+        userRole,
+        roleLoading
+      });
+      
+      // Don't redirect if role is still loading or if we're coming from org creation
+      if (roleLoading) {
+        console.log('⏳ Role still loading, skipping redirect check');
+        return;
+      }
+      
+      // Only redirect if truly not connected and no valid session exists
+      if (!isConnected && !principal) {
+        if (!selectedOrgId || !userRole) {
+          console.log('❌ No connection and no valid session, redirecting to auth');
+          navigate('/auth');
+        } else {
+          console.log('⚠️ Session exists but not connected, redirecting to org selector');
+          navigate('/org-selector');
+        }
+      }
+    }, 3000); // 3 second delay to allow all state to fully stabilize
+
+    return () => clearTimeout(timer);
+  }, [isConnected, principal, roleLoading, navigate]);
+
+  const quickActions = [
+    {
+      title: "Award Reputation",
+      description: "Give reputation points to members",
+      icon: Award,
+      action: () => navigate('/award-rep'),
+      variant: "hero" as const,
+      show: ['Admin', 'Awarder'].includes(userRole || '')
+    },
+    {
+      title: "Manage Members",
+      description: "Add or manage organization members",
+      icon: Users,
+      action: () => navigate('/manage-awarders'),
+      variant: "outline" as const,
+      show: userRole === 'Admin'
+    },
+    {
+      title: "View Activity",
+      description: "See all reputation transactions",
+      icon: Activity,
+      action: () => navigate('/activity'),
+      variant: "outline" as const,
+      show: true
+    },
+    {
+      title: "Settings",
+      description: "Configure organization settings",
+      icon: Settings,
+      action: () => navigate('/settings'),
+      variant: "ghost" as const,
+      show: userRole === 'Admin'
+    }
+  ].filter(action => action.show);
+
+  if (!isConnected) {
     return (
-      <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <CircularProgress sx={{ color: 'hsl(var(--primary))' }} />
-      </Box>
+      <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-muted/20 flex items-center justify-center">
+        <Card className="glass-card p-8 max-w-md mx-auto text-center">
+          <h2 className="text-xl font-bold text-foreground mb-2">Wallet Required</h2>
+          <p className="text-muted-foreground mb-4">
+            Please connect your wallet to access the dashboard.
+          </p>
+          <Button onClick={() => navigate('/auth')}>
+            Connect Wallet
+          </Button>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <Box
-
-  sx={{
-    minHeight: '100vh',
-    px: { xs: 2, md: 3 },
-    py: { xs: 2, md: 3 },
-    bgcolor: 'hsl(var(--background))',
-  }}
->
-  {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
-
-
-  <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', lg: 'row' } }}>
-    {/* Main */}
-    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
-      {/* Stats + Welcome */}
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: {
-            xs: '1fr',
-            sm: userRole === 'User' ? '1fr 1fr 1fr' : '1fr 1fr',
-          },
-          gap: 2.5,
-        }}
-      >
-        {/* 👇 Full-width Welcome */}
-        <Box sx={{ gridColumn: '1 / -1', mb: 2 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-            <Typography
-              variant="h6"
-              sx={{ fontWeight: 600, fontSize: { xs: '1.5rem', md: '2rem' } }}
-            >
-              Welcome, {userName || 'User'}
-            </Typography>
-            <IconButton onClick={loadDashboardData} disabled={refreshing} sx={{ color: 'hsl(var(--primary))' }}>
-              {refreshing ? <CircularProgress size={20} /> : <Refresh />}
-            </IconButton>
-          </Box>
-          <Typography sx={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.875rem' }}>
-            Track your community's reputation and activity
-          </Typography>
-        </Box>
-
-        {/* Stat Cards */}
-        {userRole === 'User' && (
-          <StatCard title="My Reputation" value={data.userReputation} statusLabel="Current Score" />
-        )}
-        <StatCard
-          title="Total Transactions"
-          value={data.transactionCount}
-          statusLabel="All time activity"
-          titleIcon={<History sx={{ color: 'hsl(var(--primary))', fontSize: 20 }} />}
-          statusIcon={<TrendingUp sx={{ color: 'hsl(var(--success))', fontSize: 16 }} />}
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
+        <DashboardSidebar 
+          userRole={userRole?.toLowerCase() as 'admin' | 'awarder' | 'member' || 'member'}
+          userName={userName}
+          userPrincipal={principal || ""}
+          onDisconnect={handleDisconnect}
         />
-        <StatCard
-          title="Active Members"
-          value={data.balances.length}
-          statusLabel="With reputation"
-          titleIcon={<Users sx={{ color: 'hsl(var(--primary))', fontSize: 20 }} />}
-          statusIcon={<ArrowUpRight sx={{ color: 'hsl(var(--success))', fontSize: 16 }} />}
-        />
-      </Box>
+        
+        <div className="flex-1">
+          <header className="h-16 border-b border-border/40 flex items-center px-6 glass-header">
+            <SidebarTrigger className="mr-4" />
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/20 to-primary-glow/20 flex items-center justify-center">
+                <LayoutDashboard className="w-4 h-4 text-primary" />
+              </div>
+              <div>
+                <h1 className="text-lg font-semibold text-foreground">Dashboard</h1>
+                <p className="text-xs text-muted-foreground">Welcome back to {localStorage.getItem('selectedOrgId') || "Reputation DAO"}</p>
+              </div>
+            </div>
+          </header>
+          
+          <main className="p-6">
+            <div className="relative pt-20">
+              {/* Background Effects */}
+              <div className="absolute inset-0 overflow-hidden">
+                <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/3 rounded-full blur-3xl animate-pulse-glow" />
+                <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-primary-glow/3 rounded-full blur-3xl animate-pulse-glow" style={{ animationDelay: '1s' }} />
+              </div>
 
-      {/* CTA */}
-      <SystemFeaturesCard />
+              <div className="relative max-w-7xl mx-auto px-4 py-8">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-8 animate-fade-in">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground mb-2">
+                Welcome back to {localStorage.getItem('selectedOrgId') || "Reputation DAO"}
+              </h1>
+              <p className="text-muted-foreground">
+                Manage reputation, track activity, and grow your community
+              </p>
+            </div>
+            
+            <Badge variant="secondary" className="flex items-center gap-2 px-4 py-2">
+              <RoleIcon role={userRole?.toLowerCase() || 'member'} />
+              <span className="capitalize">{userRole || 'Member'}</span>
+            </Badge>
+          </div>
 
-      {/* Activity + Chart */}
-      <ActivityCard
-        userRole={userRole}
-        data={data}
-        getUserDisplayName={getUserDisplayName}
-        formatTime={formatTime}
-      />
-      <ActivityChartCard userRole={userRole} chartData={chartData} />
-    </Box>
+          {/* Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
+              <StatCard
+                title="Total Members"
+                value={members.length}
+                icon={Users}
+                trend="+12%"
+                description="Active community members"
+              />
+            </div>
+            <div className="animate-fade-in" style={{ animationDelay: '0.2s' }}>
+              <StatCard
+                title="Total Reputation"
+                value="2,707"
+                icon={Star}
+                trend="+8%"
+                description="Points distributed"
+              />
+            </div>
+            <div className="animate-fade-in" style={{ animationDelay: '0.3s' }}>
+              <StatCard
+                title="Your Reputation"
+                value={loading ? "Loading..." : userBalance}
+                icon={Award}
+                trend={userBalance > 0 ? "+10%" : ""}
+                description="Your current points"
+              />
+            </div>
+            <div className="animate-fade-in" style={{ animationDelay: '0.4s' }}>
+              <StatCard
+                title="Growth Rate"
+                value="15%"
+                icon={BarChart3}
+                description="Member growth rate"
+              />
+            </div>
+          </div>
 
-    {/* Sidebar */}
-    <Box sx={{ width: { lg: 300 }, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <TopMembersCard balances={data.balances} getUserDisplayName={getUserDisplayName} />
-      <TrustedAwardersCard awarders={data.awarders} />
-    </Box>
-  </Box>
-</Box>
+          {/* Quick Actions */}
+          <div className="mb-8 animate-fade-in" style={{ animationDelay: '0.5s' }}>
+            <h2 className="text-xl font-semibold text-foreground mb-4">Quick Actions</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {quickActions.map((action, index) => (
+                <Button
+                  key={action.title}
+                  variant={action.variant}
+                  onClick={action.action}
+                  className="h-auto p-4 flex flex-col items-start gap-2 hover:scale-105 transition-all duration-300"
+                >
+                  <action.icon className="w-5 h-5" />
+                  <div className="text-left">
+                    <div className="font-medium">{action.title}</div>
+                    <div className="text-xs opacity-70">{action.description}</div>
+                  </div>
+                </Button>
+              ))}
+            </div>
+          </div>
 
-  );
-});
+          {/* Main Content Tabs */}
+          <div className="animate-fade-in" style={{ animationDelay: '0.6s' }}>
+            <Tabs defaultValue="activity" className="space-y-6">
+              <TabsList className="grid grid-cols-3 w-full max-w-md glass">
+                <TabsTrigger value="activity">Recent Activity</TabsTrigger>
+                <TabsTrigger value="members">Members</TabsTrigger>
+                <TabsTrigger value="analytics">Analytics</TabsTrigger>
+              </TabsList>
 
-const DashboardWithProtection: React.FC = () => {
-  return (
-    <ProtectedPage>
-      <Dashboard />
-    </ProtectedPage>
+              <TabsContent value="activity" className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-foreground">Recent Activity</h3>
+                  <Button variant="outline" size="sm">
+                    View All
+                    <ArrowUpRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </div>
+                
+                <div className="space-y-3">
+                  {recentActivity.map((activity) => (
+                    <ActivityItem key={activity.id} activity={activity} />
+                  ))}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="members" className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-foreground">Organization Members</h3>
+                  {userRole === 'Admin' && (
+                    <Button variant="outline" size="sm">
+                      <Plus className="w-4 h-4 mr-1" />
+                      Add Member
+                    </Button>
+                  )}
+                </div>
+                
+                <div className="space-y-3">
+                  {members.map((member) => (
+                    <MemberItem key={member.id} member={member} />
+                  ))}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="analytics" className="space-y-4">
+                <h3 className="text-lg font-semibold text-foreground">Analytics & Insights</h3>
+                
+                <div className="grid md:grid-cols-2 gap-6">
+                  <Card className="glass-card p-6">
+                    <h4 className="font-medium text-foreground mb-4">Reputation Distribution</h4>
+                    <div className="space-y-3">
+                      {members.map((member, index) => (
+                        <div key={member.id} className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">{member.name}</span>
+                          <div className="flex items-center gap-2">
+                            <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-gradient-to-r from-primary to-primary-glow rounded-full transition-all duration-1000"
+                                style={{ 
+                                  width: `${(member.reputation / Math.max(...members.map(m => m.reputation))) * 100}%`,
+                                  animationDelay: `${index * 0.1}s`
+                                }}
+                              />
+                            </div>
+                            <span className="text-sm font-medium text-foreground">{member.reputation}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                  
+                  <Card className="glass-card p-6">
+                    <h4 className="font-medium text-foreground mb-4">Monthly Growth</h4>
+                    <div className="space-y-4">
+                      {/* Simple Bar Chart */}
+                      <div className="space-y-3">
+                        {/* January */}
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm w-12 text-muted-foreground">Jan</span>
+                          <div className="flex-1 bg-muted/30 h-4 rounded overflow-hidden">
+                            <div className="bg-primary h-full rounded transition-all duration-500" style={{ width: '75%' }}></div>
+                          </div>
+                          <span className="text-sm w-12 text-muted-foreground">+750</span>
+                        </div>
+                        
+                        {/* February */}
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm w-12 text-muted-foreground">Feb</span>
+                          <div className="flex-1 bg-muted/30 h-4 rounded overflow-hidden">
+                            <div className="bg-primary h-full rounded transition-all duration-500" style={{ width: '60%' }}></div>
+                          </div>
+                          <span className="text-sm w-12 text-muted-foreground">+600</span>
+                        </div>
+                        
+                        {/* March */}
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm w-12 text-muted-foreground">Mar</span>
+                          <div className="flex-1 bg-muted/30 h-4 rounded overflow-hidden">
+                            <div className="bg-primary h-full rounded transition-all duration-500" style={{ width: '90%' }}></div>
+                          </div>
+                          <span className="text-sm w-12 text-muted-foreground">+900</span>
+                        </div>
+                        
+                        {/* April */}
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm w-12 text-muted-foreground">Apr</span>
+                          <div className="flex-1 bg-muted/30 h-4 rounded overflow-hidden">
+                            <div className="bg-green-500 h-full rounded transition-all duration-500" style={{ width: '100%' }}></div>
+                          </div>
+                          <span className="text-sm w-12 text-muted-foreground">+1000</span>
+                        </div>
+                        
+                        {/* May */}
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm w-12 text-muted-foreground">May</span>
+                          <div className="flex-1 bg-muted/30 h-4 rounded overflow-hidden">
+                            <div className="bg-primary h-full rounded transition-all duration-500" style={{ width: '85%' }}></div>
+                          </div>
+                          <span className="text-sm w-12 text-muted-foreground">+850</span>
+                        </div>
+                        
+                        {/* June */}
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm w-12 text-muted-foreground">Jun</span>
+                          <div className="flex-1 bg-muted/30 h-4 rounded overflow-hidden">
+                            <div className="bg-primary h-full rounded transition-all duration-500" style={{ width: '70%' }}></div>
+                          </div>
+                          <span className="text-sm w-12 text-muted-foreground">+700</span>
+                        </div>
+                      </div>
+                      
+                      <div className="text-center pt-2">
+                        <p className="text-xs text-muted-foreground">Reputation Points Awarded Per Month</p>
+                      </div>
+                    </div>
+                  </Card>
+                </div>
+              </TabsContent>
+            </Tabs>
+              </div>
+            </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
   );
 };
 
-export default DashboardWithProtection;
+export default Dashboard;

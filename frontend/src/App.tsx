@@ -1,202 +1,57 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Layout from './components/layout/Layout';
-import HomeLayout from './components/layout/HomePageLayout';
-import { ProtectedRoute } from './components/ProtectedRoute';
-import { AuthProvider } from './contexts/AuthContext';
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { RoleProvider } from "./contexts/RoleContext";
+import { RouteProvider } from "./contexts/RouteContext";
+import Home from "./pages/Home";
+import Docs from "./pages/Docs";
+import Blog from "./pages/Blog";
+import Community from "./pages/Community";
+import Auth from "./pages/Auth";
+import OrgSelector from "./pages/OrgSelector";
+import Dashboard from "./pages/Dashboard";
+import AwardRep from "./pages/AwardRep";
+import RevokeRep from "./pages/RevokeRep";
+import ManageAwarders from "./pages/ManageAwarders";
+import ViewBalances from "./pages/ViewBalances";
+import TransactionLog from "./pages/TransactionLog";
+import DecaySystem from "./pages/DecaySystem";
+import NotFound from "./pages/NotFound";
 
+const queryClient = new QueryClient();
 
-import Dashboard from './pages/Dashboard';
-import AwardRep from './pages/AwardRep';
-import RevokeRep from './pages/RevokeRep';
-import ManageAwarders from './pages/ManageAwarders';
-import ViewBalances from './pages/ViewBalances';
-import TransactionLogSimple from './pages/TransactionLogSimple';
-import DecaySystemPage from './pages/DecaySystemPage';
-import LandingPage from './pages/LandingPage';
-import Docs from './pages/Docs';
-import Community from './pages/Community';
-import Blog from './pages/Blog';
-import Auth from './pages/Auth';
-import Test from './pages/test'; 
-import PostDetailPage from './pages/PostDetailPost';
-import OrgSelector from './pages/OrgSelector';
-import OrgSelectorII from './pages/OrgSelectorII';
-
-
-function App() {
-  return (
-    <AuthProvider>
-      <Router>
-      <Routes>
-        <Route
-          path="/"
-          element={
-            <HomeLayout>
-              <LandingPage />
-            </HomeLayout>
-          }
-        />
-
-        <Route
-          path="/Blog"
-          element={
-            <HomeLayout>
-              <Blog />
-            </HomeLayout>
-          }
-        />
-        <Route
-          path="/posts/:id"
-          element={
-            <HomeLayout>
-              <PostDetailPage />
-            </HomeLayout>
-          }
-        />
-
-{/* to be removed temporary establiashed*/}
-
-        <Route
-          path="/test"
-          element={
-            <HomeLayout>
-              <Test />
-            </HomeLayout>
-          }
-        />
-
-
-        <Route
-          path="/Docs"
-          element={
-            <HomeLayout>
-              <Docs />
-            </HomeLayout>
-          }
-        />
-        <Route
-          path="/Community"
-          element={
-            <HomeLayout>
-              <Community />
-            </HomeLayout>
-          }
-        />
-        <Route
-          path="/auth"
-          element={
-            <HomeLayout>
-              <Auth />
-            </HomeLayout>
-            }
-          />
-          <Route
-            path="/org-selector"
-            element={
-              <HomeLayout>
-                <OrgSelector />
-              </HomeLayout>
-            }
-          />
-          <Route
-            path="/org-selector-ii"
-            element={
-              <HomeLayout>
-                <OrgSelectorII />
-              </HomeLayout>
-            }
-          />
-
-          {/* Protected Routes */}
-          {/* Dashboard - All roles can access */}
-          <Route
-            path="/dashboard"
-            element={
-              <Layout>
-                <ProtectedRoute allowedRoles={['Admin', 'Awarder', 'User']}>
-                  <Dashboard />
-                </ProtectedRoute>
-              </Layout>
-            }
-          />
-         
-
-          {/* Award Reputation - Admin and Awarder only */}
-          <Route
-            path="/award"
-            element={
-              <Layout>
-                <ProtectedRoute allowedRoles={['Admin', 'Awarder']}>
-                  <AwardRep />
-                </ProtectedRoute>
-              </Layout>
-            }
-          />
-
-          {/* Revoke Reputation - Admin only */}
-          <Route
-            path="/revoke"
-            element={
-              <Layout>
-                <ProtectedRoute allowedRoles={['Admin']}>
-                  <RevokeRep />
-                </ProtectedRoute>
-              </Layout>
-            }
-          />
-
-          {/* Manage Awarders - Admin only */}
-          <Route
-            path="/awarders"
-            element={
-              <Layout>
-                <ProtectedRoute allowedRoles={['Admin']}>
-                  <ManageAwarders />
-                </ProtectedRoute>
-              </Layout>
-            }
-          />
-
-                    {/* Decay System - All roles can access */}
-          <Route
-            path="/decay"
-            element={
-              <Layout>
-                <ProtectedRoute allowedRoles={['Admin', 'Awarder', 'User']}>
-                  <DecaySystemPage />
-                </ProtectedRoute>
-              </Layout>
-            }
-          />
-
-
-          {/* View Balances - All roles can access */}
-          <Route
-            path="/balances"
-            element={
-              <Layout>
-                <ProtectedRoute allowedRoles={['Admin', 'Awarder', 'User']}>
-                  <ViewBalances />
-                </ProtectedRoute>
-              </Layout>
-            }
-          />
-
-          {/* Transaction Log - All roles can access */}
-          <Route
-            path="/transactions"
-            element={
-              <Layout>
-                <ProtectedRoute allowedRoles={['Admin', 'Awarder', 'User']}>
-                  <TransactionLogSimple />
-                </ProtectedRoute>
-              </Layout>
-            }
-          />
-        </Routes>
-      </Router>
-    </AuthProvider>
-  );
-}
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <RoleProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <RouteProvider>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/docs" element={<Docs />} />
+              <Route path="/blog" element={<Blog />} />
+              <Route path="/community" element={<Community />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/org-selector" element={<OrgSelector />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/award-rep" element={<AwardRep />} />
+              <Route path="/revoke-rep" element={<RevokeRep />} />
+              <Route path="/manage-awarders" element={<ManageAwarders />} />
+              <Route path="/view-balances" element={<ViewBalances />} />
+              <Route path="/transaction-log" element={<TransactionLog />} />
+              <Route path="/decay-system" element={<DecaySystem />} />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </RouteProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </RoleProvider>
+  </QueryClientProvider>
+);
 
 export default App;

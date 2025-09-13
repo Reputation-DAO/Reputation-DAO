@@ -38,7 +38,6 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-
   const determineUserRole = async (): Promise<void> => {
     console.log('🔍 Starting role determination...');
     setError(null);

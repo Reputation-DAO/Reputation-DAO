@@ -1,376 +1,368 @@
-import React, { useState, useEffect } from 'react';
-import ProtectedPage from '../components/layout/ProtectedPage';
-import {
-  Box,
-  Typography,
-  Alert,
-  Snackbar,
-  
-} from '@mui/material';
-import {
-  EmojiEvents,
-} from '@mui/icons-material';
-import { Principal } from '@dfinity/principal';
-import { getPlugActor } from '../components/canister/reputationDao';
-import Awardform from '../components/Dashboard/awardrep/Awardform';
-import AwardSummary from '../components/Dashboard/awardrep/AwardSummary';
-import RecentAwardsTable from '../components/Dashboard/awardrep/RecentAward';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useRole } from "@/contexts/RoleContext";
+import { usePlugConnection } from "@/hooks/usePlugConnection";
+import { awardRep } from "@/components/canister/reputationDao";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
+import { toast } from "sonner";
+import { 
+  Award, 
+  Star, 
+  TrendingUp, 
+  User,
+  AlertTriangle,
+  CheckCircle,
+  Info
+} from "lucide-react";
 
-// Backend transaction interface
-
-
-interface AwardTransaction {
-  id: string;
-  recipient: string;
-  amount: number;
+interface AwardFormData {
+  recipientAddress: string;
+  reputationAmount: string;
+  category: string;
   reason: string;
-  date: string;
-  status: string;
 }
 
-const AwardRep: React.FC = () => {
-  const [recipient, setRecipient] = useState('');
-  const [amount, setAmount] = useState('');
-  const [reason, setReason] = useState('');
-  const [category, setCategory] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [totalAwards, setTotalAwards] = useState(0);
-  const [totalRepAwarded , setTotalRepAwarded] = useState(0);
-  const [recentAwards, setRecentAwards] = useState<AwardTransaction[]>([]);
-  const [loadingAwards, setLoadingAwards] = useState(false);
-  const [orgId, setOrgId] = useState<string | null>(null);
-  const [snackbar, setSnackbar] = useState<{
-    open: boolean;
-    message: string;
-    severity: 'success' | 'error' | 'warning' | 'info';
-  }>({ open: false, message: '', severity: 'success' });
+interface RecentAward {
+  id: string;
+  recipientName: string;
+  recipientAddress: string;
+  amount: number;
+  category: string;
+  reason: string;
+  timestamp: Date;
+  awardedBy: string;
+}
 
-  // Get orgId from localStorage
-  useEffect(() => {
-    const storedOrgId = localStorage.getItem('selectedOrgId');
-    if (storedOrgId) {
-      setOrgId(storedOrgId);
-    }
-  }, []);
+const categories = [
+  "Development",
+  "Community Building", 
+  "Innovation",
+  "Leadership",
+  "Mentorship",
+  "Documentation",
+  "Testing",
+  "Design",
+  "Marketing",
+  "Other"
+];
 
-  // Load recent transactions when orgId is available
-  useEffect(() => {
-    if (orgId) {
-      loadRecentAwards();
-    }
-  }, [orgId]);
+const AwardRep = () => {
+  const navigate = useNavigate();
+  const { userRole } = useRole();
+  const { isConnected, principal } = usePlugConnection({ autoCheck: true });
+  const [isAwarding, setIsAwarding] = useState(false);
+  
+  const [formData, setFormData] = useState<AwardFormData>({
+    recipientAddress: '',
+    reputationAmount: '',
+    category: '',
+    reason: ''
+  });
 
-  const loadRecentAwards = async () => {
-    if (!orgId) return;
-    
-    setLoadingAwards(true);
-    try {
-      console.log('🔄 Loading recent award transactions...');
-      console.log('🔗 Getting Plug actor connection...');
-      const actor = await getPlugActor();
-      console.log('✅ Actor connected:', !!actor);
-      
-      console.log('📞 Calling getTransactionHistory() with orgId:', orgId);
-      const transactionsResult = await actor.getTransactionHistory(orgId);
-      
-      // Handle optional array result from Motoko
-      const transactions = Array.isArray(transactionsResult) ? transactionsResult[0] || [] : transactionsResult || [];
-      console.log('📊 Raw transactions received:', transactions);
-      console.log('📊 Total transactions count:', transactions.length);
-      
-      // Check if transactions is an array
-      if (!Array.isArray(transactions)) {
-        console.warn('⚠️ Transactions is not an array:', transactions);
-        setRecentAwards([]);
-        return;
-      }
+  const [recentAwards] = useState<RecentAward[]>([]);
 
-      // Calcuate total REP awarded
-      const totalRepAwarded = transactions.reduce((sum, tx) => {
-        if (tx.transactionType && 'Award' in tx.transactionType) {
-          return sum + Number(tx.amount);
-        }
-        return sum;
-      }, 0);
+  const [stats] = useState({
+    totalAwards: 0,
+    totalREPAwarded: 0,
+    monthlyAwards: 0
+  });
 
-      setTotalRepAwarded(totalRepAwarded);
-
-      // Calculate total awards
-      const totalAwards = transactions.filter(tx =>{
-        return tx.transactionType && 'Award' in tx.transactionType;
-      }).length;
-
-      setTotalAwards(totalAwards);
-
-      // Filter for award transactions and convert to frontend format
-      const awardTransactions = transactions
-        .filter(tx => {
-          console.log('🔍 Checking transaction:', tx);
-          return tx.transactionType && 'Award' in tx.transactionType;
-        })
-        .slice(-5) // Get last 5 awards
-        .map(tx => {
-          const timestamp = Number(tx.timestamp);
-          const date = timestamp > 0 
-            ? new Date(timestamp * 1000).toISOString().split('T')[0] // Convert from seconds to milliseconds
-            : new Date().toISOString().split('T')[0];
-            
-          return {
-            id: tx.id.toString(),
-            recipient: tx.to.toString(),
-            amount: Number(tx.amount),
-            reason: (tx.reason && tx.reason.length > 0) ? tx.reason[0]! : 'No reason provided',
-            date,
-            status: 'completed'
-          };
-        })
-        .reverse(); // Show newest first
-      
-      console.log('🎯 Filtered award transactions:', awardTransactions);
-      console.log('🎯 Award transactions count:', awardTransactions.length);
-      setRecentAwards(awardTransactions);
-      
-    } catch (error) {
-      console.error('❌ Failed to load recent awards:', error);
-      console.error('❌ Error details:', error);
-      
-      // Set empty array on error to prevent infinite loading
-      setRecentAwards([]);
-      
-      setSnackbar({
-        open: true,
-        message: 'Failed to load recent awards from blockchain. The canister may be empty or connection failed.',
-        severity: 'warning'
-      });
-    } finally {
-      setLoadingAwards(false);
-      console.log('🏁 loadRecentAwards completed');
-    }
+  const handleInputChange = (field: keyof AwardFormData, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleAwardSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!recipient || !amount || !reason) {
-      setSnackbar({
-        open: true,
-        message: 'Please fill in all required fields',
-        severity: 'warning'
-      });
+    if (!formData.recipientAddress || !formData.reputationAmount || !formData.category || !formData.reason) {
+      toast.error("Please fill in all required fields");
       return;
     }
 
-    // Validate principal format
-    let recipientPrincipal: Principal;
+    if (!isConnected || !principal) {
+      toast.error("Please connect your wallet first");
+      return;
+    }
+
+    if (userRole !== "Admin" && userRole !== "Awarder") {
+      toast.error("Only Admins and Awarders can award reputation");
+      return;
+    }
+
+    setIsAwarding(true);
     try {
-      recipientPrincipal = Principal.fromText(recipient);
-    } catch (error) {
-      setSnackbar({
-        open: true,
-        message: 'Invalid principal format. Please enter a valid ICP address.',
-        severity: 'error'
-      });
-      return;
-    }
-
-    const amountBigInt = BigInt(amount);
-    if (amountBigInt <= 0) {
-      setSnackbar({
-        open: true,
-        message: 'Amount must be greater than 0',
-        severity: 'error'
-      });
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      console.log('🎯 Starting award submission...');
-      console.log('🎯 Award details:', {
-        recipient: recipientPrincipal.toString(),
-        amount: amountBigInt.toString(),
-        reason
-      });
-
-      console.log('🔗 Getting Plug actor for award...');
-      const actor = await getPlugActor();
-      console.log('✅ Actor connected for award:', !!actor);
+      const result = await awardRep(
+        formData.recipientAddress, 
+        parseInt(formData.reputationAmount), 
+        formData.reason
+      );
       
-      // Get current user principal for logging
-      const currentPrincipal = await window.ic.plug.agent.getPrincipal();
-      console.log('� Current user principal:', currentPrincipal.toString());
-      
-      console.log('�📞 Calling autoAwardRep() - auto-injecting orgId...');
-
-
-
-
-
-      const orgId = localStorage.getItem("selectedOrgId")?.trim();
-
-      if (!orgId) {
-        throw new Error("No orgId found in localStorage");
-      }
-
-
-
-
-      // PROBLEM IS HERE
-      const result = await actor.awardRep(orgId,recipientPrincipal, amountBigInt, [reason]);
-      console.log('✅ Award result:', result);
-      
-      // Check if the result indicates an error
-      if (typeof result === 'string' && result.startsWith('Error:')) {
-        console.error('❌ Backend returned error:', result);
-        setSnackbar({
-          open: true,
-          message: result,
-          severity: 'error'
-        });
-        return;
-      }
-      
-      console.log('✅ Award successful!');
-      setSnackbar({
-        open: true,
-        message: `Successfully awarded ${amount} reputation points to ${recipient}`,
-        severity: 'success'
-      });
+      // Simple string result from canister
+      toast.success(`Successfully awarded ${formData.reputationAmount} REP points!`);
       
       // Reset form
-      setRecipient('');
-      setAmount('');
-      setReason('');
-      setCategory('');
-      
-      // Reload recent awards
-      console.log('🔄 Reloading recent awards after successful award...');
-      await loadRecentAwards();
-      
-    } catch (error: any) {
-      console.error('❌ Award error:', error);
-      console.error('❌ Error type:', typeof error);
-      console.error('❌ Error message:', error.message);
-      console.error('❌ Full error object:', error);
-      
-      let errorMessage = 'Failed to award reputation. Please try again.';
-      
-      // Handle specific error types
-      if (error.message) {
-        if (error.message.includes('Not a trusted awarder')) {
-          errorMessage = 'You are not authorized to award reputation points. Only trusted awarders can perform this action.';
-        } else if (error.message.includes('Daily mint cap exceeded')) {
-          errorMessage = 'Daily minting limit exceeded. Please try again tomorrow.';
-        } else if (error.message.includes('Cannot award rep to yourself')) {
-          errorMessage = 'You cannot award reputation points to yourself.';
-        } else {
-          errorMessage = error.message;
-        }
-      }
-      
-      setSnackbar({
-        open: true,
-        message: errorMessage,
-        severity: 'error'
+      setFormData({
+        recipientAddress: '',
+        reputationAmount: '',
+        category: '',
+        reason: ''
       });
+    } catch (error) {
+      console.error("Error awarding reputation:", error);
+      toast.error("Failed to award reputation. Please try again.");
     } finally {
-      setIsLoading(false);
-      console.log('🏁 Award submission completed');
+      setIsAwarding(false);
     }
   };
 
-  const handleCloseSnackbar = () => {
-    setSnackbar(prev => ({ ...prev, open: false }));
+  const handleDisconnect = () => {
+    navigate('/auth');
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed': return 'success';
-      case 'pending': return 'warning';
-      case 'failed': return 'error';
-      default: return 'default';
-    }
-  };
+  if (!isConnected || (userRole !== "Admin" && userRole !== "Awarder")) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-muted/20 flex items-center justify-center">
+        <Card className="glass-card p-8 max-w-md mx-auto text-center">
+          <AlertTriangle className="w-12 h-12 text-orange-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-foreground mb-2">Access Denied</h2>
+          <p className="text-muted-foreground mb-4">
+            {!isConnected ? "Please connect your wallet to award reputation points." : "You don't have permission to award reputation points."}
+          </p>
+          <Button onClick={() => navigate(!isConnected ? '/auth' : '/dashboard')}>
+            {!isConnected ? 'Connect Wallet' : 'Return to Dashboard'}
+          </Button>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <Box sx={{ 
-      p: 3, 
-      backgroundColor: 'hsl(var(--background))',
-      minHeight: '100vh'
-    }}>
-      <Typography 
-        variant="h4" 
-        sx={{ 
-          mb: 3, 
-          color: 'hsl(var(--foreground))',
-          fontWeight: 600,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2
-        }}
-      >
-        <EmojiEvents sx={{ color: 'hsl(var(--primary))' }} />
-        Award Reputation
-      </Typography>
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
+        <DashboardSidebar 
+          userRole={userRole?.toLowerCase() as 'admin' | 'awarder' | 'member' || 'member'}
+          userName={principal ? `${principal.toString().slice(0, 8)}...${principal.toString().slice(-8)}` : 'Anonymous'}
+          userPrincipal={principal}
+          onDisconnect={handleDisconnect}
+        />
+        
+        <div className="flex-1">
+          {/* Header */}
+          <header className="h-16 border-b border-border/40 flex items-center px-6 glass-header">
+            <SidebarTrigger className="mr-4" />
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-600/20 flex items-center justify-center">
+                <Award className="w-4 h-4 text-blue-600" />
+              </div>
+              <div>
+                <h1 className="text-lg font-semibold text-foreground">Award Reputation</h1>
+                <p className="text-xs text-muted-foreground">Distribute reputation points to community members</p>
+              </div>
+            </div>
+          </header>
 
-      <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', lg: 'row' } }}>
-        {/* Award Form */}
-        <Awardform
-        recipient={recipient}
-        setRecipient={setRecipient}
-        amount={amount}
-        setAmount={setAmount}
-        category={category}
-        setCategory={setCategory}
-        reason={reason}
-        setReason={setReason}
-        isLoading={isLoading}
-        handleAwardSubmit={handleAwardSubmit}
-      />
+          {/* Main Content */}
+          <main className="p-6">
+            <div className="max-w-7xl mx-auto">
+              <div className="grid lg:grid-cols-3 gap-6">
+                {/* Award Form */}
+                <div className="lg:col-span-2 space-y-6">
+                  <Card className="glass-card p-6 animate-fade-in">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/20 flex items-center justify-center">
+                        <Star className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <h2 className="text-lg font-semibold text-foreground">Award Reputation Points</h2>
+                        <p className="text-sm text-muted-foreground">Recognize valuable contributions</p>
+                      </div>
+                    </div>
 
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                      <div className="grid md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="recipientAddress" className="text-sm font-medium text-foreground">
+                            Recipient Address *
+                          </Label>
+                          <div className="relative">
+                            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                            <Input
+                              id="recipientAddress"
+                              placeholder="Enter ICP address"
+                              value={formData.recipientAddress}
+                              onChange={(e) => handleInputChange('recipientAddress', e.target.value)}
+                              className="pl-10 glass-input"
+                              required
+                            />
+                          </div>
+                        </div>
 
-        {/* Award Summary */}
-        <AwardSummary totalAwards={totalAwards} totalRepAwarded={totalRepAwarded} />
+                        <div className="space-y-2">
+                          <Label htmlFor="reputationAmount" className="text-sm font-medium text-foreground">
+                            Reputation Amount *
+                          </Label>
+                          <div className="relative">
+                            <Star className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                            <Input
+                              id="reputationAmount"
+                              type="number"
+                              placeholder="Enter amount"
+                              value={formData.reputationAmount}
+                              onChange={(e) => handleInputChange('reputationAmount', e.target.value)}
+                              className="pl-10 glass-input"
+                              min="1"
+                              required
+                            />
+                          </div>
+                        </div>
+                      </div>
 
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-foreground">Category *</Label>
+                        <Select value={formData.category} onValueChange={(value) => handleInputChange('category', value)}>
+                          <SelectTrigger className="glass-input">
+                            <SelectValue placeholder="Select category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {categories.map((category) => (
+                              <SelectItem key={category} value={category}>
+                                {category}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
 
+                      <div className="space-y-2">
+                        <Label htmlFor="reason" className="text-sm font-medium text-foreground">
+                          Reason for Award *
+                        </Label>
+                        <Textarea
+                          id="reason"
+                          placeholder="Describe the contribution or achievement..."
+                          value={formData.reason}
+                          onChange={(e) => handleInputChange('reason', e.target.value)}
+                          className="glass-input min-h-[100px] resize-none"
+                          required
+                        />
+                      </div>
 
+                      <div className="flex items-center gap-2 p-4 bg-blue-500/5 border border-blue-500/10 rounded-lg">
+                        <Info className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                        <p className="text-sm text-muted-foreground">
+                          Include detailed reasons to help build trust in the reputation system.
+                        </p>
+                      </div>
 
+                      <Button type="submit" variant="hero" size="lg" className="w-full group" disabled={isAwarding}>
+                        {isAwarding ? (
+                          <>
+                            <div className="w-5 h-5 mr-2 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                            Awarding...
+                          </>
+                        ) : (
+                          <>
+                            <Award className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                            Award Reputation
+                          </>
+                        )}
+                      </Button>
+                    </form>
+                  </Card>
+                </div>
 
+                {/* Sidebar Stats & Recent Awards */}
+                <div className="space-y-6">
+                  {/* Award Summary */}
+                  <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: '0.1s' }}>
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500/20 to-green-600/20 flex items-center justify-center">
+                        <TrendingUp className="w-4 h-4 text-green-600" />
+                      </div>
+                      <h3 className="font-semibold text-foreground">Award Summary</h3>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between p-3 glass-card rounded-lg">
+                        <span className="text-sm text-muted-foreground">Total Awards</span>
+                        <Badge variant="secondary" className="font-mono">
+                          {stats.totalAwards}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center justify-between p-3 glass-card rounded-lg">
+                        <span className="text-sm text-muted-foreground">Total REP Awarded</span>
+                        <Badge variant="secondary" className="font-mono">
+                          {stats.totalREPAwarded} REP
+                        </Badge>
+                      </div>
+                      <div className="flex items-center justify-between p-3 glass-card rounded-lg">
+                        <span className="text-sm text-muted-foreground">This Month</span>
+                        <Badge variant="secondary" className="font-mono">
+                          {stats.monthlyAwards}
+                        </Badge>
+                      </div>
+                    </div>
+                  </Card>
 
-      </Box>
-
-      {/* Recent Awards */}
-      <RecentAwardsTable
-        recentAwards={recentAwards}
-        loadingAwards={loadingAwards}
-        getStatusColor={getStatusColor}
-      />
-
-
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={handleCloseSnackbar}
-      >
-        <Alert 
-          onClose={handleCloseSnackbar} 
-          severity={snackbar.severity}
-          sx={{ width: '100%' }}
-        >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-    </Box>
+                  {/* Recent Awards */}
+                  <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: '0.2s' }}>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-semibold text-foreground">Recent Awards</h3>
+                      <Button variant="ghost" size="sm" onClick={() => navigate('/transaction-log')}>
+                        View all
+                      </Button>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      {recentAwards.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <Award className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                          <p className="text-sm">No recent awards found</p>
+                        </div>
+                      ) : (
+                        recentAwards.map((award) => (
+                          <div key={award.id} className="p-3 glass-card rounded-lg hover:shadow-md transition-all duration-200">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-medium text-foreground text-sm">
+                                {award.recipientName}
+                              </span>
+                              <Badge variant="secondary" className="text-xs">
+                                +{award.amount} REP
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
+                              {award.reason}
+                            </p>
+                            <div className="flex items-center justify-between">
+                              <Badge variant="outline" className="text-xs">
+                                {award.category}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {award.timestamp.toLocaleDateString()}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </Card>
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
   );
 };
 
-const AwardRepWithProtection: React.FC = () => {
-  return (
-    <ProtectedPage>
-      <AwardRep />
-    </ProtectedPage>
-  );
-};
-
-export default AwardRepWithProtection;
+export default AwardRep;

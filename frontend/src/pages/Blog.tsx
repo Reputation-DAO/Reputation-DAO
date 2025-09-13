@@ -1,133 +1,226 @@
-import { useEffect, useState } from "react";
-import {
-  Box,
-  Container,
+import Navigation from "@/components/ui/navigation";
+import Footer from "@/components/layout/Footer";
+import { Calendar, User, ArrowRight, Tag } from "lucide-react";
 
-  Typography,
-
-  keyframes,
-} from "@mui/material";
-import HeroSection from "../components/blog/hero";
-import FeaturedBlogCard from "../components/blog/Featured";
-import LatestArticlesGrid from "../components/blog/LatestArticlesGrid";
-import { blogActor } from "../components/canister/blogBackend";
-import type { Post } from "../components/canister/blogBackend";
-
-// Glow animation (same as LandingPage)
-const heartbeatGlow = keyframes`
-  0% { opacity: 0.06; filter: blur(25px); }
-  20% { opacity: 0.14; filter: blur(40px); }
-  50% { opacity: 0.36; filter: blur(50px); }
-  80% { opacity: 0.14; filter: blur(40px); }
-  100% { opacity: 0.06; filter: blur(25px); }
-`;
-
-export default function BlogPage() {
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(true);
-
- useEffect(() => {
-  (async () => {
-    try {
-      const data = await blogActor.getPosts();
-      const formatted = data.map((p: Post) => ({
-        ...p,
-        status: Object.keys(p.status)[0] as "Draft" | "Published" | "Archived",
-      }));
-      setPosts(formatted);
-    } finally {
-      setLoading(false);
+const Blog = () => {
+  const blogPosts = [
+    {
+      title: "The Future of Decentralized Identity",
+      excerpt: "Exploring how soulbound tokens and reputation systems will transform digital identity in the web3 era.",
+      author: "Alex Chen", 
+      date: "Dec 15, 2024",
+      category: "Technology",
+      readTime: "5 min read",
+      featured: true
+    },
+    {
+      title: "Building Trust in DAOs with Reputation",
+      excerpt: "How reputation-based governance can solve the challenges of token-weighted voting systems.",
+      author: "Sarah Williams",
+      date: "Dec 10, 2024", 
+      category: "Governance",
+      readTime: "7 min read",
+      featured: false
+    },
+    {
+      title: "ICP Integration: Technical Deep Dive",
+      excerpt: "A comprehensive look at how we built Reputation DAO on the Internet Computer Protocol.",
+      author: "Mike Zhang",
+      date: "Dec 5, 2024",
+      category: "Development", 
+      readTime: "12 min read",
+      featured: false
+    },
+    {
+      title: "Privacy and Transparency: Finding Balance",
+      excerpt: "How zero-knowledge proofs enable verifiable reputation while preserving user privacy.",
+      author: "Dr. Lisa Park",
+      date: "Nov 28, 2024",
+      category: "Privacy",
+      readTime: "8 min read", 
+      featured: false
+    },
+    {
+      title: "Community Spotlight: Early Adopters", 
+      excerpt: "Meet the first DAOs and protocols integrating Reputation DAO into their platforms.",
+      author: "Team RepDAO",
+      date: "Nov 20, 2024",
+      category: "Community",
+      readTime: "6 min read",
+      featured: false
+    },
+    {
+      title: "Roadmap Update: Q1 2025",
+      excerpt: "What's coming next for Reputation DAO including new features, partnerships, and protocol upgrades.",
+      author: "Founder Team",
+      date: "Nov 15, 2024",
+      category: "Updates",
+      readTime: "4 min read", 
+      featured: false
     }
-  })();
-}, []);
+  ];
 
+  const categories = ["All", "Technology", "Governance", "Development", "Privacy", "Community", "Updates"];
 
-  const featuredPost = posts.find((p) => p.isFeatured);
-  const otherPosts = posts.filter((p) => !p.isFeatured);
+  return (  
+    <div className="min-h-screen bg-background">
+      <Navigation />
+      
+      <main className="pt-16">
+        {/* Hero Section */}
+        <section className="py-24 bg-gradient-to-b from-primary-light/10 to-background">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h1 className="text-4xl sm:text-6xl font-bold mb-6 bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent">
+              Blog
+            </h1>
+            <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto">
+              Insights, updates, and deep dives into the world of decentralized reputation.
+            </p>
+          </div>
+        </section>
 
-  return (
-    <Box
-      sx={{
-        position: "relative",
-        bgcolor: "hsl(var(--background))",
-        minHeight: "100vh",
-        overflow: "hidden",
-        pb: 6,
-      }}
-    >
-      {/* Left Glow */}
-      <Box
-        sx={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100px",
-          height: "100%",
-          background: "hsl(var(--primary))",
-          animation: `${heartbeatGlow} 10s ease-in-out infinite`,
-          zIndex: 0,
-          pointerEvents: "none",
-          mixBlendMode: "screen",
-          borderRadius: "0 100px 100px 0",
-        }}
-      />
-      {/* Right Glow */}
-      <Box
-        sx={{
-          position: "absolute",
-          top: 0,
-          right: 0,
-          width: "100px",
-          height: "100%",
-          background: "hsl(var(--primary))",
-          animation: `${heartbeatGlow} 10s ease-in-out infinite`,
-          zIndex: 0,
-          pointerEvents: "none",
-          mixBlendMode: "screen",
-          borderRadius: "100px 0 0 100px",
-        }}
-      />
+        {/* Categories Filter */}
+        <section className="py-8 border-b border-border/50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex flex-wrap gap-3 justify-center">
+              {categories.map((category) => (
+                <button
+                  key={category}
+                  className="px-4 py-2 text-sm font-medium rounded-full border border-primary/20 text-muted-foreground hover:text-primary hover:bg-primary/5 transition-all duration-300"
+                >
+                  {category}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
 
-      <HeroSection />
+        {/* Featured Post */}
+        <section className="py-16">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="mb-8">
+              <h2 className="text-3xl font-bold mb-2 text-foreground">Featured</h2>
+            </div>
+            
+            {blogPosts.filter(post => post.featured).map((post) => (
+              <div key={post.title} className="glass-card p-8 lg:p-12 hover-lift cursor-pointer">
+                <div className="grid lg:grid-cols-2 gap-8 items-center">
+                  <div>
+                    <div className="flex items-center gap-4 mb-4">
+                      <span className="px-3 py-1 bg-primary/10 text-primary text-sm font-medium rounded-full">
+                        {post.category}
+                      </span>
+                      <span className="text-sm text-muted-foreground">{post.readTime}</span>
+                    </div>
+                    
+                    <h3 className="text-3xl lg:text-4xl font-bold mb-4 text-foreground hover:text-primary transition-colors duration-300">
+                      {post.title}
+                    </h3>
+                    
+                    <p className="text-lg text-muted-foreground mb-6 leading-relaxed">
+                      {post.excerpt}
+                    </p>
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <User className="w-4 h-4" />
+                          {post.author}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-4 h-4" />
+                          {post.date}
+                        </div>
+                      </div>
+                      
+                      <button className="flex items-center gap-2 text-primary font-medium hover:gap-3 transition-all duration-300">
+                        Read More <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="w-full h-64 lg:h-80 bg-gradient-to-br from-primary/10 to-primary-glow/10 rounded-2xl" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
 
-      <Container
-        maxWidth="lg"
-        sx={{
-          position: "relative",
-          zIndex: 1,
-          py: { xs: 4, md: 6 }, // 32px on mobile, 48px on desktop
-        }}
-      >
-        {/* Featured Section */}
-        <FeaturedBlogCard loading={loading} post={featuredPost} />
-        {/* Latest Articles */}
-        <Box sx={{ display: "flex", alignItems: "center", mb: 3 }}>
-          <Box
-            sx={{
-              width: 6,
-              height: 28,
-              borderRadius: 1,
-              background: "hsl(var(--primary))",
-              mr: 2,
-            }}
-          />
-          <Typography
-            variant="h3"
-            sx={{
-              fontWeight: 800,
-              letterSpacing: "-0.5px",
-              background: "hsl(var(--foreground))",
-              backgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-            }}
-          >
-            Latest Articles
-          </Typography>
-        </Box>
+        {/* Blog Posts Grid */}
+        <section className="py-16 bg-gradient-to-b from-background to-secondary/20">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="mb-8">
+              <h2 className="text-3xl font-bold mb-2 text-foreground">Latest Posts</h2>
+            </div>
+            
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {blogPosts.filter(post => !post.featured).map((post, index) => (
+                <article 
+                  key={post.title} 
+                  className="glass-card p-6 hover-lift cursor-pointer group"
+                  style={{ animationDelay: `${index * 100}ms` }}
+                >
+                  <div className="w-full h-48 bg-gradient-to-br from-primary/5 to-primary-glow/5 rounded-xl mb-6" />
+                  
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="px-3 py-1 bg-primary/10 text-primary text-xs font-medium rounded-full">
+                      {post.category}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{post.readTime}</span>
+                  </div>
+                  
+                  <h3 className="text-xl font-bold mb-3 text-foreground group-hover:text-primary transition-colors duration-300">
+                    {post.title}
+                  </h3>
+                  
+                  <p className="text-muted-foreground mb-4 leading-relaxed text-sm">
+                    {post.excerpt}
+                  </p>
+                  
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      <User className="w-3 h-3" />
+                      {post.author}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-3 h-3" />
+                      {post.date}
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
 
-
-        <LatestArticlesGrid loading={loading} posts={otherPosts} />
-      </Container>
-    </Box>
+        {/* Newsletter CTA */}
+        <section className="py-16">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="glass-card p-10 text-center border border-primary/20">
+              <h3 className="text-3xl font-bold mb-4 text-foreground">
+                Stay in the Loop
+              </h3>
+              <p className="text-lg text-muted-foreground mb-8">
+                Get the latest blog posts, technical updates, and community news delivered to your inbox.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center max-w-md mx-auto">
+                <input
+                  type="email"
+                  placeholder="Enter your email"
+                  className="flex-1 px-4 py-3 glass rounded-lg border border-border/50 focus:border-primary focus:outline-none transition-colors duration-300"
+                />
+                <button className="px-6 py-3 bg-gradient-to-r from-primary to-primary-glow text-white rounded-lg hover:scale-105 transition-all duration-300 hover:shadow-[var(--shadow-glow)] whitespace-nowrap">
+                  Subscribe
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+      
+      <Footer />
+    </div>
   );
-}
+};
+
+export default Blog;

@@ -1,329 +1,200 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import {
-  Box,
-  Typography,
-  TextField,
-  Button,
-  Alert,
-  Card,
-  CircularProgress,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Select,
-} from '@mui/material';
-import { 
-  Building, 
-  Plus, 
-  Users, 
-  Star, 
-  ArrowRight, 
-  Search,
-  Crown,
-  Shield,
-  User,
-  CheckCircle,
-  Zap
-} from 'lucide-react';
-import { getPlugActor, getCurrentPrincipal } from '../components/canister/reputationDao';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { usePlugConnection } from "@/hooks/usePlugConnection";
+import { getAllOrganizations, createOrganization } from "@/components/canister/reputationDao";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import Navigation from "@/components/ui/navigation";
+import { toast } from "sonner";
+import { Building, Users, Star, User, Shield, Crown, Settings, Filter, Plus, ArrowRight, Copy, CheckCircle2 } from "lucide-react";
 
-// Types
 interface Organization {
   id: string;
   name: string;
   description: string;
+  category: string;
   memberCount: number;
   reputationPoints: number;
-  role: 'admin' | 'awarder' | 'member';
-  isOwner?: boolean;
-  category: string;
+  role: string;
+  isOwner: boolean;
 }
 
-// Role Icon Component
-const RoleIcon = ({ role }: { role: 'admin' | 'awarder' | 'member' }) => {
+// Wallet Display Component
+const WalletDisplay = () => {
+  const { isConnected, principal } = usePlugConnection({ autoCheck: true });
+  
+  if (!isConnected || !principal) return null;
+  
+  const principalStr = principal.toString();
+  const shortPrincipal = `${principalStr.slice(0, 8)}...${principalStr.slice(-8)}`;
+  
+  return (
+    <div className="flex items-center gap-2 bg-primary/10 rounded-lg px-3 py-2 border border-primary/20">
+      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+      <span className="text-sm font-mono text-muted-foreground">{shortPrincipal}</span>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => {
+          navigator.clipboard.writeText(principalStr);
+          toast.success("Principal copied to clipboard");
+        }}
+        className="h-6 w-6 p-0"
+      >
+        <Copy className="w-3 h-3" />
+      </Button>
+    </div>
+  );
+};
+
+const RoleIcon = ({ role }: { role: string }) => {
   switch (role) {
     case 'admin':
-      return <Crown style={{ width: 16, height: 16, color: '#f59e0b' }} />;
-    case 'awarder':
-      return <Shield style={{ width: 16, height: 16, color: '#3b82f6' }} />;
+      return <Crown className="w-4 h-4 text-yellow-500" />;
+    case 'moderator':
+      return <Shield className="w-4 h-4 text-blue-500" />;
+    case 'member':
+      return <User className="w-4 h-4 text-green-500" />;
     default:
-      return <User style={{ width: 16, height: 16, color: '#6b7280' }} />;
+      return <User className="w-4 h-4 text-green-500" />;
   }
 };
 
-// Organization Card Component
-const OrganizationCard = ({ 
-  org, 
-  onSelect, 
-  isSelected,
-  isConnected = true
-}: { 
-  org: Organization; 
+const OrganizationCard = ({ org, onSelect, isSelected }: {
+  org: Organization;
   onSelect: (org: Organization) => void;
-  isSelected: boolean;
-  isConnected?: boolean;
+  isSelected?: boolean;
 }) => (
-  <Card
-    sx={{
-      p: 3,
-      cursor: isConnected ? 'pointer' : 'not-allowed',
-      transition: 'all 0.3s ease',
-      background: isSelected 
-        ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(147, 51, 234, 0.1))'
-        : 'rgba(255, 255, 255, 0.02)',
-      backdropFilter: 'blur(20px)',
-      border: isSelected 
-        ? '2px solid rgba(99, 102, 241, 0.8)'
-        : '1px solid rgba(255, 255, 255, 0.1)',
-      borderRadius: '16px',
-      position: 'relative',
-      overflow: 'hidden',
-      opacity: isConnected ? 1 : 0.5,
-      '&:hover': isConnected ? {
-        transform: 'scale(1.02)',
-        borderColor: 'rgba(99, 102, 241, 0.6)',
-        boxShadow: '0 0 40px hsl(217 91% 70% / 0.3)',
-      } : {}
-    }}
-    onClick={() => isConnected && onSelect(org)}
-  >
-    {/* Category Badge */}
-    <Box
-      sx={{
-        position: 'absolute',
-        top: 12,
-        right: 12,
-        px: 2,
-        py: 0.5,
-        borderRadius: '20px',
-        background: 'rgba(99, 102, 241, 0.2)',
-        backdropFilter: 'blur(10px)',
-        fontSize: '0.75rem',
-        fontWeight: 600,
-        color: '#a5b4fc'
-      }}
-    >
-      {org.category}
-    </Box>
-
-    {/* Role Badge */}
-    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 0.5,
-          px: 1.5,
-          py: 0.5,
-          borderRadius: '12px',
-          background: 'rgba(255, 255, 255, 0.1)',
-          backdropFilter: 'blur(10px)',
-          fontSize: '0.75rem',
-          fontWeight: 600,
-          textTransform: 'capitalize'
-        }}
-      >
+  <Card className={`glass-card p-6 cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-[var(--shadow-glow)] group relative overflow-hidden ${
+    isSelected ? 'ring-2 ring-primary shadow-[var(--shadow-glow)]' : ''
+  }`}>
+    {org.isOwner && (
+      <div className="absolute top-0 right-0 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-3 py-1 text-xs rounded-bl-lg">
+        Owner
+      </div>
+    )}
+    
+    <div className="flex items-start justify-between mb-4">
+      <div className="flex items-center gap-3">
+        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/10 to-primary-glow/10 flex items-center justify-center group-hover:from-primary/20 group-hover:to-primary-glow/20 transition-all duration-300">
+          <Building className="w-6 h-6 text-primary group-hover:scale-110 transition-transform duration-300" />
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-foreground">{org.name}</h3>
+          <p className="text-sm text-muted-foreground">{org.category}</p>
+        </div>
+      </div>
+      
+      <Badge variant="secondary" className="flex items-center gap-1">
         <RoleIcon role={org.role} />
         {org.role}
-        {org.isOwner && ' (Owner)'}
-      </Box>
-    </Box>
-
-    {/* Content */}
-    <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-      {org.name}
-    </Typography>
+      </Badge>
+    </div>
     
-    <Typography 
-      variant="body2" 
-      sx={{ 
-        color: 'text.secondary', 
-        mb: 3, 
-        lineHeight: 1.5,
-        display: '-webkit-box',
-        WebkitLineClamp: 2,
-        WebkitBoxOrient: 'vertical',
-        overflow: 'hidden'
-      }}
-    >
-      {org.description}
-    </Typography>
-
-    {/* Stats */}
-    <Box sx={{ display: 'flex', gap: 3 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-        <Users style={{ width: 16, height: 16, color: 'rgba(255, 255, 255, 0.5)' }} />
-        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+    <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{org.description}</p>
+    
+    <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+        <div className="flex items-center gap-1">
+          <Users className="w-4 h-4" />
           {org.memberCount} members
-        </Typography>
-      </Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-        <Star style={{ width: 16, height: 16, color: '#f59e0b' }} />
-        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+        </div>
+        <div className="flex items-center gap-1">
+          <Star className="w-4 h-4" />
           {org.reputationPoints} rep
-        </Typography>
-      </Box>
-    </Box>
-
-    {/* Selection Indicator */}
-    {isSelected && (
-      <Box
-        sx={{
-          position: 'absolute',
-          top: -1,
-          left: -1,
-          right: -1,
-          bottom: -1,
-          background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(147, 51, 234, 0.3))',
-          borderRadius: '16px',
-          zIndex: -1,
-          animation: 'pulse-glow 2s ease-in-out infinite alternate',
-          '@keyframes pulse-glow': {
-            '0%': { opacity: 0.3 },
-            '100%': { opacity: 0.6 }
-          }
-        }}
-      />
-    )}
+        </div>
+      </div>
+    </div>
+    
+    <Button 
+      onClick={() => onSelect(org)}
+      variant={isSelected ? "default" : "outline"}
+      className="w-full group-hover:scale-105 transition-transform duration-200"
+    >
+      {isSelected ? 'Selected' : 'Select Organization'}
+      <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform duration-200" />
+    </Button>
   </Card>
 );
 
-// Create Organization Dialog
-const CreateOrgDialog = ({ 
-  open, 
-  onClose, 
-  onCreateOrg 
-}: { 
-  open: boolean; 
-  onClose: () => void;
-  onCreateOrg: (name: string, description: string, category: string) => void;
+const CreateOrgDialog = ({ onCreateOrg, creating }: {
+  onCreateOrg: (name: string, description: string, category: string) => Promise<void>;
+  creating: boolean;
 }) => {
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('Technology');
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("Technology");
+  const [isOpen, setIsOpen] = useState(false);
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (name.trim() && description.trim()) {
-      onCreateOrg(name.trim(), description.trim(), category);
-      setName('');
-      setDescription('');
-      setCategory('Technology');
-      onClose();
+      await onCreateOrg(name, description, category);
+      setName("");
+      setDescription("");
+      setCategory("Technology");
+      setIsOpen(false);
     }
   };
 
   return (
-    <Dialog 
-      open={open} 
-      onClose={onClose}
-      maxWidth="sm"
-      fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: '16px',
-          background: 'rgba(0, 0, 0, 0.9)',
-          backdropFilter: 'blur(20px)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-        }
-      }}
-    >
-      <DialogTitle sx={{ 
-        textAlign: 'center', 
-        fontWeight: 700, 
-        fontSize: '1.5rem',
-        color: 'white'
-      }}>
-        Create New Organization
-      </DialogTitle>
-      
-      <DialogContent sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-          <TextField
-            label="Organization Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            fullWidth
-            variant="outlined"
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: '12px',
-                background: 'rgba(255, 255, 255, 0.05)',
-                color: 'white',
-                '& fieldset': { borderColor: 'rgba(255, 255, 255, 0.2)' },
-                '&:hover fieldset': { borderColor: 'rgba(255, 255, 255, 0.3)' },
-                '&.Mui-focused fieldset': { borderColor: 'hsl(217, 91%, 60%)' }
-              },
-              '& .MuiInputLabel-root': { color: 'rgba(255, 255, 255, 0.7)' }
-            }}
-          />
-          
-          <TextField
-            label="Description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            fullWidth
-            multiline
-            rows={3}
-            variant="outlined"
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: '12px',
-                background: 'rgba(255, 255, 255, 0.05)',
-                color: 'white',
-                '& fieldset': { borderColor: 'rgba(255, 255, 255, 0.2)' },
-                '&:hover fieldset': { borderColor: 'rgba(255, 255, 255, 0.3)' },
-                '&.Mui-focused fieldset': { borderColor: 'hsl(217, 91%, 60%)' }
-              },
-              '& .MuiInputLabel-root': { color: 'rgba(255, 255, 255, 0.7)' }
-            }}
-          />
-
-          <FormControl fullWidth>
-            <InputLabel sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>Category</InputLabel>
-            <Select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              label="Category"
-              sx={{
-                borderRadius: '12px',
-                background: 'rgba(255, 255, 255, 0.05)',
-                color: 'white',
-                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255, 255, 255, 0.2)' },
-                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255, 255, 255, 0.3)' },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'hsl(217, 91%, 60%)' }
-              }}
-            >
-              <MenuItem value="Technology">Technology</MenuItem>
-              <MenuItem value="Finance">Finance</MenuItem>
-              <MenuItem value="Community">Community</MenuItem>
-              <MenuItem value="Education">Education</MenuItem>
-              <MenuItem value="Healthcare">Healthcare</MenuItem>
-              <MenuItem value="Other">Other</MenuItem>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button className="flex items-center gap-2">
+          <Plus className="w-4 h-4" />
+          Create Organization
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Create New Organization</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium mb-2 block">Organization Name</label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter organization name"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium mb-2 block">Description</label>
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Describe your organization"
+              rows={3}
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium mb-2 block">Category</label>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Technology">Technology</SelectItem>
+                <SelectItem value="Finance">Finance</SelectItem>
+                <SelectItem value="Healthcare">Healthcare</SelectItem>
+                <SelectItem value="Education">Education</SelectItem>
+                <SelectItem value="Non-Profit">Non-Profit</SelectItem>
+                <SelectItem value="Other">Other</SelectItem>
+              </SelectContent>
             </Select>
-          </FormControl>
-
-          <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-            <Button 
-              variant="outlined" 
-              onClick={onClose} 
-              sx={{ flex: 1, borderRadius: '8px', textTransform: 'none' }}
-            >
-              Cancel
-            </Button>
-            <Button 
-              variant="contained"
-              onClick={handleCreate} 
-              disabled={!name.trim() || !description.trim()} 
-              sx={{ flex: 1, borderRadius: '8px', textTransform: 'none' }}
-            >
-              Create Organization
-            </Button>
-          </Box>
-        </Box>
+          </div>
+          <Button 
+            onClick={handleCreate} 
+            disabled={!name.trim() || !description.trim() || creating}
+            className="w-full"
+          >
+            {creating ? "Creating..." : "Create Organization"}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -331,196 +202,56 @@ const CreateOrgDialog = ({
 
 const OrgSelector = () => {
   const navigate = useNavigate();
+  const { isConnected, principal } = usePlugConnection({ autoCheck: true });
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  
-  // Wallet connection states
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [userPrincipal, setUserPrincipal] = useState<string | null>(null);
-  const [connectingWallet, setConnectingWallet] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
-  const [checkingConnection, setCheckingConnection] = useState(true);
-
-  // Organizations from canister
+  const [filter, setFilter] = useState("all");
   const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [loadingOrgs, setLoadingOrgs] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
 
-  const clearMessages = () => {
-    setError(null);
-    setSuccess(null);
-  };
-
-  // Fetch organizations that the user has access to
-  const fetchUserOrganizations = async () => {
-    if (!isConnected || !userPrincipal) return;
-    
-    setLoadingOrgs(true);
-    try {
-      const reputationDao = await getPlugActor();
-      if (!reputationDao) return;
-
-      console.log("Fetching all organizations...");
-      
-      // Get all organization IDs
-      const allOrgIds = await reputationDao.getAllOrgs();
-      console.log("All org IDs:", allOrgIds);
-      
-      if (!allOrgIds || allOrgIds.length === 0) {
-        setOrganizations([]);
-        return;
-      }
-
-      // Get current user's principal
-      const currentPrincipal = await getCurrentPrincipal();
-      if (!currentPrincipal) return;
-
-      const userOrgs: Organization[] = [];
-
-      // Check each organization to see if user has access
-      for (const orgId of allOrgIds) {
-        try {
-          // Get organization stats and admin info
-          const [orgStats, orgAdmin, isAwarder] = await Promise.all([
-            reputationDao.getOrgStats(orgId),
-            reputationDao.getOrgAdmin(orgId),
-            reputationDao.isOrgTrustedAwarderQuery(orgId, currentPrincipal)
-          ]);
-
-          // Check if user has any role in this organization
-          let userRole: 'admin' | 'awarder' | 'member' = 'member';
-          let isOwner = false;
-
-          // Check if user is admin
-          if (orgAdmin && orgAdmin.toString() === currentPrincipal.toString()) {
-            userRole = 'admin';
-            isOwner = true;
-          }
-          // Check if user is awarder  
-          else if (isAwarder) {
-            userRole = 'awarder';
-          }
-          // For now, we'll include all orgs - you might want to filter this
-          // to only show orgs where user is actually a member
-
-          const stats = Array.isArray(orgStats) ? orgStats[0] : orgStats;
-          
-          const org: Organization = {
-            id: orgId,
-            name: orgId, // Using ID as name for now - you might want to store actual names
-            description: `Organization ${orgId}`, // Placeholder description
-            memberCount: stats ? Number(stats.userCount) : 0,
-            reputationPoints: stats ? Number(stats.totalPoints) : 0,
-            role: userRole,
-            isOwner,
-            category: "General" // Default category
-          };
-
-          userOrgs.push(org);
-          
-        } catch (error) {
-          console.warn(`Error fetching data for org ${orgId}:`, error);
-        }
-      }
-      
-      console.log("User organizations:", userOrgs);
-      setOrganizations(userOrgs);
-      
-    } catch (error) {
-      console.error("Error fetching organizations:", error);
-      setError("Failed to fetch organizations. You can try the 'Load Organizations' button.");
-    } finally {
-      setLoadingOrgs(false);
-    }
-  };
-
-  // Check wallet connection + retrieve principal
-  const checkWalletConnection = async () => {
-    try {
-      if ((window as any).ic?.plug) {
-        const connected = await (window as any).ic.plug.isConnected();
-        setIsConnected(Boolean(connected));
-
-        if (connected) {
-          let principal: any = null;
-          try {
-            principal = await getCurrentPrincipal();
-          } catch {
-            /* ignore and fallback */
-          }
-
-          if (!principal && (window as any).ic?.plug?.getPrincipal) {
-            try {
-              principal = await (window as any).ic.plug.getPrincipal();
-            } catch {
-              /* ignore */
-            }
-          }
-
-          setUserPrincipal(principal ? principal.toString() : null);
-          return;
-        }
-      }
-    } catch (err) {
-      console.warn("Error checking wallet connection:", err);
-    }
-
-    setIsConnected(false);
-    setUserPrincipal(null);
-  };
-
+  // Load organizations from backend
   useEffect(() => {
-    const initConnection = async () => {
-      setCheckingConnection(true);
-      await checkWalletConnection();
-      setCheckingConnection(false);
-    };
-    
-    initConnection();
-  }, []);
-
-  // Fetch organizations when connected
-  useEffect(() => {
-    if (isConnected && userPrincipal) {
-      fetchUserOrganizations();
-    }
-  }, [isConnected, userPrincipal]);
-
-  const handleConnectWallet = async () => {
-    setConnectingWallet(true);
-    clearMessages();
-
-    try {
-      // First try to connect to Plug Wallet
-      if ((window as any).ic?.plug) {
-        const connected = await (window as any).ic.plug.requestConnect({
-          whitelist: [],
-          timeout: 50000
-        });
+    const loadOrganizations = async () => {
+      if (!isConnected || !principal) return;
+      
+      try {
+        setLoading(true);
+        console.log('🔄 Loading organizations...');
         
-        if (connected) {
-          await checkWalletConnection();
-          setSuccess("Wallet connected successfully!");
-        } else {
-          setError("Failed to connect wallet. Please try again.");
-        }
-      } else {
-        setError("Plug wallet not found. Please install Plug wallet extension.");
+        const orgs = await getAllOrganizations();
+        console.log('� Received organizations:', orgs);
+        
+        // Convert backend orgs to UI format
+        const uiOrgs: Organization[] = orgs.map((org, index) => ({
+          id: org.id,
+          name: org.name,
+          description: org.description,
+          category: "Technology", // Default category for now
+          memberCount: 1, // Default member count
+          reputationPoints: 0, // Default reputation
+          role: "admin", // Default role
+          isOwner: true // Default ownership
+        }));
+        
+        setOrganizations(uiOrgs);
+        console.log('✅ Organizations loaded successfully');
+        
+      } catch (error) {
+        console.error('Error loading organizations:', error);
+        // Fallback to empty array
+        setOrganizations([]);
+      } finally {
+        setLoading(false);
       }
-    } catch (err: any) {
-      console.error("Wallet connection error:", err);
-      setError(err?.message || "Failed to connect wallet. Please make sure Plug is installed and unlocked.");
-    } finally {
-      setConnectingWallet(false);
-    }
-  };
+    };
+
+    loadOrganizations();
+  }, [isConnected, principal]);
 
   const filteredOrgs = organizations.filter(org =>
-    org.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    org.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    org.category.toLowerCase().includes(searchQuery.toLowerCase())
+    filter === "all" || 
+    org.role === filter ||
+    (filter === "owned" && org.isOwner)
   );
 
   const handleSelectOrg = (org: Organization) => {
@@ -529,480 +260,184 @@ const OrgSelector = () => {
 
   const handleContinue = () => {
     if (selectedOrg) {
-      localStorage.setItem('selectedOrgId', selectedOrg.id); // Use the actual org ID (name)
+      // Store organization data in the format expected by Dashboard
+      localStorage.setItem('selectedOrgId', selectedOrg.id);
       localStorage.setItem('userRole', selectedOrg.role);
-      window.dispatchEvent(new CustomEvent('orgChanged'));
+      localStorage.setItem('selectedOrganization', JSON.stringify(selectedOrg));
+      
+      // Trigger custom event for RoleContext to refresh
+      window.dispatchEvent(new Event('orgChanged'));
+      
       navigate('/dashboard');
     }
   };
 
   const handleCreateOrg = async (name: string, description: string, category: string) => {
-    if (!isConnected) {
-      setError("Please connect your wallet first");
+    if (!isConnected || !principal) {
+      toast.error("Please connect your wallet first");
       return;
     }
 
-    setLoading(true);
-    clearMessages();
-
     try {
-      const reputationDao = await getPlugActor();
-      if (!reputationDao) {
-        setError("Failed to connect to canister");
-        return;
-      }
-
-      // Register org with canister using the name as ID
-      const result = await reputationDao.registerOrg(name);
-      console.log("Register org result:", result);
+      setCreating(true);
+      console.log('🏗️ Creating organization:', name);
       
-      if (typeof result === "string" && result.toLowerCase().includes("success")) {
-        const newOrg: Organization = {
-          id: name, // Use name as ID to match canister
-          name,
-          description,
-          memberCount: 1,
-          reputationPoints: 0,
-          role: 'admin',
-          isOwner: true,
-          category
-        };
-
-        setOrganizations(prev => [...prev, newOrg]);
-        setSuccess(`Organization "${name}" created successfully!`);
-        
-        // Store the org name as selectedOrgId and set role as Admin
-        localStorage.setItem('selectedOrgId', name);
-        localStorage.setItem('userRole', 'Admin');
-        
-        // Trigger org change event
-        window.dispatchEvent(new CustomEvent('orgChanged'));
-        
-        setTimeout(() => navigate('/dashboard'), 1200);
-      } else {
-        setError(typeof result === "string" ? result : "Failed to create organization");
-      }
-    } catch (err: any) {
-      console.error("Create org error:", err);
-      setError(err?.message || "Failed to create organization");
+      // Set a flag to indicate organization creation is in progress
+      localStorage.setItem('orgCreationInProgress', 'true');
+      
+      // Create organization on backend
+      const result = await createOrganization(name, description, category);
+      console.log('✅ Organization created:', result);
+      
+      // Add to local state
+      const newOrg: Organization = {
+        id: name,
+        name,
+        description,
+        category,
+        memberCount: 1,
+        reputationPoints: 0,
+        role: 'admin',
+        isOwner: true
+      };
+      setOrganizations([...organizations, newOrg]);
+      setSelectedOrg(newOrg);
+      
+      // Store organization data in localStorage immediately
+      localStorage.setItem('selectedOrgId', newOrg.id);
+      localStorage.setItem('userRole', newOrg.role);
+      localStorage.setItem('selectedOrganization', JSON.stringify(newOrg));
+      
+      console.log('📦 Stored in localStorage:', {
+        selectedOrgId: localStorage.getItem('selectedOrgId'),
+        userRole: localStorage.getItem('userRole')
+      });
+      
+      // Trigger custom event for RoleContext to refresh
+      window.dispatchEvent(new Event('orgChanged'));
+      
+      toast.success(`Organization "${name}" created successfully! Redirecting to dashboard...`);
+      
+      // Wait a bit longer for all state updates to complete
+      setTimeout(() => {
+        console.log('🧭 Navigating to dashboard...');
+        navigate('/dashboard');
+      }, 2500);
+      
+    } catch (error) {
+      console.error('❌ Error creating organization:', error);
+      toast.error("Failed to create organization");
     } finally {
-      setLoading(false);
+      setCreating(false);
     }
   };
 
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        background: 'linear-gradient(135deg, hsl(220, 30%, 5%) 0%, hsl(220, 30%, 8%) 50%, hsl(220, 30%, 12%) 100%)',
-        position: 'relative',
-        overflow: 'hidden',
-        py: 8
-      }}
-    >
-      {/* Floating Blur Orbs */}
-      {[...Array(3)].map((_, i) => (
-        <Box
-          key={i}
-          sx={{
-            position: 'absolute',
-            width: { xs: '300px', md: '500px' },
-            height: { xs: '300px', md: '500px' },
-            borderRadius: '50%',
-            background: `linear-gradient(135deg, 
-              hsla(217, 91%, 60%, 0.1), 
-              hsla(147, 51%, 60%, 0.1))`,
-            filter: 'blur(60px)',
-            animation: 'float 6s ease-in-out infinite',
-            zIndex: 0,
-            ...(i === 0 && {
-              top: '10%',
-              left: '10%',
-              animationDelay: '0s'
-            }),
-            ...(i === 1 && {
-              top: '50%',
-              right: '10%',
-              animationDelay: '2s'
-            }),
-            ...(i === 2 && {
-              bottom: '10%',
-              left: '30%',
-              animationDelay: '4s'
-            }),
-            '@keyframes float': {
-              '0%, 100%': { transform: 'translateY(0px) rotate(0deg)' },
-              '50%': { transform: 'translateY(-20px) rotate(5deg)' }
-            }
-          }}
-        />
-      ))}
+    <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-muted/20">
+      <Navigation />
+      
+      {/* Floating Header */}
+      <div className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50 mt-16">
+        <div className="max-w-6xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center">
+                <Building className="w-5 h-5 text-primary-foreground" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-foreground">Choose Organization</h1>
+                <p className="text-sm text-muted-foreground">Select your organization to continue</p>
+              </div>
+            </div>
+            
+            {/* Wallet Display in top right */}
+            <WalletDisplay />
+          </div>
+        </div>
+      </div>
 
-      <Box sx={{ position: 'relative', maxWidth: '1200px', mx: 'auto', px: 2, py: 10 }}>
-        {/* Wallet Address Display - Top Right */}
-        {isConnected && userPrincipal && (
-          <Box
-            sx={{
-              position: 'absolute',
-              top: 20,
-              right: 20,
-              display: 'flex',
-              gap: 2,
-              zIndex: 10
-            }}
-          >
-            {/* Refresh Organizations Button */}
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={fetchUserOrganizations}
-              disabled={loadingOrgs}
-              startIcon={loadingOrgs ? <CircularProgress size={16} /> : <Building style={{ width: 16, height: 16 }} />}
-              sx={{
-                minWidth: 'auto',
-                px: 1.5,
-                py: 1,
-                borderColor: 'rgba(255, 255, 255, 0.3)',
-                color: 'rgba(255, 255, 255, 0.8)',
-                fontSize: '0.75rem',
-                '&:hover': {
-                  borderColor: 'rgba(255, 255, 255, 0.5)',
-                  background: 'rgba(255, 255, 255, 0.1)'
+      <div className="relative pt-32">
+        <div className="max-w-6xl mx-auto px-6 py-8">
+          {/* Filter and Actions */}
+          <div className="flex flex-col sm:flex-row gap-4 mb-8 justify-between items-start sm:items-center">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-muted-foreground" />
+                <Select value={filter} onValueChange={setFilter}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="member">Member</SelectItem>
+                    <SelectItem value="owned">Owned</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <Badge variant="outline" className="flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3" />
+                {filteredOrgs.length} organizations
+              </Badge>
+            </div>
+
+            <CreateOrgDialog onCreateOrg={handleCreateOrg} creating={creating} />
+          </div>
+
+          {loading ? (
+            <div className="text-center py-12">
+              <div className="inline-flex items-center gap-2 text-muted-foreground">
+                <div className="w-4 h-4 border-2 border-primary border-r-transparent rounded-full animate-spin"></div>
+                Loading organizations...
+              </div>
+            </div>
+          ) : filteredOrgs.length === 0 ? (
+            <div className="text-center py-12">
+              <Building className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-foreground mb-2">No Organizations Found</h3>
+              <p className="text-muted-foreground mb-6">
+                {organizations.length === 0 
+                  ? "You haven't joined any organizations yet. Create your first one!"
+                  : "No organizations match your current filter."
                 }
-              }}
-            >
-              {loadingOrgs ? 'Loading...' : 'Refresh'}
-            </Button>
+              </p>
+              {organizations.length === 0 && (
+                <CreateOrgDialog onCreateOrg={handleCreateOrg} creating={creating} />
+              )}
+            </div>
+          ) : (
+            <>
+              {/* Organizations Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                {filteredOrgs.map((org) => (
+                  <OrganizationCard
+                    key={org.id}
+                    org={org}
+                    onSelect={handleSelectOrg}
+                    isSelected={selectedOrg?.id === org.id}
+                  />
+                ))}
+              </div>
 
-            {/* Wallet Info */}
-            <Box
-              sx={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                backdropFilter: 'blur(20px)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: '12px',
-                p: 2,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 2
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <CheckCircle style={{ width: 16, height: 16, color: '#4ade80' }} />
-                <Typography 
-                  variant="caption" 
-                  sx={{ 
-                    color: 'white',
-                    fontFamily: 'monospace',
-                    fontSize: '0.75rem'
-                  }}
-                >
-                  {userPrincipal.slice(0, 8)}...{userPrincipal.slice(-8)}
-                </Typography>
-              </Box>
-              <Button
-                size="small"
-                variant="outlined"
-                onClick={() => {
-                  setIsConnected(false);
-                  setUserPrincipal(null);
-                  setOrganizations([]);
-                  setSuccess("Wallet disconnected");
-                }}
-                sx={{
-                  minWidth: 'auto',
-                  px: 1,
-                  py: 0.5,
-                  fontSize: '0.7rem',
-                  borderColor: 'rgba(255, 255, 255, 0.3)',
-                  color: 'rgba(255, 255, 255, 0.8)',
-                  '&:hover': {
-                    borderColor: 'rgba(255, 255, 255, 0.5)',
-                    background: 'rgba(255, 255, 255, 0.1)'
-                  }
-                }}
-              >
-                Disconnect
-              </Button>
-            </Box>
-          </Box>
-        )}
-
-        {/* Header */}
-        <Box sx={{ textAlign: 'center', mb: 8 }}>
-          <Box
-            sx={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 64,
-              height: 64,
-              background: 'linear-gradient(135deg, hsl(217, 91%, 60%), hsl(217, 91%, 70%))',
-              borderRadius: '16px',
-              mb: 3,
-              animation: 'pulse-glow 2s ease-in-out infinite alternate',
-              '@keyframes pulse-glow': {
-                '0%': { boxShadow: '0 0 20px hsl(217 91% 70% / 0.3)' },
-                '100%': { boxShadow: '0 0 60px hsl(217 91% 70% / 0.6)' }
-              }
-            }}
-          >
-            <Building style={{ width: 32, height: 32, color: 'white' }} />
-          </Box>
-          
-          <Typography 
-            variant="h2" 
-            sx={{ 
-              fontSize: { xs: '2.5rem', md: '3rem' },
-              fontWeight: 700, 
-              mb: 3,
-              background: 'linear-gradient(135deg, white, rgba(255, 255, 255, 0.7))',
-              backgroundClip: 'text',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-            }}
-          >
-            Choose Your Organization
-          </Typography>
-          
-          <Typography 
-            variant="h6" 
-            sx={{ 
-              color: 'rgba(255, 255, 255, 0.7)', 
-              maxWidth: '600px', 
-              mx: 'auto', 
-              mb: 4,
-              lineHeight: 1.6
-            }}
-          >
-            Select an existing organization or create a new one to start managing reputation points.
-          </Typography>
-
-          {/* Wallet Connection Status */}
-          {checkingConnection ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 4 }}>
-              <CircularProgress size={24} sx={{ color: 'rgba(255, 255, 255, 0.7)' }} />
-            </Box>
-          ) : !isConnected ? (
-            <Alert 
-              severity="warning" 
-              sx={{ 
-                maxWidth: '600px', 
-                mx: 'auto', 
-                mb: 4,
-                borderRadius: '12px',
-                background: 'rgba(255, 193, 7, 0.1)',
-                color: 'white'
-              }}
-              action={
-                <Button
-                  color="inherit"
-                  size="small"
-                  onClick={handleConnectWallet}
-                  disabled={connectingWallet}
-                  startIcon={connectingWallet ? <CircularProgress size={16} /> : <Zap style={{ width: 16, height: 16 }} />}
-                  sx={{ borderRadius: '8px', textTransform: 'none' }}
-                >
-                  {connectingWallet ? 'Connecting...' : 'Connect Plug Wallet'}
-                </Button>
-              }
-            >
-              Connect your Plug Wallet to create or join organizations
-            </Alert>
-          ) : null}
-        </Box>
-
-        {/* Search */}
-        <Box sx={{ maxWidth: '400px', mx: 'auto', mb: 6 }}>
-          <Box sx={{ position: 'relative' }}>
-            <Box sx={{ 
-              position: 'absolute', 
-              left: 12, 
-              top: '50%', 
-              transform: 'translateY(-50%)', 
-              color: 'rgba(255, 255, 255, 0.5)',
-              zIndex: 1
-            }}>
-              <Search style={{ width: 20, height: 20 }} />
-            </Box>
-            <TextField
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search organizations..."
-              fullWidth
-              variant="outlined"
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  pl: 5,
-                  borderRadius: '12px',
-                  background: 'rgba(255, 255, 255, 0.02)',
-                  backdropFilter: 'blur(20px)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  color: 'white',
-                  '& input::placeholder': { color: 'rgba(255, 255, 255, 0.5)' },
-                  '& fieldset': { border: 'none' }
-                }
-              }}
-            />
-          </Box>
-          
-          {/* Load Organizations Button */}
-          {isConnected && organizations.length === 0 && !loadingOrgs && (
-            <Box sx={{ textAlign: 'center', mt: 3 }}>
-              <Button
-                variant="outlined"
-                onClick={fetchUserOrganizations}
-                startIcon={<Building style={{ width: 16, height: 16 }} />}
-                sx={{
-                  borderColor: 'rgba(255, 255, 255, 0.3)',
-                  color: 'white',
-                  textTransform: 'none',
-                  borderRadius: '8px',
-                  '&:hover': {
-                    borderColor: 'rgba(255, 255, 255, 0.5)',
-                    background: 'rgba(255, 255, 255, 0.1)'
-                  }
-                }}
-              >
-                Load Organizations
-              </Button>
-            </Box>
+              {/* Continue Button */}
+              {selectedOrg && (
+                <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50">
+                  <Button 
+                    onClick={handleContinue}
+                    size="lg"
+                    className="shadow-lg hover:shadow-xl transition-all duration-300 px-8"
+                  >
+                    Continue to Dashboard
+                    <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+                </div>
+              )}
+            </>
           )}
-        </Box>
-
-        {/* Error/Success Messages */}
-        {error && (
-          <Alert severity="error" sx={{ maxWidth: '600px', mx: 'auto', mb: 4, borderRadius: '12px' }}>
-            {error}
-          </Alert>
-        )}
-        {success && (
-          <Alert severity="success" sx={{ maxWidth: '600px', mx: 'auto', mb: 4, borderRadius: '12px' }}>
-            {success}
-          </Alert>
-        )}
-
-        {/* Organization Grid */}
-        {loadingOrgs ? (
-          <Box sx={{ textAlign: 'center', py: 6 }}>
-            <CircularProgress sx={{ color: 'rgba(255, 255, 255, 0.7)' }} />
-            <Typography variant="body1" sx={{ color: 'rgba(255, 255, 255, 0.7)', mt: 2 }}>
-              Loading organizations...
-            </Typography>
-          </Box>
-        ) : (
-          <Box sx={{ 
-            display: 'grid', 
-            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' },
-            gap: 3,
-            mb: 6
-          }}>
-            {/* Create New Organization Card */}
-            <Card
-              sx={{
-                p: 3,
-                cursor: isConnected ? 'pointer' : 'not-allowed',
-                transition: 'all 0.3s ease',
-                background: 'rgba(255, 255, 255, 0.02)',
-                backdropFilter: 'blur(20px)',
-                border: '2px dashed rgba(99, 102, 241, 0.3)',
-                borderRadius: '16px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                textAlign: 'center',
-                minHeight: '200px',
-                color: 'white',
-                opacity: isConnected ? 1 : 0.5,
-                '&:hover': isConnected ? {
-                  transform: 'scale(1.02)',
-                  borderColor: 'rgba(99, 102, 241, 0.6)',
-                  boxShadow: '0 0 40px hsl(217 91% 70% / 0.3)',
-                } : {}
-              }}
-              onClick={() => isConnected && setCreateDialogOpen(true)}
-          >
-            <Box
-              sx={{
-                width: 64,
-                height: 64,
-                borderRadius: '16px',
-                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(147, 51, 234, 0.1))',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                mb: 2,
-                transition: 'all 0.3s ease',
-                '&:hover': {
-                  background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(147, 51, 234, 0.2))',
-                  transform: 'scale(1.1)',
-                }
-              }}
-            >
-              <Plus style={{ width: 32, height: 32, color: 'hsl(217, 91%, 60%)' }} />
-            </Box>
-            <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
-              Create New Organization
-            </Typography>
-            <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-              {isConnected 
-                ? "Set up a new organization and start building reputation"
-                : "Connect your wallet to create a new organization"
-              }
-            </Typography>
-          </Card>
-
-          {/* Existing Organizations */}
-          {filteredOrgs.map((org) => (
-            <OrganizationCard
-              key={org.id}
-              org={org}
-              onSelect={handleSelectOrg}
-              isSelected={selectedOrg?.id === org.id}
-              isConnected={isConnected}
-            />
-          ))}
-          </Box>
-        )}
-
-        {/* Continue Button */}
-        {selectedOrg && (
-          <Box sx={{ textAlign: 'center' }}>
-            <Button
-              onClick={handleContinue}
-              variant="contained"
-              size="large"
-              disabled={loading}
-              startIcon={loading ? <CircularProgress size={20} /> : null}
-              endIcon={<ArrowRight style={{ width: 20, height: 20 }} />}
-              sx={{
-                px: 4,
-                py: 1.5,
-                fontSize: '1.1rem',
-                borderRadius: '12px',
-                textTransform: 'none',
-                background: 'linear-gradient(135deg, hsl(217, 91%, 60%), hsl(217, 91%, 70%))',
-                color: 'white',
-                '&:hover': {
-                  transform: 'scale(1.05)',
-                  boxShadow: '0 0 40px hsl(217 91% 70% / 0.3)',
-                }
-              }}
-            >
-              {loading ? 'Loading...' : 'Continue to Dashboard'}
-            </Button>
-          </Box>
-        )}
-      </Box>
-
-      {/* Create Organization Dialog */}
-      <CreateOrgDialog
-        open={createDialogOpen}
-        onClose={() => setCreateDialogOpen(false)}
-        onCreateOrg={handleCreateOrg}
-      />
-    </Box>
+        </div>
+      </div>
+    </div>
   );
 };
 
