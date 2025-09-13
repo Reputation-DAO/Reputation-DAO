@@ -1,0 +1,94 @@
+// Version: 1.0.0
+type AssocList__1070081661<K, V> = AssocList__350321376<K, V>;
+type AssocList__350321376<K, V> = List__300693946<(K, V)>;
+type Branch__23217752<K, V> =
+  {left : Trie__667510501<K, V>; right : Trie__667510501<K, V>; size : Nat};
+type Hash__437950368 = Nat32;
+type Key__916294360<K> = {hash : Hash__437950368; key : K};
+type Leaf__671877739<K, V> =
+  {keyvals : AssocList__1070081661<Key__916294360<K>, V>; size : Nat};
+type List__300693946<T> = ?(T, List__300693946<T>);
+type OrgData__489903160 =
+  {
+    admin : Principal;
+    dailyMinted : [(Principal, Nat)];
+    lastGlobalDecayProcess : Nat;
+    lastMintTimestamp : [(Principal, Nat)];
+    nextTransactionId : Nat;
+    totalDecayedPoints : Nat;
+    transactionHistory : [Transaction__920732195];
+    trustedAwarders : [(Principal, Text)];
+    userBalances : [(Principal, Nat)];
+    userDecayInfo : [(Principal, UserDecayInfo__568464291)]
+  };
+type TransactionType__884855196 = {#Award; #Decay; #Revoke};
+type Transaction__920732195 =
+  {
+    amount : Nat;
+    from : Principal;
+    id : Nat;
+    reason : ?Text;
+    timestamp : Nat;
+    to : Principal;
+    transactionType : TransactionType__884855196
+  };
+type Trie__667510501<K, V> =
+  {#branch : Branch__23217752<K, V>; #empty; #leaf : Leaf__671877739<K, V>};
+type UserDecayInfo__568464291 =
+  {
+    lastActivityTime : Nat;
+    lastDecayTime : Nat;
+    registrationTime : Nat;
+    totalDecayed : Nat
+  };
+actor {
+  stable var _balances :
+    {
+      #branch : Branch__23217752<Principal, Nat>;
+      #empty;
+      #leaf : Leaf__671877739<Principal, Nat>
+    };
+  stable var _dailyMinted :
+    {
+      #branch : Branch__23217752<Principal, Nat>;
+      #empty;
+      #leaf : Leaf__671877739<Principal, Nat>
+    };
+  stable var _lastMintTimestamp :
+    {
+      #branch : Branch__23217752<Principal, Nat>;
+      #empty;
+      #leaf : Leaf__671877739<Principal, Nat>
+    };
+  stable var _nextTransactionId : Nat;
+  stable var _transactionHistory : [Transaction__920732195];
+  stable var _trustedAwarders :
+    {
+      #branch : Branch__23217752<Principal, Text>;
+      #empty;
+      #leaf : Leaf__671877739<Principal, Text>
+    };
+  stable var decayConfig :
+    {
+      decayInterval : Nat;
+      decayRate : Nat;
+      enabled : Bool;
+      gracePeriod : Nat;
+      minThreshold : Nat
+    };
+  stable var lastGlobalDecayProcess : Nat;
+  stable var organizations :
+    {
+      #branch : Branch__23217752<Text, OrgData__489903160>;
+      #empty;
+      #leaf : Leaf__671877739<Text, OrgData__489903160>
+    };
+  stable var owner : Principal;
+  stable var totalDecayedPoints : Nat;
+  stable var userDecayInfo :
+    {
+      #branch : Branch__23217752<Principal, UserDecayInfo__568464291>;
+      #empty;
+      #leaf : Leaf__671877739<Principal, UserDecayInfo__568464291>
+    }
+};

@@ -1,0 +1,125 @@
+type UserDecayInfo = 
+ record {
+   lastActivityTime: nat;
+   lastDecayTime: nat;
+   registrationTime: nat;
+   totalDecayed: nat;
+ };
+type TransactionType = 
+ variant {
+   Award;
+   Decay;
+   Revoke;
+ };
+type Transaction = 
+ record {
+   amount: nat;
+   from: principal;
+   id: nat;
+   reason: opt text;
+   timestamp: nat;
+   to: principal;
+   transactionType: TransactionType;
+ };
+type OrgStats = 
+ record {
+   admin: principal;
+   awarderCount: nat;
+   totalPoints: nat;
+   totalTransactions: nat;
+   userCount: nat;
+ };
+type OrgID = text;
+type DecayConfig = 
+ record {
+   decayInterval: nat;
+   decayRate: nat;
+   enabled: bool;
+   gracePeriod: nat;
+   minThreshold: nat;
+ };
+type Awarder = 
+ record {
+   id: principal;
+   name: text;
+ };
+service : {
+  addTrustedAwarder: (orgId: OrgID, p: principal, name: text) -> (text);
+  applyDecayToSpecificUser: (p: principal) -> (text);
+  autoAwardRep: (to: principal, amount: nat, reason: opt text) -> (text);
+  autoRevokeRep: (from: principal, amount: nat, reason: opt text) -> (text);
+  awardRep: (orgId: OrgID, to: principal, amount: nat, reason: opt text) ->
+   (text);
+  configureDecay: (decayRate: nat, decayInterval: nat, minThreshold: 
+   nat, gracePeriod: nat, enabled: bool) -> (text);
+  configureOrgDecay: (orgId: OrgID, decayRate: nat, decayInterval: nat,
+   minThreshold: nat, gracePeriod: nat, enabled: bool) -> (text);
+  getAllOrgs: () -> (vec OrgID) query;
+  getAllTransactions: () -> (vec Transaction) query;
+  getBalance: (orgId: OrgID, p: principal) -> (opt nat) query;
+  getBalanceWithDetails: (p: principal) ->
+   (record {
+      currentBalance: nat;
+      decayInfo: opt UserDecayInfo;
+      pendingDecay: nat;
+      rawBalance: nat;
+    }) query;
+  getDecayConfig: () -> (DecayConfig) query;
+  getDecayStatistics: () ->
+   (record {
+      configEnabled: bool;
+      lastGlobalDecayProcess: nat;
+      totalDecayedPoints: nat;
+    }) query;
+  getMyBalance: () -> (opt nat);
+  getMyOrgTransactions: () -> (opt vec Transaction);
+  getMyOrganization: () -> (opt text);
+  getMyTransactionsByUser: (user: principal) -> (opt vec Transaction);
+  getOrgAdmin: (orgId: OrgID) -> (opt principal) query;
+  getOrgBalance: (orgId: OrgID, user: principal) -> (opt nat) query;
+  getOrgDecayAnalytics: (orgId: OrgID) ->
+   (opt
+     record {
+       averageDecayPerUser: nat;
+       recentDecayTransactions: vec Transaction;
+       totalPointsDecayed: nat;
+       totalUsers: nat;
+       usersWithDecay: nat;
+     }) query;
+  getOrgDecayStatistics: (orgId: OrgID) ->
+   (opt
+     record {
+       configEnabled: bool;
+       lastGlobalDecayProcess: nat;
+       totalDecayedPoints: nat;
+       totalPoints: nat;
+       userCount: nat;
+     }) query;
+  getOrgStats: (orgId: OrgID) -> (opt OrgStats) query;
+  getOrgTransactionHistory: (orgId: OrgID) -> (opt vec Transaction) query;
+  getOrgTransactions: (orgId: OrgID) -> (opt vec Transaction) query;
+  getOrgTrustedAwarders: (orgId: OrgID) -> (opt vec Awarder) query;
+  getOrgUserBalances: (orgId: OrgID) ->
+   (opt vec record {
+              principal;
+              nat;
+            }) query;
+  getRawBalance: (p: principal) -> (nat) query;
+  getTransactionById: (orgId: OrgID, id: nat) -> (opt Transaction) query;
+  getTransactionCount: (orgId: OrgID) -> (opt nat) query;
+  getTransactionHistory: (orgId: OrgID) -> (opt vec Transaction) query;
+  getTransactionsByUser: (orgId: OrgID, user: principal) ->
+   (opt vec Transaction) query;
+  getTrustedAwarders: (orgId: OrgID) -> (opt vec Awarder) query;
+  getUserDecayInfo: (p: principal) -> (opt UserDecayInfo) query;
+  isMyOrgAdmin: () -> (bool);
+  isOrgTrustedAwarderQuery: (orgId: OrgID, user: principal) ->
+   (opt bool) query;
+  previewDecayAmount: (p: principal) -> (nat) query;
+  processBatchDecay: () -> (text);
+  registerOrg: (orgId: OrgID) -> (text);
+  removeTrustedAwarder: (orgId: OrgID, p: principal) -> (text);
+  revokeRep: (orgId: OrgID, from: principal, amount: nat, reason:
+   opt text) -> (text);
+  triggerManualDecay: () -> (text);
+}
