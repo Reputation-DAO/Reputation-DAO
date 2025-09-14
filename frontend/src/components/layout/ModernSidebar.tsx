@@ -22,7 +22,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
   const [activeIndex, setActiveIndex] = useState(0);
   const location = useLocation();
   const navigate = useNavigate();
-  const { userRole, userName, isAdmin, isAwarder } = useRole();
+  const { userRole, userName } = useRole();
   const indicatorRef = useRef<HTMLDivElement>(null);
 
   const collapsedWidth = 80;
@@ -39,9 +39,6 @@ const ModernSidebar: React.FC<ModernSidebarProps> = ({
       setActiveIndex(currentIndex);
     }
   }, [location.pathname, availableNavItems]);
-
-  const getRoleDisplayName = () => (isAdmin ? 'Administrator' : isAwarder ? 'Trusted Awarder' : 'Member');
-  const getUserInitials = () => (userName ? userName.slice(0, 2).toUpperCase() : 'U');
 
   const toggleCollapse = () => setIsCollapsed(!isCollapsed);
 

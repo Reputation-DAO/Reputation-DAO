@@ -45,10 +45,10 @@ export default function PostDetailPage() {
     if (!id) return;
     (async () => {
       try {
-        const opt = await blogActor.getPostById(Number(id));
+        const opt = await blogActor.getPostById(BigInt(id));
         // Motoko ?Post → JS [] | [Post]
         const raw: Post | null =
-          Array.isArray(opt) && opt.length > 0 ? opt[0] : null;
+          (Array.isArray(opt) && opt.length > 0 && opt[0]) ? opt[0] : null;
 
         if (!raw) {
           setPost(null);

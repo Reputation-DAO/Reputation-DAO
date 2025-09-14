@@ -25,7 +25,7 @@ class ConnectionManager {
     if (this.actor && this.isConnected) {
       try {
         // Quick test to ensure the actor is still valid
-        await this.actor.getTransactionCount();
+        await this.actor.getAllOrgs();
         return this.actor;
       } catch (error) {
         console.warn('Existing actor failed, creating new one:', error);

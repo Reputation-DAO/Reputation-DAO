@@ -89,9 +89,9 @@ const OrgSelectorII: React.FC = () => {
               
               return {
                 name,
-                description: `Admin: ${orgStat.admin.toString().slice(0, 8)}...`, // Using admin as description
-                awardersCount: awarders && awarders.length > 0 ? awarders[0].length : 0,
-                membersCount: Number(orgStat.userCount),
+                description: `Admin: ${orgStat?.admin?.toString().slice(0, 8) || 'Unknown'}...`, // Using admin as description
+                awardersCount: awarders && awarders.length > 0 && awarders[0] ? awarders[0].length : 0,
+                membersCount: orgStat ? Number(orgStat.userCount) : 0,
               };
             }
             return null;

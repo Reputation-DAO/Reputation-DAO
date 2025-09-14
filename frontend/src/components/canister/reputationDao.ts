@@ -52,7 +52,7 @@ export interface Awarder {
 }
 
 //modify this canisterID based on where the dfx playground hosts your backend
-const canisterId = '3f6pv-baaaa-aaaab-qacoq-cai';
+const canisterId = '4k2wq-cqaaa-aaaab-qac7q-cai'; // From dfx.json
 
 export const getPlugActor = async () => {
   if (!window.ic?.plug) {
@@ -102,8 +102,8 @@ export const getPlugActor = async () => {
     
     // Test the connection by calling a simple query
     try {
-      const transactionCount = await actor.getTransactionCount();
-      console.log('🔄 Connection test successful. Transaction count:', transactionCount);
+      const allOrgs = await actor.getAllOrgs();
+      console.log('🔄 Connection test successful. Available orgs:', allOrgs.length);
     } catch (testError) {
       console.warn('⚠️ Connection test failed:', testError);
       // Don't throw here, let the caller handle it
@@ -284,11 +284,11 @@ export const getBalanceWithDetails = async (principal: Principal): Promise<Balan
       rawBalance: Number(details.rawBalance),
       currentBalance: Number(details.currentBalance),
       pendingDecay: Number(details.pendingDecay),
-      decayInfo: details.decayInfo ? {
-        lastDecayTime: Number(details.decayInfo.lastDecayTime),
-        registrationTime: Number(details.decayInfo.registrationTime),
-        lastActivityTime: Number(details.decayInfo.lastActivityTime),
-        totalDecayed: Number(details.decayInfo.totalDecayed),
+      decayInfo: details.decayInfo.length > 0 && details.decayInfo[0] ? {
+        lastDecayTime: Number(details.decayInfo[0].lastDecayTime),
+        registrationTime: Number(details.decayInfo[0].registrationTime),
+        lastActivityTime: Number(details.decayInfo[0].lastActivityTime),
+        totalDecayed: Number(details.decayInfo[0].totalDecayed),
       } : undefined,
     };
   } catch (error) {
@@ -408,11 +408,17 @@ export const getTransactionHistory = async (): Promise<Transaction[]> => {
 };
 
 // Get transactions by user with proper type handling
-export const getTransactionsByUser = async (principal: Principal): Promise<Transaction[]> => {
+export const getTransactionsByUser = async (orgId: string, principal: Principal): Promise<Transaction[]> => {
   try {
     const actor = await getPlugActor();
-    const transactions = await actor.getTransactionsByUser(principal);
+    const transactionsResult = await actor.getTransactionsByUser(orgId, principal);
     
+    // Handle optional array result
+    if (!transactionsResult || transactionsResult.length === 0) {
+      return [];
+    }
+    
+    const transactions = transactionsResult[0];
     return transactions.map((tx: any) => ({
       id: Number(tx.id),
       transactionType: Object.keys(tx.transactionType)[0] as TransactionType,
@@ -490,11 +496,17 @@ export const getDecayAnalytics = async (): Promise<any> => {
 };
 
 // Get user's current balance (updated to use current balance with decay applied)
-export const getBalance = async (principal: Principal): Promise<number> => {
+export const getBalance = async (orgId: string, principal: Principal): Promise<number> => {
   try {
     const actor = await getPlugActor();
-    const balance = await actor.getBalance(principal);
-    return Number(balance);
+    const balanceResult = await actor.getBalance(orgId, principal);
+    
+    // Handle optional return type [] | [bigint]
+    if (!balanceResult || balanceResult.length === 0) {
+      return 0;
+    }
+    
+    return Number(balanceResult[0]);
   } catch (error) {
     console.error('Error fetching balance:', error);
     return 0;
@@ -606,3 +618,53 @@ export const getOrgDecayAnalytics = async (orgId: string): Promise<any> => {
     return null;
   }
 };
+
+// === TEST CONNECTION UTILITY ===
+
+// Test canister connectivity for debugging
+export const testCanisterConnection = async (): Promise<void> => {
+  console.log('🧪 Testing canister connection...');
+  console.log('📍 Canister ID:', canisterId);
+  console.log('🌐 IC Host: https://ic0.app');
+  
+  try {
+    // Test 1: Check if Plug is available
+    if (!window.ic?.plug) {
+      console.error('❌ Plug extension not found');
+      return;
+    }
+    console.log('✅ Plug extension detected');
+    
+    // Test 2: Check connection status
+    const isConnected = await window.ic.plug.isConnected();
+    console.log('🔌 Plug connected:', isConnected);
+    
+    // Test 3: Get actor and test simple query
+    const actor = await getPlugActor();
+    console.log('🎭 Actor created successfully');
+    
+    // Test 4: Try a simple query to verify canister is responding
+    const allOrgs = await actor.getAllOrgs();
+    console.log('✅ Connection test successful! Available orgs:', allOrgs.length, allOrgs);
+    
+    // Test 5: Get current principal if connected
+    const principal = await getCurrentPrincipal();
+    if (principal) {
+      console.log('👤 Current principal:', principal.toString());
+    }
+    
+  } catch (error: any) {
+    console.error('❌ Connection test failed:', error);
+    console.error('💡 Suggestions:');
+    console.error('   - Check if Plug wallet is connected');
+    console.error('   - Verify canister ID is correct');
+    console.error('   - Try refreshing the page');
+    console.error('   - Check network connectivity');
+  }
+};
+
+// Attach to window for browser console testing
+if (typeof window !== 'undefined') {
+  (window as any).testConnection = testCanisterConnection;
+  console.log('🔧 Test function attached: window.testConnection()');
+}

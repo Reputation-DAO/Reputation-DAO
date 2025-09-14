@@ -34,7 +34,7 @@ interface RevokeTransaction {
 
 interface BackendTransaction {
   id: bigint;
-  transactionType: { Award: null } | { Revoke: null };
+  transactionType: { Award: null } | { Revoke: null } | { Decay: null };
   from: Principal;
   to: Principal;
   amount: bigint;

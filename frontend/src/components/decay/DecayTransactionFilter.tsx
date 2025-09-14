@@ -79,9 +79,9 @@ const DecayTransactionFilter: React.FC<DecayTransactionFilterProps> = ({
     setError(null);
     try {
       let txs: Transaction[];
-      if (userId && currentPrincipal) txs = await getTransactionsByUser(currentPrincipal);
+      if (userId && currentPrincipal) txs = await getTransactionsByUser(orgId, currentPrincipal);
       else if (isAdmin && orgId) txs = await getOrgTransactionHistory(orgId);
-      else if (currentPrincipal) txs = await getTransactionsByUser(currentPrincipal);
+      else if (currentPrincipal) txs = await getTransactionsByUser(orgId, currentPrincipal);
       else txs = [];
       setTransactions(txs);
     } catch (err) {
