@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 import { useRole } from "@/contexts/RoleContext";
 import { usePlugConnection } from "@/hooks/usePlugConnection";
-import { getPlugActor, revokeRep, getTransactionsByUser } from "@/components/canister/reputationDao";
+import { getPlugActor, revokeRep, getTransactionsByUser, getOrgTransactionHistory, getOrgStats } from "@/components/canister/reputationDao";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 import { toast } from "sonner";
+import { parseTransactionType, convertTimestampToDate } from "@/utils/transactionUtils";
 import {
   UserMinus,
   AlertTriangle,
@@ -67,47 +68,89 @@ const RevokeRep = () => {
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [recentRevocations, setRecentRevocations] = useState<RecentRevocation[]>([]);
   const [loading, setLoading] = useState(false);
+  
+  const [stats, setStats] = useState({
+    totalRevocations: 0,
+    totalREPRevoked: 0,
+    monthlyRevocations: 0
+  });
 
-  // Load recent revocations
+  // Load recent revocations and stats
   useEffect(() => {
-    const loadRecentRevocations = async () => {
-      if (!isConnected || !principal) return;
+    const loadRevocationData = async () => {
+      const selectedOrgId = localStorage.getItem('selectedOrgId');
+      if (!selectedOrgId || !isConnected) return;
       
       try {
-        const principalObj = Principal.fromText(principal);
-        const transactions = await getTransactionsByUser(principalObj);
+        console.log('📊 RevokeRep: Loading revocation data for:', selectedOrgId);
         
-        // Filter revocation transactions and format
-        const revocations = transactions
-          .filter(tx => tx.transactionType && typeof tx.transactionType === 'object' && tx.transactionType && 'Revoke' in tx.transactionType)
-          .slice(0, 5) // Get last 5 revocations
+        // Get all organization transactions
+        const transactions = await getOrgTransactionHistory(selectedOrgId);
+        
+
+        // Filter only Revoke transactions
+        const revokeTransactions = transactions.filter(tx => {
+          const transactionType = parseTransactionType(tx.transactionType);
+          const isRevoke = transactionType === 'revoke';
+          console.log('🔍 RevokeRep: Transaction type check:', {
+            original: tx.transactionType,
+            parsed: transactionType,
+            isRevoke: isRevoke,
+            amount: tx.amount,
+            from: tx.from.toString(),
+            to: tx.to.toString()
+          });
+          return isRevoke;
+        });
+        
+        const totalRevocations = revokeTransactions.length;
+        const totalREPRevoked = revokeTransactions.reduce((sum, tx) => sum + Number(tx.amount), 0);
+        
+        // Calculate monthly revocations
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
+        const monthlyRevocations = revokeTransactions.filter(tx => {
+          const txDate = convertTimestampToDate(tx.timestamp);
+          return txDate.getMonth() === currentMonth && txDate.getFullYear() === currentYear;
+        }).length;
+        
+        setStats({
+          totalRevocations,
+          totalREPRevoked,
+          monthlyRevocations
+        });
+        
+        // Convert recent revoke transactions to UI format (last 5)
+        const recentRevocationData: RecentRevocation[] = revokeTransactions
+          .slice(-5)
+          .reverse()
           .map((tx, index) => ({
             id: `rev-${index}`,
             recipientName: `User ${tx.to.toString().slice(0, 8)}`,
             recipientAddress: tx.to.toString(),
             amount: Number(tx.amount),
-            category: "General", // Default category since backend doesn't have this
+            category: "General",
             reason: tx.reason.length > 0 ? tx.reason[0] : "No reason provided",
-            timestamp: new Date(Number(tx.timestamp) / 1000000), // Convert nanoseconds to milliseconds
-            revokedBy: tx.from.toString()
+            timestamp: convertTimestampToDate(tx.timestamp),
+            revokedBy: `User ${tx.from.toString().slice(0, 8)}`
           }));
           
-        setRecentRevocations(revocations);
+        setRecentRevocations(recentRevocationData);
+        
+        console.log('✅ RevokeRep: Data loaded:', {
+          totalRevocations,
+          totalREPRevoked,
+          monthlyRevocations,
+          recentRevocations: recentRevocationData.length
+        });
+        
       } catch (error) {
-        console.error("Error loading recent revocations:", error);
+        console.error("❌ RevokeRep: Error loading revocation data:", error);
       }
     };
 
-    loadRecentRevocations();
+    loadRevocationData();
   }, [isConnected, principal]);
-
-  const [stats] = useState({
-    totalRevocations: recentRevocations.length,
-    totalREPRevoked: recentRevocations.reduce((sum, rev) => sum + rev.amount, 0),
-    monthlyRevocations: recentRevocations.filter(rev => 
-      new Date(rev.timestamp).getMonth() === new Date().getMonth()
-    ).length
-  });
 
   const handleInputChange = (field: keyof RevokeFormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -178,7 +221,10 @@ const RevokeRep = () => {
       const principalObj = Principal.fromText(principal);
       const transactions = await getTransactionsByUser(principalObj);
       const revocations = transactions
-        .filter(tx => tx.transactionType && typeof tx.transactionType === 'object' && tx.transactionType && 'Revoke' in tx.transactionType)
+        .filter(tx => {
+          const transactionType = parseTransactionType(tx.transactionType);
+          return transactionType === 'revoke';
+        })
         .slice(0, 5)
         .map((tx, index) => ({
           id: `rev-${index}`,
@@ -187,7 +233,7 @@ const RevokeRep = () => {
           amount: Number(tx.amount),
           category: "General",
           reason: tx.reason.length > 0 ? tx.reason[0] : "No reason provided",
-          timestamp: new Date(Number(tx.timestamp) / 1000000),
+          timestamp: convertTimestampToDate(tx.timestamp),
           revokedBy: tx.from.toString()
         }));
       setRecentRevocations(revocations);

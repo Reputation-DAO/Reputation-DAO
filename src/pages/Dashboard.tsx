@@ -3,12 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 import { useRole } from "@/contexts/RoleContext";
 import { usePlugConnection } from "@/hooks/usePlugConnection";
-import { getBalance } from "@/components/canister/reputationDao";
+import { getBalance, getOrgUserBalances, getOrgTransactionHistory, getOrgStats } from "@/components/canister/reputationDao";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { parseTransactionTypeForUI, convertTimestampToDate } from "@/utils/transactionUtils";
 import { 
   Star, 
   Users, 
@@ -31,7 +32,7 @@ import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 
 interface ReputationActivity {
   id: string;
-  type: 'awarded' | 'revoked' | 'earned';
+  type: 'awarded' | 'revoked' | 'decayed';
   points: number;
   reason: string;
   timestamp: Date;
@@ -94,6 +95,7 @@ const ActivityItem = ({ activity }: { activity: ReputationActivity }) => (
     <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
       activity.type === 'awarded' ? 'bg-green-500/10 text-green-600' :
       activity.type === 'revoked' ? 'bg-red-500/10 text-red-600' :
+      activity.type === 'decayed' ? 'bg-orange-500/10 text-orange-600' :
       'bg-blue-500/10 text-blue-600'
     }`}>
       <Star className="w-5 h-5" />
@@ -102,7 +104,7 @@ const ActivityItem = ({ activity }: { activity: ReputationActivity }) => (
     <div className="flex-1">
       <div className="flex items-center gap-2 mb-1">
         <span className="font-medium text-foreground">
-          {activity.type === 'awarded' ? '+' : activity.type === 'revoked' ? '-' : '+'}{activity.points} points
+          {activity.type === 'awarded' ? '+' : activity.type === 'revoked' ? '-' : activity.type === 'decayed' ? '-' : '+'}{activity.points} points
         </span>
         <Badge variant="outline" className="text-xs">
           {activity.type}
@@ -156,6 +158,12 @@ const Dashboard = () => {
   const [userName] = useState("John Doe");
   const [userBalance, setUserBalance] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [orgStats, setOrgStats] = useState({
+    totalMembers: 0,
+    totalReputation: 0,
+    growthRate: "0%",
+    recentTransactions: 0
+  });
   
   // Debug logging
   useEffect(() => {
@@ -190,13 +198,93 @@ const Dashboard = () => {
     loadBalance();
   }, [isConnected, principal]);
   
+  // Load organization stats
+  useEffect(() => {
+    const loadOrgStats = async () => {
+      const selectedOrgId = localStorage.getItem('selectedOrgId');
+      if (!selectedOrgId || !isConnected) return;
+      
+      try {
+        console.log('📊 Loading organization stats for:', selectedOrgId);
+        
+        // Get organization stats (total points distributed, not current balances)
+        const orgStatsData = await getOrgStats(selectedOrgId);
+        const totalPointsDistributed = orgStatsData?.totalPoints || 0;
+        const totalMembers = orgStatsData?.userCount || 0;
+        
+        // Get all users and their current balances for member list
+        const userBalances = await getOrgUserBalances(selectedOrgId);
+        
+        // Convert user balances to members data
+        const membersData: Member[] = userBalances.map((user, index) => ({
+          id: `member-${index}`,
+          name: `User ${user.userId.toString().slice(0, 8)}`,
+          principal: user.userId.toString(),
+          reputation: user.balance,
+          role: 'member' as const, // Default role - could be enhanced to get actual roles
+          joinDate: new Date(), // Placeholder - would need historical data
+          lastActive: new Date() // Placeholder - would need activity tracking
+        }));
+        
+        setMembers(membersData);
+        
+        // Get recent transactions for activity count and recent activity
+        const recentTransactions = await getOrgTransactionHistory(selectedOrgId);
+        const recentCount = recentTransactions.length;
+        
+
+        // Convert recent transactions to activity data (last 5)
+        const activityData: ReputationActivity[] = recentTransactions
+          .slice(-5) // Get last 5 transactions
+          .reverse() // Show most recent first
+          .map((tx, index) => {
+            const txType = parseTransactionTypeForUI(tx.transactionType);
+            
+            return {
+              id: `activity-${index}`,
+              type: txType,
+              points: Number(tx.amount),
+              reason: tx.reason.length > 0 ? tx.reason[0] : 'No reason provided',
+              timestamp: convertTimestampToDate(tx.timestamp),
+              from: tx.from.toString().slice(0, 8),
+              to: tx.to.toString().slice(0, 8)
+            };
+          });
+        
+        setRecentActivity(activityData);
+        
+        // Calculate growth rate (placeholder calculation - in reality you'd compare with historical data)
+        const growthRate = totalMembers > 0 ? `+${Math.floor(totalMembers * 0.08)}%` : "0%";
+        
+        setOrgStats({
+          totalMembers,
+          totalReputation: totalPointsDistributed, // Total points ever distributed
+          growthRate,
+          recentTransactions: recentCount
+        });
+        
+        console.log('✅ Organization stats loaded:', {
+          totalMembers,
+          totalReputation: totalPointsDistributed,
+          growthRate,
+          recentTransactions: recentCount
+        });
+        
+      } catch (error) {
+        console.error('❌ Error loading organization stats:', error);
+      }
+    };
+    
+    loadOrgStats();
+  }, [isConnected, principal]);
+  
   const handleDisconnect = () => {
     navigate('/auth');
   };
   
-  const [recentActivity] = useState<ReputationActivity[]>([]);
+  const [recentActivity, setRecentActivity] = useState<ReputationActivity[]>([]);
 
-  const [members] = useState<Member[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
 
   useEffect(() => {
     // Add a small delay to avoid redirecting during connection state updates
@@ -339,18 +427,18 @@ const Dashboard = () => {
             <div className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
               <StatCard
                 title="Total Members"
-                value={members.length}
+                value={orgStats.totalMembers}
                 icon={Users}
-                trend="+12%"
+                trend={orgStats.totalMembers > 0 ? `+${Math.floor(orgStats.totalMembers * 0.12)}%` : "0%"}
                 description="Active community members"
               />
             </div>
             <div className="animate-fade-in" style={{ animationDelay: '0.2s' }}>
               <StatCard
                 title="Total Reputation"
-                value="2,707"
+                value={orgStats.totalReputation.toLocaleString()}
                 icon={Star}
-                trend="+8%"
+                trend={orgStats.totalReputation > 0 ? `+${Math.floor(orgStats.totalReputation * 0.08)}%` : "0%"}
                 description="Points distributed"
               />
             </div>
@@ -359,14 +447,14 @@ const Dashboard = () => {
                 title="Your Reputation"
                 value={loading ? "Loading..." : userBalance}
                 icon={Award}
-                trend={userBalance > 0 ? "+10%" : ""}
+                trend={userBalance > 0 ? `+${Math.floor(userBalance * 0.1)}%` : ""}
                 description="Your current points"
               />
             </div>
             <div className="animate-fade-in" style={{ animationDelay: '0.4s' }}>
               <StatCard
                 title="Growth Rate"
-                value="15%"
+                value={orgStats.growthRate}
                 icon={BarChart3}
                 description="Member growth rate"
               />

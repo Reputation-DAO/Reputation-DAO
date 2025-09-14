@@ -26,9 +26,10 @@ import {
   MoreVertical
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { addTrustedAwarder, removeTrustedAwarder, getTrustedAwarders } from "@/components/canister/reputationDao";
+import { addTrustedAwarder, removeTrustedAwarder, getTrustedAwarders, getOrgUserBalances, getOrgTransactionHistory } from "@/components/canister/reputationDao";
 import { Principal } from "@dfinity/principal";
 import { usePlugConnection } from "@/hooks/usePlugConnection";
+import { parseTransactionType, convertTimestampToDate } from "@/utils/transactionUtils";
 
 interface Awarder {
   id: string;
@@ -85,19 +86,57 @@ const ManageAwarders = () => {
         const backendAwarders = await getTrustedAwarders(selectedOrgId);
         console.log('📦 Received awarders:', backendAwarders);
         
-        // Transform backend data to UI format
+        // Get real data for awarders
+        const userBalances = await getOrgUserBalances(selectedOrgId);
+        const transactions = await getOrgTransactionHistory(selectedOrgId);
+        
+        // Create a map of user balances for quick lookup
+        const balanceMap = new Map<string, number>();
+        userBalances.forEach(user => {
+          balanceMap.set(user.userId.toString(), user.balance);
+        });
+        
+        // Create a map of awards given by each user
+        const awardsGivenMap = new Map<string, number>();
+        transactions.forEach(tx => {
+          const transactionType = parseTransactionType(tx.transactionType);
+          if (transactionType === 'award') {
+            const fromUser = tx.from.toString();
+            awardsGivenMap.set(fromUser, (awardsGivenMap.get(fromUser) || 0) + 1);
+          }
+        });
+        
+        // Create a map of last activity (most recent transaction)
+        const lastActivityMap = new Map<string, Date>();
+        transactions.forEach(tx => {
+          const fromUser = tx.from.toString();
+          const txDate = convertTimestampToDate(tx.timestamp);
+          const existingDate = lastActivityMap.get(fromUser);
+          if (!existingDate || txDate > existingDate) {
+            lastActivityMap.set(fromUser, txDate);
+          }
+        });
+        
+        // Transform backend data to UI format with real data
         const uiAwarders: Awarder[] = Array.isArray(backendAwarders) 
-          ? backendAwarders.map((awarder, index) => ({
-              id: index.toString(),
-              name: `User ${awarder.toString().slice(0, 8)}`,
-              principal: awarder.toString(),
-              role: 'awarder' as const,
-              reputation: Math.floor(Math.random() * 1000), // Placeholder
-              joinDate: new Date(Date.now() - Math.random() * 31536000000),
-              lastActive: new Date(Date.now() - Math.random() * 604800000),
-              awardsGiven: Math.floor(Math.random() * 50),
-              status: 'active' as const
-            }))
+          ? backendAwarders.map((awarder, index) => {
+              const principalStr = awarder.toString();
+              const reputation = balanceMap.get(principalStr) || 0;
+              const awardsGiven = awardsGivenMap.get(principalStr) || 0;
+              const lastActive = lastActivityMap.get(principalStr) || new Date();
+              
+              return {
+                id: index.toString(),
+                name: `User ${principalStr.slice(0, 8)}`,
+                principal: principalStr,
+                role: 'awarder' as const,
+                reputation: reputation,
+                joinDate: new Date(Date.now() - Math.random() * 31536000000), // Still placeholder as we don't have join date in backend
+                lastActive: lastActive,
+                awardsGiven: awardsGiven,
+                status: 'active' as const
+              };
+            })
           : [];
         
         setAwarders(uiAwarders);

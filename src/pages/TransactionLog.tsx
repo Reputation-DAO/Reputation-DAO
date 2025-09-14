@@ -14,6 +14,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { parseTransactionType, parseTransactionTypeAlternative, getTransactionTypeIcon, getTransactionTypeBgClass, convertTimestampToDate, getTransactionTypeDescription, formatTransactionAmount } from "@/utils/transactionUtils";
 import {
   FileText,
   Search,
@@ -59,6 +60,7 @@ const TransactionLog = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
 
+
   // Load transactions from backend
   useEffect(() => {
     const loadTransactions = async () => {
@@ -70,26 +72,68 @@ const TransactionLog = () => {
         
         const principalObj = Principal.fromText(principal);
         
-        // Get transactions for current user (remove type annotation to avoid conflict)
+        // Get transactions for current user
         const userTransactions = await getTransactionsByUser(principalObj);
         console.log('📦 Received user transactions:', userTransactions);
         
+        // Debug: Log transaction type summary
+        const typeSummary = userTransactions.reduce((acc, tx) => {
+          const type = parseTransactionType(tx.transactionType);
+          acc[type] = (acc[type] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+        console.log('📊 Transaction type summary:', typeSummary);
+        
+        // Debug: Log ALL transaction types in detail
+        console.log('🔍 DETAILED TRANSACTION TYPE ANALYSIS:');
+        userTransactions.forEach((tx, index) => {
+          console.log(`Transaction ${index}:`, {
+            id: tx.id,
+            transactionType: tx.transactionType,
+            transactionTypeType: typeof tx.transactionType,
+            transactionTypeKeys: tx.transactionType ? Object.keys(tx.transactionType) : 'no keys',
+            transactionTypeString: JSON.stringify(tx.transactionType),
+            parsedType: parseTransactionType(tx.transactionType),
+            amount: tx.amount,
+            from: tx.from.toString(),
+            to: tx.to.toString(),
+            reason: tx.reason
+          });
+        });
+        
+        // Debug: Log the first few transactions in detail
+        userTransactions.slice(0, 3).forEach((tx, index) => {
+          console.log(`🔍 DEBUG Transaction ${index}:`, {
+            transactionType: tx.transactionType,
+            transactionTypeType: typeof tx.transactionType,
+            transactionTypeKeys: tx.transactionType ? Object.keys(tx.transactionType) : 'no keys',
+            transactionTypeString: JSON.stringify(tx.transactionType),
+            amount: tx.amount,
+            from: tx.from.toString(),
+            to: tx.to.toString(),
+            reason: tx.reason
+          });
+        });
+        
         // Convert backend transactions to UI format
         const uiTransactions: Transaction[] = userTransactions.map((tx, index) => {
-          // Handle transaction type - it's a variant type
-          let transactionType: 'award' | 'revoke' | 'decay' = 'decay';
+          // Parse transaction type using enhanced parsing
+          let transactionType = parseTransactionType(tx.transactionType);
           
-          // Parse transaction type with explicit type checking
-          const txType = tx.transactionType as any; // Type assertion to bypass strict null checking
-          if (txType && typeof txType === 'object') {
-            if (txType.Award !== undefined) {
-              transactionType = 'award';
-            } else if (txType.Revoke !== undefined) {
-              transactionType = 'revoke';
-            } else if (txType.Decay !== undefined) {
-              transactionType = 'decay';
+          // If primary parsing fails, try alternative method
+          if (transactionType === 'award' && tx.transactionType) {
+            const altType = parseTransactionTypeAlternative(tx.transactionType);
+            if (altType !== 'award') {
+              console.log(`🔄 Transaction ${index}: Using alternative parsing, result: ${altType}`);
+              transactionType = altType;
             }
           }
+          
+          console.log(`🔍 Transaction ${index}: Final type = ${transactionType}`, {
+            original: tx.transactionType,
+            parsed: transactionType,
+            keys: tx.transactionType ? Object.keys(tx.transactionType) : 'no keys'
+          });
           
           return {
             id: `tx-${index}`,
@@ -101,7 +145,7 @@ const TransactionLog = () => {
             toPrincipal: tx.to.toString(),
             reason: tx.reason.length > 0 ? tx.reason[0] : "No reason provided",
             category: "General", // Default category since backend doesn't have this
-            timestamp: new Date(Number(tx.timestamp) / 1000000), // Convert nanoseconds to milliseconds
+            timestamp: convertTimestampToDate(tx.timestamp),
             blockHeight: Math.floor(Math.random() * 1000000), // Placeholder
             transactionHash: `0x${index.toString(16).padStart(16, '0')}...`, // Placeholder
             status: 'completed' as const
@@ -369,17 +413,17 @@ const TransactionLog = () => {
                         style={{ animationDelay: `${0.6 + index * 0.05}s` }}
                       >
                         <div className="flex items-center gap-4">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${getTransactionColor(transaction.type)}`}>
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${getTransactionTypeBgClass(transaction.type)}`}>
                             {getTransactionIcon(transaction.type)}
                           </div>
                           
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-medium text-foreground">
-                                {transaction.type === 'award' ? '+' : '-'}{transaction.amount} REP
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="font-medium text-foreground text-lg">
+                                {formatTransactionAmount(transaction.type, transaction.amount)} REP
                               </span>
                               <Badge variant="outline" className="text-xs capitalize">
-                                {transaction.type}
+                                {getTransactionTypeDescription(transaction.type)}
                               </Badge>
                               <Badge 
                                 variant={transaction.status === 'completed' ? 'default' : 
@@ -390,17 +434,22 @@ const TransactionLog = () => {
                               </Badge>
                             </div>
                             
-                            <p className="text-sm text-muted-foreground mb-1">
-                              <span className="font-medium">{transaction.fromUser}</span>
-                              {' → '}
-                              <span className="font-medium">{transaction.toUser}</span>
-                            </p>
+                            <div className="mb-2">
+                              <p className="text-sm text-muted-foreground mb-1">
+                                <span className="font-medium">{transaction.fromUser}</span>
+                                {' → '}
+                                <span className="font-medium">{transaction.toUser}</span>
+                              </p>
+                              
+                              <div className="bg-muted/30 rounded-lg p-3 mb-2">
+                                <p className="text-sm font-medium text-foreground mb-1">Reason:</p>
+                                <p className="text-sm text-muted-foreground break-words">
+                                  {transaction.reason}
+                                </p>
+                              </div>
+                            </div>
                             
-                            <p className="text-xs text-muted-foreground line-clamp-1">
-                              {transaction.reason}
-                            </p>
-                            
-                            <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
                               <div className="flex items-center gap-1">
                                 <Calendar className="w-3 h-3" />
                                 {transaction.timestamp.toLocaleString()}

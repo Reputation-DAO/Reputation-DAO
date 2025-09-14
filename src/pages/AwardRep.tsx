@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRole } from "@/contexts/RoleContext";
 import { usePlugConnection } from "@/hooks/usePlugConnection";
-import { awardRep } from "@/components/canister/reputationDao";
+import { awardRep, getOrgTransactionHistory, getOrgStats } from "@/components/canister/reputationDao";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 import { toast } from "sonner";
+import { parseTransactionType, convertTimestampToDate } from "@/utils/transactionUtils";
 import { 
   Award, 
   Star, 
@@ -68,13 +69,131 @@ const AwardRep = () => {
     reason: ''
   });
 
-  const [recentAwards] = useState<RecentAward[]>([]);
+  const [recentAwards, setRecentAwards] = useState<RecentAward[]>([]);
 
-  const [stats] = useState({
+  const [stats, setStats] = useState({
     totalAwards: 0,
     totalREPAwarded: 0,
     monthlyAwards: 0
   });
+
+  // Load award statistics and recent awards
+  useEffect(() => {
+    const loadAwardData = async () => {
+      const selectedOrgId = localStorage.getItem('selectedOrgId');
+      console.log('🔍 AwardRep: selectedOrgId from localStorage:', selectedOrgId);
+      console.log('🔍 AwardRep: isConnected:', isConnected);
+      console.log('🔍 AwardRep: principal:', principal?.toString());
+      
+      if (!selectedOrgId || !isConnected) {
+        console.log('❌ AwardRep: Missing orgId or not connected, skipping data load');
+        // Let's also check if there's a default org we can use
+        if (isConnected && principal) {
+          try {
+            console.log('🔍 AwardRep: Trying to use default org "sample"');
+            const defaultOrgId = "sample";
+            localStorage.setItem('selectedOrgId', defaultOrgId);
+            
+            const orgStats = await getOrgStats(defaultOrgId);
+            console.log('📊 AwardRep: Default org stats:', orgStats);
+            
+            if (orgStats) {
+              setStats({
+                totalAwards: Number(orgStats.totalTransactions),
+                totalREPAwarded: orgStats.totalPoints,
+                monthlyAwards: 0
+              });
+            }
+          } catch (error) {
+            console.error('❌ AwardRep: Error with default org:', error);
+          }
+        }
+        return;
+      }
+
+      try {
+        console.log('📊 AwardRep: Loading award statistics for:', selectedOrgId);
+        
+        // Get organization stats for total awarded points
+        console.log('📊 AwardRep: Calling getOrgStats...');
+        const orgStats = await getOrgStats(selectedOrgId);
+        console.log('📊 AwardRep: orgStats result:', orgStats);
+        
+        const totalREPAwarded = orgStats?.totalPoints || 0;
+        const totalTransactions = orgStats?.totalTransactions || 0;
+        
+        // Get transaction history to analyze awards
+        console.log('📊 AwardRep: Calling getOrgTransactionHistory...');
+        const transactions = await getOrgTransactionHistory(selectedOrgId);
+        console.log('📊 AwardRep: transactions result:', transactions);
+        
+
+        // Filter only Award transactions
+        const awardTransactions = transactions.filter(tx => {
+          const transactionType = parseTransactionType(tx.transactionType);
+          const isAward = transactionType === 'award';
+          console.log('🔍 AwardRep: Transaction type check:', {
+            original: tx.transactionType,
+            parsed: transactionType,
+            isAward: isAward,
+            amount: tx.amount,
+            from: tx.from.toString(),
+            to: tx.to.toString()
+          });
+          return isAward;
+        });
+        
+        console.log('📊 AwardRep: Found award transactions:', awardTransactions.length);
+        
+        const totalAwards = awardTransactions.length;
+        
+        // Calculate monthly awards (transactions from current month)
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
+        const monthlyAwards = awardTransactions.filter(tx => {
+          const txDate = convertTimestampToDate(tx.timestamp);
+          return txDate.getMonth() === currentMonth && txDate.getFullYear() === currentYear;
+        }).length;
+        
+        console.log('📊 AwardRep: Calculated stats:', {
+          totalAwards,
+          totalREPAwarded,
+          monthlyAwards
+        });
+        
+        setStats({
+          totalAwards,
+          totalREPAwarded,
+          monthlyAwards
+        });
+        
+        // Convert recent award transactions to RecentAward format (last 5 awards)
+        const recentAwardData: RecentAward[] = awardTransactions
+          .slice(-5) // Get last 5 awards
+          .reverse() // Show most recent first
+          .map((tx, index) => ({
+            id: `award-${index}`,
+            recipientName: `User ${tx.to.toString().slice(0, 8)}`,
+            recipientAddress: tx.to.toString(),
+            amount: Number(tx.amount),
+            category: "General", // Backend doesn't store category, so default
+            reason: tx.reason.length > 0 ? tx.reason[0] : "No reason provided",
+            timestamp: convertTimestampToDate(tx.timestamp),
+            awardedBy: `User ${tx.from.toString().slice(0, 8)}`
+          }));
+          
+        console.log('📊 AwardRep: Recent award data:', recentAwardData);
+        setRecentAwards(recentAwardData);
+        
+        console.log('✅ AwardRep: Award data loaded successfully');
+        
+      } catch (error) {
+        console.error('❌ AwardRep: Error loading award data:', error);
+      }
+    };
+
+    loadAwardData();
+  }, [isConnected, principal]); // Added principal as dependency
 
   const handleInputChange = (field: keyof AwardFormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));

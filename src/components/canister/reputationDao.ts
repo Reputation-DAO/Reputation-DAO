@@ -27,7 +27,7 @@ const getSelectedOrgId = (): string => {
 };
 
 // Canister ID for the reputation DAO
-const CANISTER_ID = "owyeu-jiaaa-aaaam-qdvwq-cai";
+const CANISTER_ID = "zwbmv-jyaaa-aaaab-qacaa-cai";
 
 // === DECAY SYSTEM TYPES ===
 export type TransactionType = 'Award' | 'Revoke' | 'Decay';
@@ -76,7 +76,7 @@ export interface Awarder {
 }
 
 //modify this canisterID based on where the dfx playground hosts your backend
-const canisterId = 'ysmdh-qyaaa-aaaab-qacga-cai';
+const canisterId = 'zwbmv-jyaaa-aaaab-qacaa-cai';
 
 export const getPlugActor = async () => {
   // Block Plug access on restricted routes
@@ -825,5 +825,44 @@ export const getAllOrganizations = async (): Promise<Array<{id: string; name: st
   } catch (error) {
     console.error('Error fetching organizations:', error);
     return [];
+  }
+};
+
+// Get organization statistics including total points distributed
+export const getOrgStats = async (orgId: string): Promise<{
+  admin: Principal;
+  totalPoints: number;
+  awarderCount: number;
+  userCount: number;
+  totalTransactions: number;
+} | null> => {
+  try {
+    console.log('🔍 getOrgStats: Calling actor.getOrgStats for orgId:', orgId);
+    const actor = await getPlugActor();
+    const stats = await actor.getOrgStats(orgId);
+    
+    console.log('🔍 getOrgStats: Raw stats response:', stats);
+    
+    if (!stats || stats.length === 0) {
+      console.log('❌ getOrgStats: No stats returned or empty array');
+      return null;
+    }
+    
+    const orgStats = stats[0];
+    console.log('🔍 getOrgStats: First stats object:', orgStats);
+    
+    const result = {
+      admin: orgStats.admin,
+      totalPoints: Number(orgStats.totalPoints),
+      awarderCount: Number(orgStats.awarderCount),
+      userCount: Number(orgStats.userCount),
+      totalTransactions: Number(orgStats.totalTransactions)
+    };
+    
+    console.log('✅ getOrgStats: Processed result:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ getOrgStats: Error fetching org stats:', error);
+    return null;
   }
 };

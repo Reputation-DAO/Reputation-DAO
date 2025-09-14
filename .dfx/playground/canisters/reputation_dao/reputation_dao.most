@@ -8,7 +8,7 @@ type Key__916294360<K> = {hash : Hash__437950368; key : K};
 type Leaf__671877739<K, V> =
   {keyvals : AssocList__1070081661<Key__916294360<K>, V>; size : Nat};
 type List__300693946<T> = ?(T, List__300693946<T>);
-type OrgData__489903160 =
+type OrgData__564642646 =
   {
     admin : Principal;
     dailyMinted : [(Principal, Nat)];
@@ -16,13 +16,13 @@ type OrgData__489903160 =
     lastMintTimestamp : [(Principal, Nat)];
     nextTransactionId : Nat;
     totalDecayedPoints : Nat;
-    transactionHistory : [Transaction__920732195];
+    transactionHistory : [Transaction__753434484];
     trustedAwarders : [(Principal, Text)];
     userBalances : [(Principal, Nat)];
-    userDecayInfo : [(Principal, UserDecayInfo__568464291)]
+    userDecayInfo : [(Principal, UserDecayInfo__420269834)]
   };
-type TransactionType__884855196 = {#Award; #Decay; #Revoke};
-type Transaction__920732195 =
+type TransactionType__847121993 = {#Award; #Decay; #Revoke};
+type Transaction__753434484 =
   {
     amount : Nat;
     from : Principal;
@@ -30,11 +30,11 @@ type Transaction__920732195 =
     reason : ?Text;
     timestamp : Nat;
     to : Principal;
-    transactionType : TransactionType__884855196
+    transactionType : TransactionType__847121993
   };
 type Trie__667510501<K, V> =
   {#branch : Branch__23217752<K, V>; #empty; #leaf : Leaf__671877739<K, V>};
-type UserDecayInfo__568464291 =
+type UserDecayInfo__420269834 =
   {
     lastActivityTime : Nat;
     lastDecayTime : Nat;
@@ -61,7 +61,7 @@ actor {
       #leaf : Leaf__671877739<Principal, Nat>
     };
   stable var _nextTransactionId : Nat;
-  stable var _transactionHistory : [Transaction__920732195];
+  stable var _transactionHistory : [Transaction__753434484];
   stable var _trustedAwarders :
     {
       #branch : Branch__23217752<Principal, Text>;
@@ -79,16 +79,16 @@ actor {
   stable var lastGlobalDecayProcess : Nat;
   stable var organizations :
     {
-      #branch : Branch__23217752<Text, OrgData__489903160>;
+      #branch : Branch__23217752<Text, OrgData__564642646>;
       #empty;
-      #leaf : Leaf__671877739<Text, OrgData__489903160>
+      #leaf : Leaf__671877739<Text, OrgData__564642646>
     };
   stable var owner : Principal;
   stable var totalDecayedPoints : Nat;
   stable var userDecayInfo :
     {
-      #branch : Branch__23217752<Principal, UserDecayInfo__568464291>;
+      #branch : Branch__23217752<Principal, UserDecayInfo__420269834>;
       #empty;
-      #leaf : Leaf__671877739<Principal, UserDecayInfo__568464291>
+      #leaf : Leaf__671877739<Principal, UserDecayInfo__420269834>
     }
 };
