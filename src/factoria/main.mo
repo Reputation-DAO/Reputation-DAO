@@ -370,10 +370,17 @@ actor ReputationFactory {
 
 
   // -------------------- Lifecycle helpers --------------------
-  public shared({ caller }) func upgradeChild(canister_id : Principal, arg : Blob) : async () {
+  public shared({ caller }) func upgradeChild(canister_id : Principal) : async () {
     requireAdmin(caller);
-    await IC.install_code({ mode = #upgrade; canister_id = canister_id; wasm_module = requireWasm(); arg = arg });
+    let child = switch (byId.get(canister_id)) { case (?c) c; case null Debug.trap("unknown child") };
+    await IC.install_code({
+      mode = #upgrade;
+      canister_id;
+      wasm_module = requireWasm();
+      arg = to_candid(child.owner);   // ← build correct arg automatically
+    });
   };
+
 
   public shared({ caller }) func reinstallChild(canister_id : Principal, arg : Blob) : async () {
     requireAdmin(caller);

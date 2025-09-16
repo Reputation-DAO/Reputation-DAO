@@ -1,5 +1,9 @@
 export const idlFactory = ({ IDL }) => {
-  const OrgID = IDL.Text;
+  const AwarderBreakdown = IDL.Record({
+    'total' : IDL.Nat,
+    'lastAward' : IDL.Nat,
+    'awarder' : IDL.Principal,
+  });
   const TransactionType = IDL.Variant({
     'Revoke' : IDL.Null,
     'Decay' : IDL.Null,
@@ -27,53 +31,40 @@ export const idlFactory = ({ IDL }) => {
     'decayInterval' : IDL.Nat,
     'decayRate' : IDL.Nat,
   });
-  const OrgStats = IDL.Record({
-    'admin' : IDL.Principal,
-    'totalPoints' : IDL.Nat,
-    'awarderCount' : IDL.Nat,
-    'userCount' : IDL.Nat,
-    'totalTransactions' : IDL.Nat,
+  const TopUp = IDL.Record({
+    'id' : IDL.Nat,
+    'from' : IDL.Principal,
+    'timestamp' : IDL.Nat,
+    'amount' : IDL.Nat,
   });
   const Awarder = IDL.Record({ 'id' : IDL.Principal, 'name' : IDL.Text });
-  return IDL.Service({
-    'addTrustedAwarder' : IDL.Func(
-        [OrgID, IDL.Principal, IDL.Text],
-        [IDL.Text],
-        [],
-      ),
-    'applyDecayToSpecificUser' : IDL.Func([IDL.Principal], [IDL.Text], []),
-    'autoAwardRep' : IDL.Func(
-        [IDL.Principal, IDL.Nat, IDL.Opt(IDL.Text)],
-        [IDL.Text],
-        [],
-      ),
-    'autoRevokeRep' : IDL.Func(
-        [IDL.Principal, IDL.Nat, IDL.Opt(IDL.Text)],
-        [IDL.Text],
-        [],
-      ),
+  const ReputationChild = IDL.Service({
+    'acceptOwnership' : IDL.Func([], [IDL.Text], []),
+    'addTrustedAwarder' : IDL.Func([IDL.Principal, IDL.Text], [IDL.Text], []),
     'awardRep' : IDL.Func(
-        [OrgID, IDL.Principal, IDL.Nat, IDL.Opt(IDL.Text)],
+        [IDL.Principal, IDL.Nat, IDL.Opt(IDL.Text)],
         [IDL.Text],
         [],
       ),
+    'awarderStats' : IDL.Func(
+        [IDL.Principal],
+        [IDL.Vec(AwarderBreakdown)],
+        ['query'],
+      ),
+    'blacklist' : IDL.Func([IDL.Principal, IDL.Bool], [IDL.Text], []),
     'configureDecay' : IDL.Func(
         [IDL.Nat, IDL.Nat, IDL.Nat, IDL.Nat, IDL.Bool],
         [IDL.Text],
         [],
       ),
-    'configureOrgDecay' : IDL.Func(
-        [OrgID, IDL.Nat, IDL.Nat, IDL.Nat, IDL.Nat, IDL.Bool],
-        [IDL.Text],
-        [],
-      ),
-    'getAllOrgs' : IDL.Func([], [IDL.Vec(OrgID)], ['query']),
-    'getAllTransactions' : IDL.Func([], [IDL.Vec(Transaction)], ['query']),
-    'getBalance' : IDL.Func(
-        [OrgID, IDL.Principal],
-        [IDL.Opt(IDL.Nat)],
+    'cycles_balance' : IDL.Func([], [IDL.Nat], ['query']),
+    'emitEvent' : IDL.Func([IDL.Text, IDL.Vec(IDL.Nat8)], [IDL.Text], []),
+    'findTransactionsByReason' : IDL.Func(
+        [IDL.Text, IDL.Nat],
+        [IDL.Vec(Transaction)],
         ['query'],
       ),
+    'getBalance' : IDL.Func([IDL.Principal], [IDL.Nat], ['query']),
     'getBalanceWithDetails' : IDL.Func(
         [IDL.Principal],
         [
@@ -98,114 +89,113 @@ export const idlFactory = ({ IDL }) => {
         ],
         ['query'],
       ),
-    'getMyBalance' : IDL.Func([], [IDL.Opt(IDL.Nat)], []),
-    'getMyOrgTransactions' : IDL.Func([], [IDL.Opt(IDL.Vec(Transaction))], []),
-    'getMyOrganization' : IDL.Func([], [IDL.Opt(IDL.Text)], []),
-    'getMyTransactionsByUser' : IDL.Func(
-        [IDL.Principal],
-        [IDL.Opt(IDL.Vec(Transaction))],
-        [],
-      ),
-    'getOrgAdmin' : IDL.Func([OrgID], [IDL.Opt(IDL.Principal)], ['query']),
-    'getOrgBalance' : IDL.Func(
-        [OrgID, IDL.Principal],
-        [IDL.Opt(IDL.Nat)],
+    'getTopUpCount' : IDL.Func([], [IDL.Nat], ['query']),
+    'getTopUpsPaged' : IDL.Func(
+        [IDL.Nat, IDL.Nat],
+        [IDL.Vec(TopUp)],
         ['query'],
       ),
-    'getOrgDecayAnalytics' : IDL.Func(
-        [OrgID],
-        [
-          IDL.Opt(
-            IDL.Record({
-              'usersWithDecay' : IDL.Nat,
-              'recentDecayTransactions' : IDL.Vec(Transaction),
-              'totalUsers' : IDL.Nat,
-              'totalPointsDecayed' : IDL.Nat,
-              'averageDecayPerUser' : IDL.Nat,
-            })
-          ),
-        ],
-        ['query'],
-      ),
-    'getOrgDecayStatistics' : IDL.Func(
-        [OrgID],
-        [
-          IDL.Opt(
-            IDL.Record({
-              'lastGlobalDecayProcess' : IDL.Nat,
-              'configEnabled' : IDL.Bool,
-              'totalPoints' : IDL.Nat,
-              'totalDecayedPoints' : IDL.Nat,
-              'userCount' : IDL.Nat,
-            })
-          ),
-        ],
-        ['query'],
-      ),
-    'getOrgStats' : IDL.Func([OrgID], [IDL.Opt(OrgStats)], ['query']),
-    'getOrgTransactionHistory' : IDL.Func(
-        [OrgID],
-        [IDL.Opt(IDL.Vec(Transaction))],
-        ['query'],
-      ),
-    'getOrgTransactions' : IDL.Func(
-        [OrgID],
-        [IDL.Opt(IDL.Vec(Transaction))],
-        ['query'],
-      ),
-    'getOrgTrustedAwarders' : IDL.Func(
-        [OrgID],
-        [IDL.Opt(IDL.Vec(Awarder))],
-        ['query'],
-      ),
-    'getOrgUserBalances' : IDL.Func(
-        [OrgID],
-        [IDL.Opt(IDL.Vec(IDL.Tuple(IDL.Principal, IDL.Nat)))],
-        ['query'],
-      ),
-    'getRawBalance' : IDL.Func([IDL.Principal], [IDL.Nat], ['query']),
     'getTransactionById' : IDL.Func(
-        [OrgID, IDL.Nat],
+        [IDL.Nat],
         [IDL.Opt(Transaction)],
         ['query'],
       ),
-    'getTransactionCount' : IDL.Func([OrgID], [IDL.Opt(IDL.Nat)], ['query']),
-    'getTransactionHistory' : IDL.Func(
-        [OrgID],
-        [IDL.Opt(IDL.Vec(Transaction))],
-        ['query'],
-      ),
+    'getTransactionCount' : IDL.Func([], [IDL.Nat], ['query']),
+    'getTransactionHistory' : IDL.Func([], [IDL.Vec(Transaction)], ['query']),
     'getTransactionsByUser' : IDL.Func(
-        [OrgID, IDL.Principal],
-        [IDL.Opt(IDL.Vec(Transaction))],
+        [IDL.Principal],
+        [IDL.Vec(Transaction)],
         ['query'],
       ),
-    'getTrustedAwarders' : IDL.Func(
-        [OrgID],
-        [IDL.Opt(IDL.Vec(Awarder))],
+    'getTransactionsPaged' : IDL.Func(
+        [IDL.Nat, IDL.Nat],
+        [IDL.Vec(Transaction)],
         ['query'],
       ),
+    'getTrustedAwarders' : IDL.Func([], [IDL.Vec(Awarder)], ['query']),
     'getUserDecayInfo' : IDL.Func(
         [IDL.Principal],
         [IDL.Opt(UserDecayInfo)],
         ['query'],
       ),
-    'isMyOrgAdmin' : IDL.Func([], [IDL.Bool], []),
-    'isOrgTrustedAwarderQuery' : IDL.Func(
-        [OrgID, IDL.Principal],
-        [IDL.Opt(IDL.Bool)],
+    'health' : IDL.Func(
+        [],
+        [
+          IDL.Record({
+            'topUpCount' : IDL.Nat,
+            'decayConfigHash' : IDL.Nat,
+            'cycles' : IDL.Nat,
+            'users' : IDL.Nat,
+            'txCount' : IDL.Nat,
+            'paused' : IDL.Bool,
+          }),
+        ],
         ['query'],
       ),
-    'previewDecayAmount' : IDL.Func([IDL.Principal], [IDL.Nat], ['query']),
-    'processBatchDecay' : IDL.Func([], [IDL.Text], []),
-    'registerOrg' : IDL.Func([OrgID], [IDL.Text], []),
-    'removeTrustedAwarder' : IDL.Func([OrgID, IDL.Principal], [IDL.Text], []),
-    'revokeRep' : IDL.Func(
-        [OrgID, IDL.Principal, IDL.Nat, IDL.Opt(IDL.Text)],
+    'leaderboard' : IDL.Func(
+        [IDL.Nat, IDL.Nat],
+        [IDL.Vec(IDL.Tuple(IDL.Principal, IDL.Nat))],
+        ['query'],
+      ),
+    'multiAward' : IDL.Func(
+        [
+          IDL.Vec(IDL.Tuple(IDL.Principal, IDL.Nat, IDL.Opt(IDL.Text))),
+          IDL.Bool,
+        ],
         [IDL.Text],
         [],
       ),
+    'myStats' : IDL.Func(
+        [IDL.Principal],
+        [
+          IDL.Record({
+            'lifetimeRevoked' : IDL.Nat,
+            'balance' : IDL.Nat,
+            'lastActivity' : IDL.Nat,
+            'lifetimeAwarded' : IDL.Nat,
+            'totalDecayed' : IDL.Nat,
+          }),
+        ],
+        ['query'],
+      ),
+    'nominateOwner' : IDL.Func([IDL.Principal], [IDL.Text], []),
+    'orgPulse' : IDL.Func(
+        [IDL.Nat],
+        [
+          IDL.Record({
+            'revokes' : IDL.Nat,
+            'decays' : IDL.Nat,
+            'awards' : IDL.Nat,
+          }),
+        ],
+        ['query'],
+      ),
+    'pause' : IDL.Func([IDL.Bool], [IDL.Text], []),
+    'previewDecayAmount' : IDL.Func([IDL.Principal], [IDL.Nat], ['query']),
+    'processBatchDecay' : IDL.Func([], [IDL.Text], []),
+    'removeTrustedAwarder' : IDL.Func([IDL.Principal], [IDL.Text], []),
+    'resetUser' : IDL.Func([IDL.Principal, IDL.Opt(IDL.Text)], [IDL.Text], []),
+    'revokeRep' : IDL.Func(
+        [IDL.Principal, IDL.Nat, IDL.Opt(IDL.Text)],
+        [IDL.Text],
+        [],
+      ),
+    'setDailyMintLimit' : IDL.Func([IDL.Nat], [IDL.Text], []),
+    'setMinCyclesAlert' : IDL.Func([IDL.Nat], [IDL.Text], []),
+    'setParent' : IDL.Func([IDL.Principal], [IDL.Text], []),
+    'setPerAwarderDailyLimit' : IDL.Func(
+        [IDL.Principal, IDL.Nat],
+        [IDL.Text],
+        [],
+      ),
+    'snapshotHash' : IDL.Func([], [IDL.Nat], ['query']),
+    'topUp' : IDL.Func([], [IDL.Nat], []),
+    'transferOwnership' : IDL.Func([IDL.Principal], [IDL.Text], []),
     'triggerManualDecay' : IDL.Func([], [IDL.Text], []),
+    'version' : IDL.Func([], [IDL.Text], ['query']),
+    'wallet_receive' : IDL.Func([], [IDL.Nat], []),
+    'withdrawCycles' : IDL.Func([IDL.Principal, IDL.Nat], [IDL.Text], []),
   });
+  return ReputationChild;
 };
-export const init = ({ IDL }) => { return []; };
+export const init = ({ IDL }) => { return [IDL.Principal]; };

@@ -570,7 +570,7 @@ actor class ReputationChild(initOwner : Principal) = this {
 
   // ——— Maintenance ———
   public shared({ caller }) func processBatchDecay() : async Text {
-    if (caller != owner) return "Error: Only owner";
+    if (caller != owner and caller != Principal.fromActor(this)) return "Error: Only owner";
     let pairs = Buffer.Buffer<(Principal, Nat)>(0); for (entry in Trie.iter(balances)) { pairs.add(entry) };
     let arr = Buffer.toArray(pairs);
     var usersProcessed : Nat = 0; var total : Nat = 0;
@@ -580,7 +580,8 @@ actor class ReputationChild(initOwner : Principal) = this {
   };
 
   public shared({ caller }) func triggerManualDecay() : async Text {
-    if (caller != owner) return "Error: Only owner"; await processBatchDecay()
+     if (caller != owner) return "Error: Only owner";
+     await processBatchDecay()
   };
 
 
