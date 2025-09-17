@@ -1,5 +1,8 @@
+// frontend/src/pages/RevokeRep.tsx
+// @ts-nocheck
 import React, { useState, useEffect } from 'react';
 import ProtectedPage from '../components/layout/ProtectedPage';
+import { useParams } from 'react-router-dom';
 import { Principal } from '@dfinity/principal';
 import {
   Box,
@@ -11,16 +14,16 @@ import {
   DialogActions,
   DialogContent,
   DialogContentText,
-  DialogTitle
+  DialogTitle,
+  Chip,
+  CircularProgress,
 } from '@mui/material';
-import {
-  RemoveCircle,
+import { RemoveCircle } from '@mui/icons-material';
+import { makeChildWithPlug } from '../components/canister/child';
 
-} from '@mui/icons-material';
-import { getPlugActor } from '../components/canister/reputationDao';
-import  RevokeReputationCard  from '../components/Dashboard/revokerep/RevokeForm';
-import  RevocationSummary  from '../components/Dashboard/revokerep/RevokeSum';
-import  RevocationRecent  from '../components/Dashboard/revokerep/RecentRevoke';
+import RevokeReputationCard from '../components/Dashboard/revokerep/RevokeForm';
+import RevocationSummary from '../components/Dashboard/revokerep/RevokeSum';
+import RevocationRecent from '../components/Dashboard/revokerep/RecentRevoke';
 
 interface RevokeTransaction {
   id: string;
@@ -34,200 +37,159 @@ interface RevokeTransaction {
 
 interface BackendTransaction {
   id: bigint;
-  transactionType: { Award: null } | { Revoke: null };
+  transactionType: { Award: null } | { Revoke: null } | { Decay: null };
   from: Principal;
   to: Principal;
   amount: bigint;
-  timestamp: bigint;
+  timestamp: bigint; // seconds
   reason: [] | [string];
 }
 
 const RevokeRep: React.FC = () => {
+  const { cid } = useParams<{ cid: string }>();
+
+  const [child, setChild] = useState<any>(null);
+
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
   const [category, setCategory] = useState('');
+
   const [isLoading, setIsLoading] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState(false);
-  const [totalPointsRevoked , setTotalPointsRevoked] = useState(0);
+
+  const [totalPointsRevoked, setTotalPointsRevoked] = useState(0);
   const [totalRevocations, setTotalRevocations] = useState(0);
   const [recentRevocations, setRecentRevocations] = useState<RevokeTransaction[]>([]);
-  const [orgId, setOrgId] = useState<string | null>(null);
+
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
     severity: 'success' | 'error' | 'warning' | 'info';
   }>({ open: false, message: '', severity: 'success' });
 
-  // Get orgId from localStorage
+  const [connecting, setConnecting] = useState(true);
+  const [connectError, setConnectError] = useState<string | null>(null);
+
+  // Build child actor from :cid
   useEffect(() => {
-    const storedOrgId = localStorage.getItem('selectedOrgId');
-    if (storedOrgId) {
-      setOrgId(storedOrgId);
-    }
-  }, []);
-
-  // Load recent revocations when orgId is available
-  useEffect(() => {
-    if (orgId) {
-      loadRecentRevocations();
-    }
-  }, [orgId]);
-
-  // Load recent revocations from blockchain
-  const loadRecentRevocations = async () => {
-    if (!orgId) return;
-    try {
-      console.log('🔄 Loading recent revoke transactions...');
-      console.log('🔗 Getting Plug actor connection...');
-      const actor = await getPlugActor();
-      console.log('✅ Actor connected:', !!actor);
-
-      console.log('📞 Calling getTransactionHistory() with orgId:', orgId);
-      const transactionsResult = await actor.getTransactionHistory(orgId);
-
-      // Handle Motoko optional array (? [Transaction]) exactly like AwardRep
-      const transactions: BackendTransaction[] = Array.isArray(transactionsResult)
-        ? (transactionsResult[0] || [])
-        : (transactionsResult || []);
-
-      console.log('📊 Raw transactions for revocations:', transactions);
-      console.log('📊 Total transactions count:', transactions.length);
-
-      if (!Array.isArray(transactions)) {
-        console.warn('⚠️ Transactions is not an array:', transactions);
-        setRecentRevocations([]);
-        setTotalPointsRevoked(0);
-        setTotalRevocations(0);
-        return;
+    (async () => {
+      try {
+        if (!cid) {
+          setConnectError('No organization selected.');
+          return;
+        }
+        const actor = await makeChildWithPlug({ canisterId: cid, host: 'https://icp-api.io' });
+        setChild(actor);
+      } catch (e: any) {
+        setConnectError(e?.message || 'Failed to connect to org canister');
+      } finally {
+        setConnecting(false);
       }
+    })();
+  }, [cid]);
 
-      // Filter and convert revoke transactions (last 10, newest first)
-      const revokeTransactions: RevokeTransaction[] = transactions
-        .filter(tx => tx.transactionType && 'Revoke' in tx.transactionType)
-        .slice(-10)
-        .map(tx => {
-          const timestamp = Number(tx.timestamp);
-          const date = timestamp > 0
-            ? new Date(timestamp * 1000).toISOString().split('T')[0] // seconds → ms
-            : new Date().toISOString().split('T')[0];
+  // Load recent revocations from child
+  const loadRecentRevocations = async () => {
+    if (!child) return;
+    try {
+      const txs: BackendTransaction[] = await child.getTransactionHistory();
+      const arr = Array.isArray(txs) ? txs : [];
 
+      // Newest-first comes from backend already; take latest 10 revokes
+      const revokeTx = arr
+        .filter((tx) => tx.transactionType && 'Revoke' in tx.transactionType)
+        .slice(0, 10)
+        .map((tx) => {
+          const tsSec = Number(tx.timestamp || 0);
+          const date =
+            tsSec > 0
+              ? new Date(tsSec * 1000).toISOString().split('T')[0]
+              : new Date().toISOString().split('T')[0];
           return {
             id: tx.id.toString(),
             recipient: tx.to.toString(),
             amount: Number(tx.amount),
-            reason: (tx.reason && tx.reason.length > 0) ? tx.reason[0]! : 'No reason provided',
+            reason: tx.reason?.[0] || 'No reason provided',
             date,
             status: 'completed' as const,
-            revokedBy: tx.from.toString()
+            revokedBy: tx.from.toString(),
           };
-        })
-        .reverse();
+        });
 
-      console.log('🎯 Processed revoke transactions:', revokeTransactions);
-      console.log('🎯 Revoke transactions count:', revokeTransactions.length);
-
-      setRecentRevocations(revokeTransactions);
-
-      // Totals
-      const totalPointsRevoked = revokeTransactions.reduce((sum, tx) => sum + tx.amount, 0);
-      setTotalPointsRevoked(totalPointsRevoked);
-      setTotalRevocations(revokeTransactions.length);
-
+      setRecentRevocations(revokeTx);
+      setTotalPointsRevoked(revokeTx.reduce((s, t) => s + t.amount, 0));
+      setTotalRevocations(revokeTx.length);
     } catch (error) {
-      console.error('❌ Error loading recent revocations:', error);
+      console.error('Failed to load recent revocations:', error);
       setRecentRevocations([]);
       setTotalPointsRevoked(0);
       setTotalRevocations(0);
       setSnackbar({
         open: true,
-        message: 'Failed to load recent revocations from blockchain. The canister may be empty or connection failed.',
-        severity: 'warning'
+        message: 'Failed to load recent revocations from blockchain.',
+        severity: 'warning',
       });
     }
   };
 
-  const handleRevokeSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Load on child ready
+  useEffect(() => {
+    if (child) loadRecentRevocations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [child]);
 
+  // Submit (open confirm)
+  const handleRevokeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
     if (!recipient || !amount || !reason) {
       setSnackbar({
         open: true,
         message: 'Please fill in all required fields',
-        severity: 'warning'
+        severity: 'warning',
       });
       return;
     }
-
-    // Validate Principal ID format
     try {
-      Principal.fromText(recipient);
+      Principal.fromText(recipient); // validate format
     } catch {
-      setSnackbar({
-        open: true,
-        message: 'Invalid Principal ID format',
-        severity: 'error'
-      });
+      setSnackbar({ open: true, message: 'Invalid Principal ID format', severity: 'error' });
       return;
     }
-
-    // Validate amount
-    const numAmount = parseInt(amount);
-    if (isNaN(numAmount) || numAmount <= 0) {
+    const numAmount = Number(amount);
+    if (!Number.isFinite(numAmount) || numAmount <= 0) {
       setSnackbar({
         open: true,
         message: 'Amount must be a positive number',
-        severity: 'error'
+        severity: 'error',
       });
       return;
     }
-
     setConfirmDialog(true);
   };
 
+  // Confirm + perform revoke on child canister
   const handleConfirmRevoke = async () => {
     setConfirmDialog(false);
     setIsLoading(true);
-
     try {
-      const actor = await getPlugActor();
-      if (!actor) {
-        throw new Error('Failed to connect to blockchain. Please ensure you are logged in.');
-      }
+      if (!child) throw new Error('Not connected to the organization canister');
 
       const recipientPrincipal = Principal.fromText(recipient);
-      const numAmount = parseInt(amount);
+      const amt = BigInt(Number(amount));
 
-      console.log('Revoking reputation:', {
-        to: recipientPrincipal.toString(),
-        amount: numAmount,
-        reason: reason
-      });
+      // Only owner can revoke (child will enforce)
+      const res: string = await child.revokeRep(recipientPrincipal, amt, [reason]);
 
-      const orgId = localStorage.getItem('selectedOrgId')?.trim();
-      if (!orgId) {
-        throw new Error('No orgId found in localStorage');
-      }
-
-      console.log('📞 Calling revokeRep() - auto-injecting orgId...');
-      const result = await actor.revokeRep(orgId, recipientPrincipal, BigInt(numAmount), [reason]);
-      console.log('✅ Revoke result:', result);
-
-      // Backend string error pattern handling (mirrors Award)
-      if (typeof result === 'string' && result.startsWith('Error:')) {
-        console.error('❌ Backend returned error:', result);
-        setSnackbar({
-          open: true,
-          message: result,
-          severity: 'error'
-        });
+      if (typeof res === 'string' && res.startsWith('Error:')) {
+        setSnackbar({ open: true, message: res, severity: 'error' });
         return;
       }
 
       setSnackbar({
         open: true,
         message: `Successfully revoked ${amount} reputation points from ${recipient}`,
-        severity: 'success'
+        severity: 'success',
       });
 
       // Reset form
@@ -236,65 +198,74 @@ const RevokeRep: React.FC = () => {
       setReason('');
       setCategory('');
 
-      // Reload recent revocations immediately (no setTimeout needed)
+      // Reload list
       await loadRecentRevocations();
-
     } catch (error: any) {
-      console.error('❌ Error revoking reputation:', error);
-      let errorMessage = 'Failed to revoke reputation. Please try again.';
+      console.error('Revoke error:', error);
+      let msg = 'Failed to revoke reputation. Please try again.';
       if (error?.message) {
-        // mirror Award-style surface of backend reasons
-        if (error.message.includes('Not a trusted awarder')) {
-          errorMessage = 'You are not authorized to revoke reputation points.';
-        } else if (error.message.includes('Daily mint cap exceeded')) {
-          errorMessage = 'Daily limit exceeded.';
-        } else if (error.message.includes('Cannot revoke from yourself')) {
-          errorMessage = 'You cannot revoke reputation points from yourself.';
-        } else {
-          errorMessage = error.message;
-        }
+        if (error.message.includes('Only owner')) msg = 'Only the organization admin can revoke reputation.';
+        else if (error.message.includes('Insufficient balance')) msg = 'User has insufficient balance to revoke.';
+        else msg = error.message;
       }
-      setSnackbar({
-        open: true,
-        message: errorMessage,
-        severity: 'error'
-      });
+      setSnackbar({ open: true, message: msg, severity: 'error' });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleCloseSnackbar = () => {
-    setSnackbar(prev => ({ ...prev, open: false }));
-  };
+  const handleCloseSnackbar = () => setSnackbar((p) => ({ ...p, open: false }));
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed': return 'success';
-      case 'pending': return 'warning';
-      case 'failed': return 'error';
-      default: return 'default';
+      case 'completed':
+        return 'success';
+      case 'pending':
+        return 'warning';
+      case 'failed':
+        return 'error';
+      default:
+        return 'default';
     }
   };
+
+  // Loading / error states for connecting the child
+  if (connecting) {
+    return (
+      <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <CircularProgress sx={{ color: 'hsl(var(--primary))' }} />
+      </Box>
+    );
+  }
+
+  if (!cid || connectError) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="error">{connectError || 'No organization selected.'}</Alert>
+      </Box>
+    );
+  }
+
   return (
-    <Box sx={{ 
-      p: 3, 
-      backgroundColor: 'hsl(var(--background))',
-      minHeight: '100vh'
-    }}>
-      <Typography 
-        variant="h4" 
-        sx={{ 
-          mb: 3, 
+    <Box sx={{ p: 3, backgroundColor: 'hsl(var(--background))', minHeight: '100vh' }}>
+      <Typography
+        variant="h4"
+        sx={{
+          mb: 3,
           color: 'hsl(var(--foreground))',
           fontWeight: 600,
           display: 'flex',
           alignItems: 'center',
-          gap: 2
+          gap: 2,
         }}
       >
         <RemoveCircle sx={{ color: 'hsl(var(--destructive))' }} />
         Revoke Reputation
+        <Chip
+          label={`Org: ${cid}`}
+          size="small"
+          sx={{ ml: 2, bgcolor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }}
+        />
       </Typography>
 
       <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', lg: 'row' } }}>
@@ -312,21 +283,12 @@ const RevokeRep: React.FC = () => {
           handleRevokeSubmit={handleRevokeSubmit}
         />
 
-
-        {/* Revocation Summary */}
-        <RevocationSummary 
-  totalRevocations={totalRevocations} 
-  totalPointsRevoked={totalPointsRevoked} 
-/>
-
+        {/* Summary */}
+        <RevocationSummary totalRevocations={totalRevocations} totalPointsRevoked={totalPointsRevoked} />
       </Box>
 
       {/* Recent Revocations */}
-      <RevocationRecent
-  recentRevocations={recentRevocations} 
-  getStatusColor={getStatusColor} 
-/>
-
+      <RevocationRecent recentRevocations={recentRevocations} getStatusColor={getStatusColor} />
 
       {/* Confirmation Dialog */}
       <Dialog
@@ -340,37 +302,28 @@ const RevokeRep: React.FC = () => {
         </DialogTitle>
         <DialogContent>
           <DialogContentText id="confirm-dialog-description" sx={{ color: 'hsl(var(--muted-foreground))' }}>
-            Are you sure you want to revoke <strong>{amount} reputation points</strong> from <strong>{recipient}</strong>?
-            This action requires administrative approval and will be logged for audit purposes.
+            Are you sure you want to revoke <strong>{amount} reputation points</strong> from{' '}
+            <strong>{recipient}</strong>? This action requires administrative permissions and will be logged for audit
+            purposes.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmDialog(false)} sx={{ color: 'hsl(var(--muted-foreground))' }}>
             Cancel
           </Button>
-          <Button 
-            onClick={handleConfirmRevoke} 
-            sx={{ 
-              color: 'hsl(var(--destructive))',
-              fontWeight: 600
-            }}
+          <Button
+            onClick={handleConfirmRevoke}
+            sx={{ color: 'hsl(var(--destructive))', fontWeight: 600 }}
             autoFocus
+            disabled={isLoading}
           >
-            Confirm Revocation
+            {isLoading ? 'Revoking…' : 'Confirm Revocation'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={handleCloseSnackbar}
-      >
-        <Alert 
-          onClose={handleCloseSnackbar} 
-          severity={snackbar.severity}
-          sx={{ width: '100%' }}
-        >
+      <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={handleCloseSnackbar}>
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
           {snackbar.message}
         </Alert>
       </Snackbar>
@@ -378,12 +331,10 @@ const RevokeRep: React.FC = () => {
   );
 };
 
-const RevokeRepWithProtection: React.FC = () => {
-  return (
-    <ProtectedPage>
-      <RevokeRep />
-    </ProtectedPage>
-  );
-};
+const RevokeRepWithProtection: React.FC = () => (
+  <ProtectedPage>
+    <RevokeRep />
+  </ProtectedPage>
+);
 
 export default RevokeRepWithProtection;

@@ -25,6 +25,7 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, handleDrawerToggle, drawe
     <Box component="nav" sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}>
       {/* Mobile Drawer */}
       <Drawer
+       aria-label="Main navigation"
         variant="temporary"
         open={mobileOpen}
         onClose={handleDrawerToggle}
@@ -36,7 +37,7 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, handleDrawerToggle, drawe
           },
         }}
       >
-        <DrawerContent />
+        <DrawerContent onNavigate={handleDrawerToggle} />
       </Drawer>
 
       {/* Desktop Drawer */}

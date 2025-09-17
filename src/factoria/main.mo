@@ -28,8 +28,6 @@ actor ReputationFactory {
     }
   };
 
-
-
   type CanisterSettings = {
     controllers : ?[Principal];
     compute_allocation : ?Nat;
@@ -64,13 +62,15 @@ actor ReputationFactory {
     delete_canister : (StartStopArgs)      -> async ();
   } = actor ("aaaaa-aa");
 
-  // -------------------- Child-facing interface (only what we use) --------------------
+  // -------------------- Child-facing interfaces --------------------
   type ChildWallet = actor { wallet_receive : () -> async Nat };
   type ChildMgmt   = actor {
     health : () -> async {
       paused : Bool; cycles : Nat; users : Nat; txCount : Nat; topUpCount : Nat; decayConfigHash : Nat
     };
   };
+  // New: drain cycles back to factory when archiving
+  type ChildDrain = actor { returnCyclesToFactory : (Nat) -> async Nat };
 
   // -------------------- Registry/Pool Types --------------------
   public type Status = { #Active; #Archived };
@@ -130,29 +130,26 @@ actor ReputationFactory {
 
   // -------------------- Auth & Utils --------------------
 
-
   func requireAdmin(caller : Principal) : () {
     if (caller != admin) { assert false };
   };
+
   func requireOrgAdmin(caller : Principal, canister_id : Principal) : () {
-  // Allow global admin
-  if (caller == admin) return;
+    // Allow global admin
+    if (caller == admin) return;
 
-  // Allow the factory canister itself
-  if (caller == Principal.fromActor(ReputationFactory)) return;
+    // Allow the factory canister itself
+    if (caller == Principal.fromActor(ReputationFactory)) return;
 
-  // Otherwise require the caller to be the recorded owner of that child
-  switch (byId.get(canister_id)) {
-    case (?c) {
-      if (c.owner == caller) return;
-      Debug.trap("unauthorized: caller is not owner of this canister");
+    // Otherwise require the caller to be the recorded owner of that child
+    switch (byId.get(canister_id)) {
+      case (?c) {
+        if (c.owner == caller) return;
+        Debug.trap("unauthorized: caller is not owner of this canister");
+      };
+      case null Debug.trap("unauthorized: unknown canister");
     };
-    case null Debug.trap("unauthorized: unknown canister");
   };
-};
-
-
-
 
   func nowNs() : Nat64 = Nat64.fromIntWrap(Time.now());
 
@@ -236,11 +233,7 @@ actor ReputationFactory {
     } catch (_) { #err "transfer failed" }
   };
 
-
-
-
   // -------------------- Create / Reuse / CRUD --------------------
-  /// Create new ReputationChild with app-level owner; if `controllers` empty, default to [factory, owner].
 
   public shared({ caller }) func forceAddOwnerIndex(owner: Principal, cid: Principal) : async Text {
     requireAdmin(caller);
@@ -252,7 +245,6 @@ actor ReputationFactory {
     owner             : Principal,
     cycles_for_create : Nat,
     controllers       : [Principal],   // optional override; empty means default
-
     note              : Text
   ) : async Principal {
     requireAdmin(caller);
@@ -266,8 +258,8 @@ actor ReputationFactory {
     });
     let cid = res.canister_id;
 
-    // Child expects ONE candid arg: (owner)
-    let init_arg : Blob = to_candid (owner);
+    // Child now expects TWO candid args: (owner, factory)
+    let init_arg : Blob = to_candid(owner, Principal.fromActor(ReputationFactory));
 
     await IC.install_code({
       mode = #install;
@@ -282,7 +274,19 @@ actor ReputationFactory {
     cid
   };
 
-  /// Create or reuse from pool for given owner; ensure final cycles >= cycles_for_create.
+
+
+
+
+
+
+
+
+
+
+
+
+ /// Create or reuse from pool for given owner; ensure final cycles >= cycles_for_create.
 /// If reused canister has fewer cycles than requested, top up the difference.
 public shared({ caller }) func createOrReuseChildFor(
   owner: Principal,
@@ -292,40 +296,41 @@ public shared({ caller }) func createOrReuseChildFor(
 ) : async Principal {
 
   let defaultCtrls = [Principal.fromActor(ReputationFactory), owner];
-  let arg : Blob = to_candid(owner);
+  // Child takes TWO candid init args: (owner, factory)
+  let initArg : Blob = to_candid(owner, Principal.fromActor(ReputationFactory));
 
-  // Helper: fetch current cycles from the child directly (bypass factory guards)
-  func getChildCycles(cid: Principal) : async Nat {
-    let c : ChildMgmt = actor (Principal.toText(cid));
-    // If health traps or returns nonsense, treat as 0 to be safe.
-    try {
-      let h = await c.health();
-      h.cycles
-    } catch (_) { 0 }
+  // --- helpers ---
+  type ChildWallet = actor { wallet_receive : () -> async Nat };
+  type ChildMgmt   = actor {
+    health : () -> async { paused : Bool; cycles : Nat; users : Nat; txCount : Nat; topUpCount : Nat; decayConfigHash : Nat }
   };
 
-  // Helper: top up from the factory's own cycles (same logic as topUpChild, but no guard)
+  func getChildCycles(cid: Principal) : async Nat {
+    let c : ChildMgmt = actor (Principal.toText(cid));
+    // best-effort; if it fails we’ll just return 0
+    try { (await c.health()).cycles } catch (_) { 0 }
+  };
+
   func topUpInternal(cid: Principal, amount: Nat) : async () {
     if (amount == 0) return;
     let target : ChildWallet = actor (Principal.toText(cid));
-    // Ignore partial accepts; best-effort top-up.
     ignore await (with cycles = amount) target.wallet_receive();
   };
 
-  // Helper: ensure final balance >= target
   func ensureCycles(cid: Principal, target: Nat) : async () {
     if (target == 0) return;
     let have = await getChildCycles(cid);
-    if (have < target) {
-      await topUpInternal(cid, target - have);
-    };
+    if (have < target) { await topUpInternal(cid, target - have) };
   };
 
-  // ----- Reuse path -----
+  // ===== Reuse path (pool canisters are STOPPED due to archiveChild) =====
   if (pool.size() > 0) {
     switch (pool.removeLast()) {
       case (?cid) {
-        await IC.stop_canister({ canister_id = cid });
+        // 1) Update controllers while STOPPED (matches archiveChild behavior)
+        await ensureCycles(cid, cycles_for_create);
+        await startChild(cid);
+
         await IC.update_settings({
           canister_id = cid;
           settings = {
@@ -333,23 +338,29 @@ public shared({ caller }) func createOrReuseChildFor(
             compute_allocation = null; memory_allocation = null; freezing_threshold = null;
           }
         });
+
+        // 2) Install code while STOPPED using #reinstall (works whether wasm existed or not)
         await IC.install_code({
-          mode = #reinstall;
+          mode        = #reinstall;
           canister_id = cid;
           wasm_module = requireWasm();
-          arg = arg
+          arg         = initArg
         });
-        await IC.start_canister({ canister_id = cid });
 
+        // 3) Start and then top up to requested target (wallet_receive needs running code)
+       
+
+        // Bring balance up to cycles_for_create (front-loads user’s target after reuse)
+      
+
+        // 4) Book-keeping (Active again)
         switch (byId.get(cid)) { case (?old) { removeOwnerIndex(old.owner, cid) }; case null {} };
         let rec : Child = { id = cid; owner; created_at = nowNs(); note; status = #Active };
         recordOrRefresh(rec);
         addOwnerIndex(owner, cid);
 
+        // keep stable mirror of pool in sync after removal
         storePool := Buffer.toArray(pool);
-
-        // Ensure cycles >= cycles_for_create (important for reuse case)
-        await ensureCycles(cid, cycles_for_create);
 
         return cid;
       };
@@ -357,7 +368,7 @@ public shared({ caller }) func createOrReuseChildFor(
     }
   };
 
-  // ----- Fresh create -----
+  // ===== Fresh create =====
   let res = await (with cycles = cycles_for_create) IC.create_canister({
     settings = ?{
       controllers = ?(if (controllers.size() == 0) defaultCtrls else controllers);
@@ -366,17 +377,40 @@ public shared({ caller }) func createOrReuseChildFor(
   });
   let cid = res.canister_id;
 
-  await IC.install_code({ mode = #install; canister_id = cid; wasm_module = requireWasm(); arg = arg });
+  await IC.install_code({
+    mode        = #install;
+    canister_id = cid;
+    wasm_module = requireWasm();
+    arg         = initArg
+  });
   await IC.start_canister({ canister_id = cid });
 
-  let rec : Child = { id = cid; owner; created_at = nowNs(); note; status = #Active };
+  let rec : Child = { id = cid; owner; created_at = nowNs(); note: Text = note; status = #Active };
   recordChild(rec);
 
-  // Creation burns fees, so top up the delta if needed to meet the user's requested amount exactly.
+  // Creation burns fees; top up delta if needed to meet requested total
   await ensureCycles(cid, cycles_for_create);
 
   cid
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
   /// Archive a child back to pool.
@@ -385,7 +419,12 @@ public shared({ caller }) func createOrReuseChildFor(
     switch (byId.get(canister_id)) {
       case null { "Error: unknown canister" };
       case (?c) {
-        await IC.stop_canister({ canister_id = canister_id });
+        // Ask child to return cycles to the factory vault BEFORE stopping it.
+        let childDrain : ChildDrain = actor (Principal.toText(canister_id));
+        // Keep ~0.1T cycles inside child as reply buffer; tune as you like.
+        ignore await childDrain.returnCyclesToFactory(100_000_000_000);
+
+        
         await IC.update_settings({
           canister_id = canister_id;
           settings = {
@@ -432,9 +471,6 @@ public shared({ caller }) func createOrReuseChildFor(
     "Success: deleted"
   };
 
-
-
-
   // -------------------- Lifecycle helpers --------------------
   public shared({ caller }) func upgradeChild(canister_id : Principal) : async () {
     requireOrgAdmin(caller, canister_id);
@@ -443,17 +479,39 @@ public shared({ caller }) func createOrReuseChildFor(
       mode = #upgrade;
       canister_id;
       wasm_module = requireWasm();
-      arg = to_candid(child.owner);   // ← build correct arg automatically
+      // TWO-arg candid again on upgrade
+      arg = to_candid(child.owner, Principal.fromActor(ReputationFactory));
     });
   };
 
 
-  public shared({ caller }) func reinstallChild(canister_id : Principal, arg : Blob) : async () {
+
+
+  // In ReputationFactory.mo
+public shared({ caller }) func reinstallChild(canister_id : Principal, owner : Principal, factory : Principal) : async () {
     requireOrgAdmin(caller, canister_id);
-    await IC.stop_canister({ canister_id = canister_id });
-    await IC.install_code({ mode = #reinstall; canister_id = canister_id; wasm_module = requireWasm(); arg = arg });
-    await IC.start_canister({ canister_id = canister_id });
-  };
+
+    // Encode (owner, factory) into candid Blob
+    let arg : Blob = to_candid(owner, factory);
+
+    await IC.stop_canister({ canister_id });
+    await IC.install_code({
+        mode        = #reinstall;
+        canister_id = canister_id;
+        wasm_module = requireWasm();
+        arg         = arg;
+    });
+    await IC.start_canister({ canister_id });
+};
+
+
+
+
+
+
+
+
+
 
   public shared({ caller }) func startChild(canister_id : Principal) : async () {
     requireOrgAdmin(caller, canister_id);
@@ -507,4 +565,14 @@ public shared({ caller }) func createOrReuseChildFor(
     let c : ChildMgmt = actor (Principal.toText(cid));
     ?(await c.health())
   };
+
+  // Replace pool with an explicit list
+public shared({ caller }) func adminSetPool(newPool : [Principal]) : async Text {
+  requireAdmin(caller);
+  let b = Buffer.Buffer<Principal>(newPool.size());
+  for (cid in newPool.vals()) { b.add(cid) };
+  pool := b;
+  storePool := Buffer.toArray(pool);
+  "ok"
+};
 }

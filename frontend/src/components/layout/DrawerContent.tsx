@@ -1,40 +1,39 @@
 // DrawerContent.tsx
 import React from 'react';
 import {
-  Box,
-  List,
-  ListItem,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  Avatar,
-  Typography,
-  IconButton,
-  Chip,
+  Box, List, ListItem, ListItemButton, ListItemIcon, ListItemText,
+  Avatar, Typography, IconButton, Chip,
 } from '@mui/material';
-import { useLocation, useNavigate } from 'react-router-dom';
-
+import { useLocation, useNavigate, useParams, matchPath } from 'react-router-dom';
 import { getFilteredNavItems } from './navItems';
 import { useRole } from '../../contexts/RoleContext';
-import {
-  Help as HelpIcon,
-  QuestionAnswer as FAQIcon,
-  Settings as SettingsIcon,
-} from '@mui/icons-material';
+import { Help as HelpIcon, QuestionAnswer as FAQIcon, Settings as SettingsIcon } from '@mui/icons-material';
 
-const DrawerContent: React.FC = () => {
+type DrawerContentProps = {
+  onNavigate?: () => void; // close mobile drawer after nav
+};
+
+const DrawerContent: React.FC<DrawerContentProps> = ({ onNavigate }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { cid } = useParams<{ cid: string }>();
+  const { userRole, userName, isAdmin, isAwarder } = useRole();
 
-  const { userRole, userName, isAdmin, isAwarder} = useRole();
+  const availableNavItems = userRole !== 'Loading' ? getFilteredNavItems(userRole) : [];
 
-  // Get filtered navigation items based on user role (exclude Loading state)
-  const availableNavItems = userRole !== 'Loading' 
-    ? getFilteredNavItems(userRole) 
-    : [];
+  // Resolve a nav path to include the current :cid
+  const resolvePath = (path: string) => {
+    if (!cid) return path;
+    return path.includes(':cid') ? path.replace(':cid', cid) : `${path}/${cid}`;
+  };
 
-  console.log('🔍 DrawerContent - UserRole:', userRole, 'AvailableNavItems:', availableNavItems.length);
-
+  const isActivePath = (targetPath: string) => {
+    // match exact or any nested under it (e.g., pagination, subroutes)
+    return (
+      location.pathname === targetPath ||
+      !!matchPath({ path: `${targetPath}/*`, end: false }, location.pathname)
+    );
+  };
 
   const getRoleDisplayName = () => (isAdmin ? 'Admin' : isAwarder ? 'Trusted Awarder' : 'Member');
   const getUserInitials = () => (userName ? userName.slice(0, 2).toUpperCase() : 'U');
@@ -52,7 +51,7 @@ const DrawerContent: React.FC = () => {
         '&::-webkit-scrollbar': { display: 'none' },
       }}
     >
-      {/* Profile Section */}
+      {/* Profile */}
       <Box
         sx={{
           p: 3,
@@ -86,7 +85,10 @@ const DrawerContent: React.FC = () => {
             {userName || 'Unknown User'}
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-            <Typography variant="body2" sx={{ fontSize: '0.72rem', color: 'hsl(var(--muted-foreground))' }}>
+            <Typography
+              variant="body2"
+              sx={{ fontSize: '0.72rem', color: 'hsl(var(--muted-foreground))' }}
+            >
               {getRoleDisplayName()}
             </Typography>
             {(isAdmin || isAwarder) && (
@@ -105,40 +107,54 @@ const DrawerContent: React.FC = () => {
           </Box>
         </Box>
 
-        <IconButton sx={{ color: 'hsl(var(--muted-foreground))', '&:hover': { color: 'hsl(var(--foreground))' }, p: 0.5 }}>
+        <IconButton
+          sx={{
+            color: 'hsl(var(--muted-foreground))',
+            '&:hover': { color: 'hsl(var(--foreground))' },
+            p: 0.5,
+          }}
+          aria-label="Settings"
+        >
           <SettingsIcon sx={{ fontSize: 18 }} />
         </IconButton>
       </Box>
 
-      {/* Navigation Section */}
+      {/* Navigation */}
       <Box sx={{ flex: 1, py: 2 }}>
         <List sx={{ p: 0 }}>
           {availableNavItems.map((item) => {
-            const isActive = location.pathname === item.path;
+            const to = resolvePath(item.path);
+            const active = isActivePath(to);
+
             return (
               <ListItem key={item.path} disablePadding sx={{ px: 2, mb: 0.5 }}>
                 <ListItemButton
-                  onClick={() => navigate(item.path)}
+                  onClick={() => {
+                    navigate(to);
+                    onNavigate?.(); // close mobile drawer
+                  }}
                   sx={{
                     borderRadius: 0.5,
                     py: 1.5,
                     px: 2,
                     minHeight: 'unset',
-                    transition: 'background-color var(--transition-smooth), border var(--transition-smooth)',
-                    backgroundColor: isActive ? 'hsl(var(--primary) / 0.1)' : 'transparent',
-                    border: isActive ? '1px solid hsl(var(--primary) / 0.3)' : '1px solid transparent',
+                    transition:
+                      'background-color var(--transition-smooth), border var(--transition-smooth)',
+                    backgroundColor: active ? 'hsl(var(--primary) / 0.1)' : 'transparent',
+                    border: active
+                      ? '1px solid hsl(var(--primary) / 0.3)'
+                      : '1px solid transparent',
                     '&:hover': {
-                    background: "hsl(var(--background))",
-                    boxShadow: "0 8px 24px hsl(var(--primary) / 0.2)",
-                
-                    border: "1px solid hsl(var(--primary))",
+                      background: 'hsl(var(--background))',
+                      boxShadow: '0 8px 24px hsl(var(--primary) / 0.2)',
+                      border: '1px solid hsl(var(--primary))',
                     },
                   }}
                 >
                   <ListItemIcon
                     sx={{
                       minWidth: 36,
-                      color: isActive ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))',
+                      color: active ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))',
                       '& .MuiSvgIcon-root': { fontSize: 20 },
                     }}
                   >
@@ -149,8 +165,10 @@ const DrawerContent: React.FC = () => {
                     primaryTypographyProps={{
                       sx: {
                         fontSize: '0.85rem',
-                        fontWeight: isActive ? 600 : 500,
-                        color: isActive ? 'hsl(var(--foreground))' : 'hsl(var(--foreground) / 0.8)',
+                        fontWeight: active ? 600 : 500,
+                        color: active
+                          ? 'hsl(var(--foreground))'
+                          : 'hsl(var(--foreground) / 0.8)',
                       },
                     }}
                   />
@@ -161,11 +179,17 @@ const DrawerContent: React.FC = () => {
         </List>
       </Box>
 
-      {/* Help & FAQ Section */}
+      {/* Support */}
       <Box sx={{ borderTop: '1px solid hsl(var(--border) / 0.3)', p: 2 }}>
         <Typography
           variant="overline"
-          sx={{ fontSize: '0.7rem', fontWeight: 600, color: 'hsl(var(--muted-foreground))', px: 2, mb: 1 }}
+          sx={{
+            fontSize: '0.7rem',
+            fontWeight: 600,
+            color: 'hsl(var(--muted-foreground))',
+            px: 2,
+            mb: 1,
+          }}
         >
           SUPPORT
         </Typography>

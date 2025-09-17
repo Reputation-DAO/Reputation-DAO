@@ -3,10 +3,6 @@ import { Actor, HttpAgent } from '@dfinity/agent';
 import { idlFactory } from '../../../../src/declarations/factoria/factoria.did.js';
 import type { _SERVICE } from '../../../../src/declarations/factoria/factoria.did.d.ts';
 
-// If your declarations live elsewhere, adjust the two imports above accordingly.
-// From `frontend/src/canister` to project-root `src/declarations/...` is typically ../../../
-
-// -- Canister ID from Vite env (required) --------------------------------------
 const FACTORIA_CANISTER_ID = import.meta.env.VITE_FACTORIA_CANISTER_ID as string | undefined;
 if (!FACTORIA_CANISTER_ID) {
   throw new Error(
@@ -14,9 +10,8 @@ if (!FACTORIA_CANISTER_ID) {
     'VITE_FACTORIA_CANISTER_ID=aaaaa-aa'
   );
 }
-const DEFAULT_HOST = 'https://icp-api.io'; // or 'https://ic0.app'
+const DEFAULT_HOST = 'https://icp-api.io';
 
-// Build an actor with either a provided agent or a new HttpAgent.
 export async function makeFactoriaActor(opts?: {
   agent?: HttpAgent;
   host?: string;
@@ -27,34 +22,20 @@ export async function makeFactoriaActor(opts?: {
 
   const agent =
     opts?.agent ??
-    new HttpAgent({
-      host,
-    });
+    new HttpAgent({ host });
 
-  // Local dev: fetchRootKey only if talking to local replica
   const lowerHost = host.toLowerCase();
   const isLocal =
     lowerHost.startsWith('http://127.0.0.1') ||
     lowerHost.startsWith('http://localhost');
 
   if (!opts?.agent && isLocal) {
-    try {
-      await agent.fetchRootKey();
-    } catch {
-      // replica might not be running; ignore
-    }
+    try { await agent.fetchRootKey(); } catch {}
   }
 
-  return Actor.createActor<_SERVICE>(idlFactory, {
-    agent,
-    canisterId,
-  });
+  return Actor.createActor<_SERVICE>(idlFactory, { agent, canisterId });
 }
 
-/**
- * Build a Factoria actor using Plug’s agent.
- * Ensures Plug is connected and an agent exists, then reuses that agent.
- */
 export async function makeFactoriaWithPlug(opts?: {
   host?: string;
   canisterId?: string;
@@ -62,22 +43,16 @@ export async function makeFactoriaWithPlug(opts?: {
   const canisterId = opts?.canisterId ?? FACTORIA_CANISTER_ID!;
   const host = opts?.host ?? DEFAULT_HOST;
 
-  // Basic runtime checks
   if (!window.ic?.plug) {
     throw new Error('Plug extension not found. Please install/enable Plug.');
   }
 
-  // 1) Ensure connected (idempotent)
   const connected = await window.ic.plug.isConnected?.();
   if (!connected) {
-    const ok = await window.ic.plug.requestConnect?.({
-      whitelist: [canisterId],
-      host,
-    });
+    const ok = await window.ic.plug.requestConnect?.({ whitelist: [canisterId], host });
     if (!ok) throw new Error('User rejected Plug connection.');
   }
 
-  // 2) Ensure agent exists (idempotent)
   if (!window.ic.plug.agent) {
     await window.ic.plug.createAgent?.({ whitelist: [canisterId], host });
   }
@@ -86,14 +61,16 @@ export async function makeFactoriaWithPlug(opts?: {
   return Actor.createActor<_SERVICE>(idlFactory, { agent, canisterId });
 }
 
-/** Convenience getter if you need to read the configured canister id elsewhere */
 export const getFactoriaCanisterId = () => FACTORIA_CANISTER_ID!;
 
-// Optional: if TS complains about window.ic.plug, add these ambient types here or in a global d.ts.
+// --- FIX: Global types -------------------------------------------------------
 declare global {
   interface Window {
-    ic?: {
+    // Make this non-optional to match other declarations elsewhere in the project
+    ic: {
       plug?: {
+        /** Present in some Plug versions */
+        disconnect?: () => Promise<void> | void;
         isConnected?: () => Promise<boolean>;
         requestConnect?: (opts: { whitelist?: string[]; host?: string }) => Promise<boolean>;
         createAgent?: (opts: { whitelist?: string[]; host?: string }) => Promise<void>;

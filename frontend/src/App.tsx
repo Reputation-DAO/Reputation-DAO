@@ -99,7 +99,7 @@ function App() {
           {/* Protected Routes */}
           {/* Dashboard - All roles can access */}
           <Route
-            path="/dashboard"
+            path="/dashboard/home/:cid"
             element={
               <Layout>
                 <ProtectedRoute allowedRoles={['Admin', 'Awarder', 'User']}>
@@ -112,7 +112,7 @@ function App() {
 
           {/* Award Reputation - Admin and Awarder only */}
           <Route
-            path="/award"
+            path="/dashboard/award/:cid"
             element={
               <Layout>
                 <ProtectedRoute allowedRoles={['Admin', 'Awarder']}>
@@ -124,7 +124,7 @@ function App() {
 
           {/* Revoke Reputation - Admin only */}
           <Route
-            path="/revoke"
+            path="/dashboard/revoke/:cid"
             element={
               <Layout>
                 <ProtectedRoute allowedRoles={['Admin']}>
@@ -136,7 +136,7 @@ function App() {
 
           {/* Manage Awarders - Admin only */}
           <Route
-            path="/awarders"
+            path="/dashboard/awarders/:cid"
             element={
               <Layout>
                 <ProtectedRoute allowedRoles={['Admin']}>
@@ -148,7 +148,7 @@ function App() {
 
                     {/* Decay System - All roles can access */}
           <Route
-            path="/decay"
+            path="/dashboard/decay/:cid"
             element={
               <Layout>
                 <ProtectedRoute allowedRoles={['Admin', 'Awarder', 'User']}>
@@ -161,7 +161,7 @@ function App() {
 
           {/* View Balances - All roles can access */}
           <Route
-            path="/balances"
+            path="/dashboard/balances/:cid"
             element={
               <Layout>
                 <ProtectedRoute allowedRoles={['Admin', 'Awarder', 'User']}>
@@ -173,7 +173,7 @@ function App() {
 
           {/* Transaction Log - All roles can access */}
           <Route
-            path="/transactions"
+            path="/dashboard/transactions/:cid"
             element={
               <Layout>
                 <ProtectedRoute allowedRoles={['Admin', 'Awarder', 'User']}>

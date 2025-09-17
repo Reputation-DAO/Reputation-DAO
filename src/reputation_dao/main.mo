@@ -20,9 +20,10 @@ import Nat32 "mo:base/Nat32";
 
 
 // Actor class so Factory can pass the admin/owner at deploy time
-actor class ReputationChild(initOwner : Principal) = this {
+actor class ReputationChild(initOwner : Principal, initFactory : Principal) = this {
   // ——— Types ———
   //Defining a type for TransactionType Enum
+  stable var factory : Principal = initFactory;
   public type TransactionType = { #Award; #Revoke; #Decay };
 
   //Transaction Item Object
@@ -682,6 +683,32 @@ actor class ReputationChild(initOwner : Principal) = this {
     h := mix64_(h, Nat64.fromNat(if (paused) 1 else 0));         // make sure it's Nat, then to Nat64
 
     Nat64.toNat(h)
+  };
+  /// Drain (almost) all cycles to the factory's wallet_receive.
+/// Only callable by the factory or the owner.
+/// Returns the number of cycles successfully transferred.
+  public shared({ caller }) func returnCyclesToFactory(minRemain : Nat) : async Nat {
+    if (caller != factory and caller != owner) return 0;
+
+    // Keep some headroom to reply; default to ~0.1T cycles if minRemain == 0
+    let replyBuffer : Nat = if (minRemain == 0) 100_000_000_000 else minRemain;
+
+    let bal = Cycles.balance();
+    if (bal <= replyBuffer) return 0;
+
+    let send : Nat = bal - replyBuffer;
+
+    type Wallet = actor { wallet_receive : () -> async Nat };
+    let target : Wallet = actor (Principal.toText(factory));
+
+    try {
+      Cycles.add(send);
+      let accepted = await target.wallet_receive();
+      // If the target accepted less, that's fine — we still return what landed.
+      accepted
+    } catch (_) {
+      0
+    }
   };
 
 }

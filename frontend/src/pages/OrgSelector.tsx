@@ -97,9 +97,15 @@ const OrgSelector: React.FC = () => {
   const [factoria, setFactoria] =
     useState<Awaited<ReturnType<typeof makeFactoriaWithPlug>> | null>(null);
 
-  // data + ui state
+  // Owned orgs (your organizations)
   const [orgs, setOrgs] = useState<OrgRecord[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loadingOwned, setLoadingOwned] = useState(false);
+
+  // Public (visible) orgs – everyone can see/join these
+  const [publicOrgs, setPublicOrgs] = useState<OrgRecord[]>([]);
+  const [loadingPublic, setLoadingPublic] = useState(false);
+
+  // global UI state
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(true);
@@ -152,11 +158,11 @@ const OrgSelector: React.FC = () => {
   }, []);
 
   /* -----------------------------------------
-     Fetch orgs
+     Fetch OWNED orgs (by current principal)
   ----------------------------------------- */
-  const fetchOrgs = async () => {
+  const fetchOwnedOrgs = async () => {
     if (!factoria || !principal) return;
-    setLoading(true);
+    setLoadingOwned(true);
     clearToasts();
     try {
       const owner = Principal.fromText(principal);
@@ -183,7 +189,7 @@ const OrgSelector: React.FC = () => {
             isStopped = true;
           }
         } catch {
-          isStopped = true;
+          isStopped = true; // health is owner-protected; safely treat as stopped if error
         }
 
         rows.push({
@@ -205,17 +211,65 @@ const OrgSelector: React.FC = () => {
     } catch (e: any) {
       setErr(e?.message || "Failed to fetch organizations.");
     } finally {
-      setLoading(false);
+      setLoadingOwned(false);
     }
   };
 
+  /* -----------------------------------------
+     Fetch PUBLIC (visible) orgs
+     Uses listChildren() and shows only Active ones.
+     No health() call here (not authorized for non-owners).
+  ----------------------------------------- */
+  const fetchPublicOrgs = async () => {
+    if (!factoria) return;
+    setLoadingPublic(true);
+    try {
+      const all = await factoria.listChildren(); // [{ id, owner, created_at, note, status }]
+      const mine = new Set(orgs.map((o) => o.id)); // avoid duplicates in UI
+
+      const rows: OrgRecord[] = [];
+      for (const rec of all as any[]) {
+        const idText =
+          typeof rec.id?.toText === "function" ? rec.id.toText() : String(rec.id);
+        const status = toStatus(rec.status);
+        if (status !== "Active") continue; // visible == active
+
+        // Skip ones already in "Owned" list
+        if (mine.has(idText)) continue;
+
+        rows.push({
+          id: idText,
+          name: rec.note?.trim?.() ? rec.note : idText,
+          canisterId: idText,
+          status,
+          createdAt: Number(rec.created_at || 0),
+          publicVisibility: true,
+          plan: "Free",
+          isStopped: false,
+        });
+      }
+      setPublicOrgs(rows);
+    } catch (e: any) {
+      setErr(e?.message || "Failed to fetch public organizations.");
+    } finally {
+      setLoadingPublic(false);
+    }
+  };
+
+  // Initial + refresh when actor/principal ready
   useEffect(() => {
-    fetchOrgs();
-    // eslint-disable-next-line
+    fetchOwnedOrgs();
+    // fetch public AFTER owned so we can de-dupe
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [factoria, principal]);
 
+  useEffect(() => {
+    fetchPublicOrgs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [factoria, orgs.length]);
+
   /* -----------------------------------------
-     Toggle Start/Stop
+     Toggle Start/Stop (owned only)
   ----------------------------------------- */
   const togglePower = async (o: OrgRecord) => {
     if (!factoria) return;
@@ -229,21 +283,34 @@ const OrgSelector: React.FC = () => {
         await factoria.stopChild(id);
         setOk("Canister stopped.");
       }
-      await fetchOrgs();
+      await fetchOwnedOrgs();
     } catch (e: any) {
       setErr(e?.message || "Toggle failed.");
     }
   };
 
   /* -----------------------------------------
-     Other actions (create, update, delete, topup)
+     Other actions (create, update, delete, topup) — owned only
   ----------------------------------------- */
+  const MAX_CYCLES = 1_500_000_000_000n; // 1.5T
+  const MIN_CYCLES = 900_000_000_000n; // 0.9T
+
   const createOrg = async () => {
     if (!factoria || !principal) return;
     clearToasts();
+
     try {
       const owner = Principal.fromText(principal);
       const cycles = BigInt(createCycles || "0");
+
+      if (cycles > MAX_CYCLES) {
+        setErr("Currently only canisters with ≤ 1.5T cycles can be created.");
+        return;
+      } else if (cycles < MIN_CYCLES) {
+        setErr("need at least more that 0.9 T cycles ");
+        return;
+      }
+
       const awarders: Principal[] = [];
       const newId = await factoria.createOrReuseChildFor(
         owner,
@@ -251,11 +318,13 @@ const OrgSelector: React.FC = () => {
         awarders,
         createNote.trim()
       );
+
       setOk(`Organization created: ${newId.toText()}`);
       setCreateOpen(false);
       setCreateNote("");
       setCreateCycles("0");
-      await fetchOrgs();
+      await fetchOwnedOrgs();
+      await fetchPublicOrgs();
     } catch (e: any) {
       setErr(e?.message || "Create failed.");
     }
@@ -289,7 +358,8 @@ const OrgSelector: React.FC = () => {
       setOk(`Removed ${delOrg.name}.`);
       setDelOpen(false);
       setDelOrg(null);
-      await fetchOrgs();
+      await fetchOwnedOrgs();
+      await fetchPublicOrgs();
     } catch (e: any) {
       setErr(e?.message || "Delete failed.");
     }
@@ -309,7 +379,7 @@ const OrgSelector: React.FC = () => {
       setTopUpOpen(false);
       setTopUpOrg(null);
       setTopUpAmount("0");
-      await fetchOrgs();
+      await fetchOwnedOrgs();
     } catch (e: any) {
       setErr(e?.message || "Top up failed.");
     }
@@ -318,7 +388,8 @@ const OrgSelector: React.FC = () => {
   /* -----------------------------------------
      Render
   ----------------------------------------- */
-  const hasData = useMemo(() => orgs.length > 0, [orgs.length]);
+  const hasOwned = useMemo(() => orgs.length > 0, [orgs.length]);
+  const hasPublic = useMemo(() => publicOrgs.length > 0, [publicOrgs.length]);
 
   if (connecting) {
     return (
@@ -369,14 +440,16 @@ const OrgSelector: React.FC = () => {
 
         <Divider sx={{ mb: 3 }} />
 
-        {/* Cards */}
+        {/* ---------------------------------------
+            OWNED (Your Organizations)
+        ---------------------------------------- */}
         <Box mb={3}>
-          <Typography variant="h6" fontWeight={700}>Existing Organizations</Typography>
-          {loading ? (
+          <Typography variant="h6" fontWeight={700}>Your Organizations</Typography>
+          {loadingOwned ? (
             <Box display="flex" justifyContent="center" py={3}>
               <CircularProgress />
             </Box>
-          ) : hasData ? (
+          ) : hasOwned ? (
             <Grid container spacing={2}>
               {orgs.map((o) => (
                 <Grid item xs={12} sm={6} md={3} key={o.id}>
@@ -394,7 +467,7 @@ const OrgSelector: React.FC = () => {
                       {o.users && <Typography variant="caption" display="block">Users: {o.users}</Typography>}
                     </CardContent>
                     <CardActions>
-                      <Button size="small" onClick={() => navigate("/dashboard")}>Manage</Button>
+                      <Button size="small" onClick={() => navigate(`/dashboard/home/${o.canisterId}`)}>Manage</Button>
                       <Button size="small" onClick={() => { setTopUpOrg(o); setTopUpOpen(true); }}>Top Up</Button>
                       <Button size="small" onClick={() => togglePower(o)}>
                         {o.isStopped || o.status === "Archived" ? "Start" : "Stop"}
@@ -420,8 +493,8 @@ const OrgSelector: React.FC = () => {
           )}
         </Box>
 
-        {/* Table */}
-        <Paper variant="outlined">
+        {/* OWNED Table */}
+        <Paper variant="outlined" sx={{ mb: 5 }}>
           <Table size="small">
             <TableHead>
               <TableRow>
@@ -444,7 +517,7 @@ const OrgSelector: React.FC = () => {
                   <TableCell>{o.status}{o.isStopped ? " (Stopped)" : ""}</TableCell>
                   <TableCell>{o.publicVisibility ? "Public" : "Private"}</TableCell>
                   <TableCell align="right">
-                    <Button size="small" onClick={() => navigate("/dashboard")}>Manage</Button>
+                    <Button size="small" onClick={() => navigate(`/dashboard/home/${o.canisterId}`)}>Manage</Button>
                     <Button size="small" onClick={() => { setTopUpOrg(o); setTopUpOpen(true); }}>Top Up</Button>
                     <Button size="small" onClick={() => togglePower(o)}>
                       {o.isStopped || o.status === "Archived" ? "Start" : "Stop"}
@@ -466,6 +539,55 @@ const OrgSelector: React.FC = () => {
             </TableBody>
           </Table>
         </Paper>
+
+        {/* ---------------------------------------
+            PUBLIC (Visible to everyone)
+        ---------------------------------------- */}
+        <Box mb={2}>
+          <Typography variant="h6" fontWeight={700}>Public Organizations</Typography>
+          <Typography variant="body2" sx={{ color: "hsl(var(--muted-foreground))", mb: 2 }}>
+            Browse active organizations. Click <strong>Join</strong> to go to its dashboard.
+          </Typography>
+
+          {loadingPublic ? (
+            <Box display="flex" justifyContent="center" py={3}>
+              <CircularProgress />
+            </Box>
+          ) : hasPublic ? (
+            <Grid container spacing={2}>
+              {publicOrgs.map((o) => (
+                <Grid item xs={12} sm={6} md={3} key={o.id}>
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Typography variant="subtitle1" fontWeight={700}>{o.name}</Typography>
+                      <Typography variant="caption" color="text.secondary">{o.id}</Typography>
+                      <Box mt={1} display="flex" gap={1} flexWrap="wrap">
+                        <Chip size="small" label={o.plan || "Free"} />
+                        <Chip size="small" color="success" label={o.status} />
+                        <Chip size="small" label="Public" variant="outlined" />
+                      </Box>
+                    </CardContent>
+                    <CardActions>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        onClick={() => {
+                          // keep legacy compatibility
+                          localStorage.setItem("selectedOrgId", o.canisterId);
+                          navigate(`/dashboard/home/${o.canisterId}`);
+                        }}
+                      >
+                        Join
+                      </Button>
+                    </CardActions>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          ) : (
+            <Typography>No public organizations available right now.</Typography>
+          )}
+        </Box>
 
         {/* Create dialog */}
         <Dialog open={createOpen} onClose={() => setCreateOpen(false)} fullWidth maxWidth="sm">

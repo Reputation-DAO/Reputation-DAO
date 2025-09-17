@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect } from 'react';
 import { Principal } from '@dfinity/principal';
-import { useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -16,7 +16,7 @@ import {
   History,
   TrendingUp,
 } from '@mui/icons-material';
-import { getPlugActor } from '../components/canister/reputationDao';
+import { makeChildWithPlug } from '../components/canister/child';
 import { useRole } from '../contexts/RoleContext';
 
 import StatCard from '../components/Dashboard/statscard';
@@ -28,15 +28,17 @@ import TrustedAwardersCard from '../components/Dashboard/cards/TrustedAwarderCar
 
 import ProtectedPage from '../components/layout/ProtectedPage';
 
-
+/* -----------------------------------------
+   Local types (match your did)
+----------------------------------------- */
 interface Transaction {
-  id: number;
-  transactionType: { Award: null } | { Revoke: null };
+  id: number | bigint;
+  transactionType: { Award: null } | { Revoke: null } | { Decay: null };
   from: Principal;
   to: Principal;
   amount: number | bigint;
-  timestamp: number | bigint;
-  reason: string | null;
+  timestamp: number | bigint; // seconds
+  reason?: [] | [string];
 }
 
 interface Balance {
@@ -66,28 +68,10 @@ interface ChartData {
 }
 
 const Dashboard: React.FC = React.memo(() => {
-  const navigate = useNavigate();
-
-  
-  // Get role information from context
+  const { cid } = useParams<{ cid: string }>();
   const { userRole, userName, currentPrincipal } = useRole();
-  
-  // Get organization ID from localStorage
-  const [orgId, setOrgId] = useState<string | null>(null);
-  
-  useEffect(() => {
-    const storedOrgId = localStorage.getItem('selectedOrgId');
-    if (storedOrgId) {
-      setOrgId(storedOrgId);
-      // Trigger role refresh when organization changes
-      window.dispatchEvent(new CustomEvent('orgChanged'));
-    } else {
-      // Redirect to org selector if no org selected
-      navigate('/org-selector');
-    }
-  }, [navigate]);
-  
 
+  const [child, setChild] = useState<any>(null);
   const [data, setData] = useState<DashboardData>({
     transactions: [],
     balances: [],
@@ -102,9 +86,14 @@ const Dashboard: React.FC = React.memo(() => {
   const [refreshing, setRefreshing] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
 
+  /* -----------------------------------------
+     Helpers
+  ----------------------------------------- */
+  const toNum = (v: number | bigint) => (typeof v === 'bigint' ? Number(v) : v);
+
   const formatTime = (timestamp: number | bigint): string => {
     const now = Date.now() / 1000;
-    const ts = typeof timestamp === 'bigint' ? Number(timestamp) : timestamp;
+    const ts = toNum(timestamp);
     const diff = now - ts;
     if (diff < 60) return 'just now';
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
@@ -121,13 +110,13 @@ const Dashboard: React.FC = React.memo(() => {
   };
 
   const processChartData = (transactions: Transaction[]): ChartData[] => {
-    const last7 = Array.from({ length: 7 }, (_, i) => {
+    const last7ISO = Array.from({ length: 7 }, (_, i) => {
       const d = new Date();
       d.setDate(d.getDate() - (6 - i));
       return d.toISOString().split('T')[0];
     });
 
-    const daily = last7.map(date => ({
+    const daily = last7ISO.map(date => ({
       date: new Date(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
       awards: 0,
       revokes: 0,
@@ -135,16 +124,17 @@ const Dashboard: React.FC = React.memo(() => {
     }));
 
     transactions.forEach(tx => {
-      const txDate = new Date((typeof tx.timestamp === 'bigint' ? Number(tx.timestamp) : tx.timestamp) * 1000);
-      const txDateStr = txDate.toISOString().split('T')[0];
-      const idx = last7.indexOf(txDateStr);
+      const txDate = new Date(toNum(tx.timestamp) * 1000).toISOString().split('T')[0];
+      const idx = last7ISO.indexOf(txDate);
       if (idx !== -1) {
-        const amt = typeof tx.amount === 'bigint' ? Number(tx.amount) : tx.amount;
+        const amt = toNum(tx.amount);
         if ('Award' in tx.transactionType) {
           daily[idx].awards += amt;
           daily[idx].net += amt;
-        } else {
+        } else if ('Revoke' in tx.transactionType) {
           daily[idx].revokes += amt;
+          daily[idx].net -= amt;
+        } else if ('Decay' in tx.transactionType) {
           daily[idx].net -= amt;
         }
       }
@@ -153,60 +143,56 @@ const Dashboard: React.FC = React.memo(() => {
     return daily;
   };
 
+  /* -----------------------------------------
+     Build child actor on :cid
+  ----------------------------------------- */
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!cid) throw new Error('Missing :cid in route');
+        setLoading(true);
+        setError(null);
+        const actor = await makeChildWithPlug({ canisterId: cid, host: 'https://icp-api.io' });
+        setChild(actor);
+      } catch (e: any) {
+        setError(e?.message || 'Failed to connect to child canister');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [cid]);
+
+  /* -----------------------------------------
+     Load dashboard data from child
+  ----------------------------------------- */
   const loadDashboardData = async () => {
-
-    if (isLoadingData || !orgId) return; // Prevent multiple simultaneous loads and ensure orgId exists
-    
-
+    if (isLoadingData || !child) return;
     try {
       setIsLoadingData(true);
       setError(null);
-      const actor = await getPlugActor();
-      if (!actor) throw new Error('Failed to connect to blockchain');
 
-
-      // Simply verify the organization exists - don't restrict access
-      // The role-based UI will handle what data to show based on user permissions
-      try {
-        const orgCheckResult = await actor.getTransactionCount(orgId);
-        const orgExists = Array.isArray(orgCheckResult) ? orgCheckResult[0] !== null : orgCheckResult !== null;
-        
-        if (!orgExists) {
-          throw new Error('Organization does not exist');
-        }
-      } catch (error) {
-        console.warn('Organization verification failed:', error);
-        throw new Error('Access denied: Organization does not exist or is not accessible');
-      }
-
-      // Fetch all data in parallel with orgId parameter
-      const [
-        transactionsResult,
-        transactionCountResult,
-        awardersResult,
-      ] = await Promise.all([
-        actor.getTransactionHistory(orgId),
-        actor.getTransactionCount(orgId),
-        actor.getTrustedAwarders(orgId),
+      // Parallel fetches from the child (no orgId param needed)
+      const [transactionsResult, transactionCountResult, awardersResult] = await Promise.all([
+        child.getTransactionHistory(),
+        child.getTransactionCount(),
+        child.getTrustedAwarders(),
       ]);
 
-      // Handle optional array results from Motoko
-      const transactions = Array.isArray(transactionsResult) ? transactionsResult[0] || [] : transactionsResult || [];
-      const transactionCount = Array.isArray(transactionCountResult) ? transactionCountResult[0] || 0 : transactionCountResult || 0;
-      const awarders = Array.isArray(awardersResult) ? awardersResult[0] || [] : awardersResult || [];
+      const transactions: Transaction[] = transactionsResult ?? [];
+      const transactionCount: number = Number(transactionCountResult ?? 0);
+      const awarders: Awarder[] = awardersResult ?? [];
 
-      // Get balances by fetching transaction history and calculating
-
+      // Balances from tx history
       const balanceMap = new Map<string, number>();
-      transactions.forEach((tx: any) => {
+      for (const tx of transactions) {
         const toKey = tx.to.toString();
-        const amt = typeof tx.amount === 'bigint' ? Number(tx.amount) : Number(tx.amount);
+        const amt = toNum(tx.amount);
         if ('Award' in tx.transactionType) {
           balanceMap.set(toKey, (balanceMap.get(toKey) || 0) + amt);
-        } else {
+        } else if ('Revoke' in tx.transactionType || 'Decay' in tx.transactionType) {
           balanceMap.set(toKey, (balanceMap.get(toKey) || 0) - amt);
         }
-      });
+      }
 
       const balances = Array.from(balanceMap.entries())
         .map(([p, bal]) => ({ principal: Principal.fromText(p), balance: bal }))
@@ -214,53 +200,43 @@ const Dashboard: React.FC = React.memo(() => {
         .sort((a, b) => b.balance - a.balance)
         .slice(0, 10);
 
-      const currentUser = currentPrincipal?.toString();
-      let userReputation = 0;
-      let userTransactions: Transaction[] = [];
-
-      if (currentUser) {
-        userReputation = balanceMap.get(currentUser) || 0;
-        userTransactions = transactions.filter((tx: any) =>
-          tx.to.toString() === currentUser || tx.from.toString() === currentUser
-        );
-      }
+      const me = currentPrincipal?.toString();
+      const userReputation = me ? balanceMap.get(me) || 0 : 0;
+      const userTransactions = me
+        ? transactions.filter(tx => tx.to.toString() === me || tx.from.toString() === me)
+        : [];
 
       setData({
         transactions: transactions.slice(0, 10),
         balances,
         awarders,
-        transactionCount: Number(transactionCount),
+        transactionCount,
         userReputation,
         userTransactions: userTransactions.slice(0, 10),
       });
 
       const chartTx = userRole === 'User' ? userTransactions : transactions;
       setChartData(processChartData(chartTx));
-    } catch (err) {
-      console.error(err);
-      setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
+    } catch (e: any) {
+      console.error(e);
+      setError(e?.message || 'Failed to load dashboard data');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
       setIsLoadingData(false);
+      setRefreshing(false);
     }
   };
 
-
-  // Load data on component mount and when orgId changes
+  // Initial + on-actor ready
   useEffect(() => {
-    if (orgId) {
-      loadDashboardData();
-    }
-  }, [orgId]); // Run when orgId is set
+    if (child) loadDashboardData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [child]);
 
-  // Refresh data
   const handleRefresh = () => {
-    if (isLoadingData) return; // Prevent refresh while loading
+    if (isLoadingData) return;
     setRefreshing(true);
     loadDashboardData();
   };
-
 
   if (loading) {
     return (
@@ -272,90 +248,87 @@ const Dashboard: React.FC = React.memo(() => {
 
   return (
     <Box
+      sx={{
+        minHeight: '100vh',
+        px: { xs: 2, md: 3 },
+        py: { xs: 2, md: 3 },
+        bgcolor: 'hsl(var(--background))',
+      }}
+    >
+      {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 
-  sx={{
-    minHeight: '100vh',
-    px: { xs: 2, md: 3 },
-    py: { xs: 2, md: 3 },
-    bgcolor: 'hsl(var(--background))',
-  }}
->
-  {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+      <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', lg: 'row' } }}>
+        {/* Main */}
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
+          {/* Stats + Welcome */}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: '1fr',
+                sm: userRole === 'User' ? '1fr 1fr 1fr' : '1fr 1fr',
+              },
+              gap: 2.5,
+            }}
+          >
+            {/* Welcome */}
+            <Box sx={{ gridColumn: '1 / -1', mb: 2 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Typography
+                  variant="h6"
+                  sx={{ fontWeight: 600, fontSize: { xs: '1.5rem', md: '2rem' } }}
+                >
+                  Welcome, {userName || 'User'}
+                </Typography>
+                <IconButton onClick={handleRefresh} disabled={refreshing} sx={{ color: 'hsl(var(--primary))' }}>
+                  {refreshing ? <CircularProgress size={20} /> : <Refresh />}
+                </IconButton>
+              </Box>
+              <Typography sx={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.875rem' }}>
+                Track your community&apos;s reputation and activity
+              </Typography>
+            </Box>
 
-
-  <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', lg: 'row' } }}>
-    {/* Main */}
-    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
-      {/* Stats + Welcome */}
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: {
-            xs: '1fr',
-            sm: userRole === 'User' ? '1fr 1fr 1fr' : '1fr 1fr',
-          },
-          gap: 2.5,
-        }}
-      >
-        {/* 👇 Full-width Welcome */}
-        <Box sx={{ gridColumn: '1 / -1', mb: 2 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-            <Typography
-              variant="h6"
-              sx={{ fontWeight: 600, fontSize: { xs: '1.5rem', md: '2rem' } }}
-            >
-              Welcome, {userName || 'User'}
-            </Typography>
-            <IconButton onClick={loadDashboardData} disabled={refreshing} sx={{ color: 'hsl(var(--primary))' }}>
-              {refreshing ? <CircularProgress size={20} /> : <Refresh />}
-            </IconButton>
+            {/* Stat Cards */}
+            {userRole === 'User' && (
+              <StatCard title="My Reputation" value={data.userReputation} statusLabel="Current Score" />
+            )}
+            <StatCard
+              title="Total Transactions"
+              value={data.transactionCount}
+              statusLabel="All time activity"
+              titleIcon={<History sx={{ color: 'hsl(var(--primary))', fontSize: 20 }} />}
+              statusIcon={<TrendingUp sx={{ color: 'hsl(var(--success))', fontSize: 16 }} />}
+            />
+            <StatCard
+              title="Active Members"
+              value={data.balances.length}
+              statusLabel="With reputation"
+              titleIcon={<Users sx={{ color: 'hsl(var(--primary))', fontSize: 20 }} />}
+              statusIcon={<ArrowUpRight sx={{ color: 'hsl(var(--success))', fontSize: 16 }} />}
+            />
           </Box>
-          <Typography sx={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.875rem' }}>
-            Track your community's reputation and activity
-          </Typography>
+
+          {/* CTA */}
+          <SystemFeaturesCard />
+
+          {/* Activity + Chart */}
+          <ActivityCard
+            userRole={userRole}
+            data={data}
+            getUserDisplayName={getUserDisplayName}
+            formatTime={formatTime}
+          />
+          <ActivityChartCard userRole={userRole} chartData={chartData} />
         </Box>
 
-        {/* Stat Cards */}
-        {userRole === 'User' && (
-          <StatCard title="My Reputation" value={data.userReputation} statusLabel="Current Score" />
-        )}
-        <StatCard
-          title="Total Transactions"
-          value={data.transactionCount}
-          statusLabel="All time activity"
-          titleIcon={<History sx={{ color: 'hsl(var(--primary))', fontSize: 20 }} />}
-          statusIcon={<TrendingUp sx={{ color: 'hsl(var(--success))', fontSize: 16 }} />}
-        />
-        <StatCard
-          title="Active Members"
-          value={data.balances.length}
-          statusLabel="With reputation"
-          titleIcon={<Users sx={{ color: 'hsl(var(--primary))', fontSize: 20 }} />}
-          statusIcon={<ArrowUpRight sx={{ color: 'hsl(var(--success))', fontSize: 16 }} />}
-        />
+        {/* Sidebar */}
+        <Box sx={{ width: { lg: 300 }, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <TopMembersCard balances={data.balances} getUserDisplayName={getUserDisplayName} />
+          <TrustedAwardersCard awarders={data.awarders} />
+        </Box>
       </Box>
-
-      {/* CTA */}
-      <SystemFeaturesCard />
-
-      {/* Activity + Chart */}
-      <ActivityCard
-        userRole={userRole}
-        data={data}
-        getUserDisplayName={getUserDisplayName}
-        formatTime={formatTime}
-      />
-      <ActivityChartCard userRole={userRole} chartData={chartData} />
     </Box>
-
-    {/* Sidebar */}
-    <Box sx={{ width: { lg: 300 }, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <TopMembersCard balances={data.balances} getUserDisplayName={getUserDisplayName} />
-      <TrustedAwardersCard awarders={data.awarders} />
-    </Box>
-  </Box>
-</Box>
-
   );
 });
 

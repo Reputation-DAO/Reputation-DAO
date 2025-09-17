@@ -18,43 +18,43 @@ export interface NavItem {
 export const navItems: NavItem[] = [
   { 
     label: 'Dashboard', 
-    path: '/dashboard', 
+    path: '/dashboard/home', 
     icon: <DashboardIcon />, 
     allowedRoles: ['Admin', 'Awarder', 'User'] 
   },
   { 
     label: 'Decay System', 
-    path: '/decay', 
+    path: '/dashboard/decay', 
     icon: <TrendingDownIcon />, 
     allowedRoles: ['Admin', 'Awarder', 'User'] 
   },
   { 
     label: 'Award Rep', 
-    path: '/award', 
+    path: '/dashboard/award', 
     icon: <EmojiEventsIcon />, 
     allowedRoles: ['Admin', 'Awarder'] 
   },
   { 
     label: 'Revoke Rep', 
-    path: '/revoke', 
+    path: '/dashboard/revoke', 
     icon: <RemoveCircleIcon />, 
     allowedRoles: ['Admin'] 
   },
   { 
     label: 'Manage Awarders', 
-    path: '/awarders', 
+    path: '/dashboard/awarders', 
     icon: <GroupIcon />, 
     allowedRoles: ['Admin'] 
   },
   { 
     label: 'View Balances', 
-    path: '/balances', 
+    path: '/dashboard/balances', 
     icon: <AccountBalanceWalletIcon />, 
     allowedRoles: ['Admin', 'Awarder', 'User'] 
   },
   { 
     label: 'Transaction Log', 
-    path: '/transactions', 
+    path: '/dashboard/transactions', 
     icon: <HistoryIcon />, 
     allowedRoles: ['Admin', 'Awarder', 'User'] 
   },

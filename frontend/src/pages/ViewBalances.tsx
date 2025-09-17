@@ -1,4 +1,6 @@
-import React, { useState, useEffect} from 'react';
+// @ts-nocheck
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import ProtectedPage from '../components/layout/ProtectedPage';
 import { Principal } from '@dfinity/principal';
 import {
@@ -8,12 +10,11 @@ import {
   Snackbar,
   Chip,
 } from '@mui/material';
-import {
-  AccountBalanceWallet,
-} from '@mui/icons-material';
-import { getPlugActor } from '../components/canister/reputationDao';
-import UserBalanceSearchCard from '../components/Dashboard/ViewBalances/BalanceCard';
+import { AccountBalanceWallet } from '@mui/icons-material';
 
+import { makeChildWithPlug } from '../components/canister/child';
+
+import UserBalanceSearchCard from '../components/Dashboard/ViewBalances/BalanceCard';
 import OverviewCard from '../components/Dashboard/ViewBalances/statscard';
 import TopUsersCard from '../components/Dashboard/ViewBalances/TopUser';
 
@@ -34,194 +35,165 @@ interface BackendTransaction {
   from: Principal;
   to: Principal;
   amount: bigint;
-  timestamp: bigint;
+  timestamp: bigint; // seconds
   reason: [] | [string];
 }
 
 const ViewBalances: React.FC = () => {
+  const { cid } = useParams<{ cid: string }>();
+
   const searchTerm = '';
+  const [child, setChild] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [userBalances, setUserBalances] = useState<UserBalance[]>([]);
-  const [orgId, setOrgId] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
     severity: 'success' | 'error' | 'warning' | 'info';
   }>({ open: false, message: '', severity: 'success' });
 
-  // Get orgId from localStorage
+  // build child actor from :cid
   useEffect(() => {
-    const storedOrgId = localStorage.getItem('selectedOrgId');
-    if (storedOrgId) {
-      setOrgId(storedOrgId);
-    }
-  }, []);
-
-  // Load balances when orgId is available
-  useEffect(() => {
-    console.log('ViewBalances useEffect triggered with orgId:', orgId);
-    if (orgId) {
-      console.log('Loading balances for orgId:', orgId);
-      loadAllBalances();
-    }
-  }, [orgId]);
-
-  // Real function to fetch balance from blockchain
-  
+    (async () => {
+      try {
+        if (!cid) throw new Error('Missing :cid in route');
+        const actor = await makeChildWithPlug({ canisterId: cid, host: 'https://icp-api.io' });
+        setChild(actor);
+      } catch (e: any) {
+        setSnackbar({
+          open: true,
+          message: e?.message || 'Failed to connect to org canister',
+          severity: 'error',
+        });
+      }
+    })();
+  }, [cid]);
 
   // Load all balances from transaction history
   const loadAllBalances = async () => {
-    if (!orgId) return;
-    
+    if (!child) return;
+
     try {
       setRefreshing(true);
 
-      const plugActor = await getPlugActor();
-      if (!plugActor) {
-        console.log('No actor available');
-        return;
-      }
+      const transactions: BackendTransaction[] = await child.getTransactionHistory();
+      const txs = Array.isArray(transactions) ? transactions : [];
 
-      console.log('Loading transaction history to calculate balances for orgId:', orgId);
-      const transactions = await plugActor.getTransactionHistory(orgId) as BackendTransaction[];
-      console.log('Raw transactions for balance calculation:', transactions);
-
-      // Check if transactions is valid
-      if (!transactions || !Array.isArray(transactions)) {
-        console.log('No valid transactions array received');
-        setUserBalances([]);
-        return;
-      }
-
-      // Calculate balances from transaction history
+      // Compute balances + last activity
       const balanceMap = new Map<string, number>();
-      const activityMap = new Map<string, number>();
+      const activityMap = new Map<string, number>(); // ms
 
-      transactions.forEach(tx => {
-        const fromStr = tx.from?.toString() || '';
-        const toStr = tx.to?.toString() || '';
+      txs.forEach((tx) => {
+        const fromStr = tx.from?.toString?.() || '';
+        const toStr = tx.to?.toString?.() || '';
         const amount = Number(tx.amount || 0);
-        const timestamp = Number(tx.timestamp || 0) / 1000000; // Convert to milliseconds
+        const tsMs = Number(tx.timestamp || 0) * 1000; // seconds -> ms
 
-        // Skip if principals are invalid
-        if (!fromStr || !toStr) {
-          console.warn('Skipping transaction with invalid principals:', tx);
-          return;
+        if (fromStr) {
+          const prev = activityMap.get(fromStr) ?? 0;
+          if (tsMs > prev) activityMap.set(fromStr, tsMs);
+        }
+        if (toStr) {
+          const prev = activityMap.get(toStr) ?? 0;
+          if (tsMs > prev) activityMap.set(toStr, tsMs);
         }
 
-        // Track latest activity
-        if (!activityMap.has(fromStr) || activityMap.get(fromStr)! < timestamp) {
-          activityMap.set(fromStr, timestamp);
-        }
-        if (!activityMap.has(toStr) || activityMap.get(toStr)! < timestamp) {
-          activityMap.set(toStr, timestamp);
-        }
+        if (!toStr) return;
 
-        // Calculate balances
         if ('Award' in tx.transactionType) {
-          // Award: to user gets reputation
-          const currentBalance = balanceMap.get(toStr) || 0;
-          balanceMap.set(toStr, currentBalance + amount);
-        } else {
-          // Revoke: to user loses reputation (from is the admin/awarder doing the revoke)
-          const currentBalance = balanceMap.get(toStr) || 0;
-          balanceMap.set(toStr, Math.max(0, currentBalance - amount));
+          balanceMap.set(toStr, (balanceMap.get(toStr) || 0) + amount);
+        } else if ('Revoke' in tx.transactionType) {
+          balanceMap.set(toStr, Math.max(0, (balanceMap.get(toStr) || 0) - amount));
+        } else if ('Decay' in tx.transactionType) {
+          // decay tx have from == to; subtract from the user
+          balanceMap.set(toStr, Math.max(0, (balanceMap.get(toStr) || 0) - amount));
         }
       });
 
-      // Convert to UserBalance array
-      const userBalancesList: UserBalance[] = Array.from(balanceMap.entries())
-        .map(([address, reputation], index) => ({
-          id: (index + 1).toString(),
-          address,
-          name: `User ${address.slice(0, 8)}`,
-          reputation,
-          rank: 0, // Will be set after sorting
-          change: '+0', // Could calculate from recent transactions
-          lastActivity: activityMap.has(address) 
-            ? new Date(activityMap.get(address)!).toLocaleDateString()
-            : 'Never',
-          status: (activityMap.has(address) && 
-                   Date.now() - activityMap.get(address)! < 7 * 24 * 60 * 60 * 1000) 
-                   ? 'active' as const 
-                   : 'inactive' as const
-        }))
-        .sort((a, b) => b.reputation - a.reputation) // Sort by reputation descending
-        .map((user, index) => ({ ...user, rank: index + 1 })); // Set ranks
+      const list: UserBalance[] = Array.from(balanceMap.entries())
+        .map(([address, reputation], idx) => {
+          const last = activityMap.get(address);
+          const lastActivity = last ? new Date(last).toLocaleDateString() : 'Never';
+          const active = last ? (Date.now() - last) < 7 * 24 * 60 * 60 * 1000 : false;
 
-      console.log('Processed user balances:', userBalancesList);
-      setUserBalances(userBalancesList);
+          return {
+            id: String(idx + 1),
+            address,
+            name: `User ${address.slice(0, 8)}`,
+            reputation,
+            rank: 0, // assigned after sort
+            change: '+0', // placeholder (compute deltas if needed)
+            lastActivity,
+            status: active ? 'active' : 'inactive',
+          };
+        })
+        .sort((a, b) => b.reputation - a.reputation)
+        .map((u, i) => ({ ...u, rank: i + 1 }));
 
-    } catch (error) {
+      setUserBalances(list);
+    } catch (error: any) {
       console.error('Error loading balances:', error);
       setSnackbar({
         open: true,
-        message: 'Failed to load balances: ' + (error as Error).message,
-        severity: 'error'
+        message: 'Failed to load balances: ' + (error?.message || 'unknown error'),
+        severity: 'error',
       });
     } finally {
       setRefreshing(false);
     }
   };
 
-  // Load balances on component mount
+  // load whenever the child actor is ready
   useEffect(() => {
-    loadAllBalances();
-  }, []);
+    if (child) loadAllBalances();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [child]);
 
- 
+  const handleRefresh = () => loadAllBalances();
+  const handleCloseSnackbar = () => setSnackbar((s) => ({ ...s, open: false }));
 
-  const handleRefresh = () => {
-    loadAllBalances();
-  };
-
-  const handleCloseSnackbar = () => {
-    setSnackbar(prev => ({ ...prev, open: false }));
-  };
-
-  const getStatusColor = (status: string) => {
-    return status === 'active' ? 'success' : 'default';
-  };
-
- const getChangeColor = (change: string | number) => {
-    const strChange = typeof change === 'number' ? change.toString() : change;
-    if (strChange.startsWith('+')) return 'hsl(var(--primary))';
-    if (strChange.startsWith('-')) return 'hsl(var(--destructive))';
+  const getStatusColor = (status: string) => (status === 'active' ? 'success' : 'default');
+  const getChangeColor = (change: string | number) => {
+    const s = typeof change === 'number' ? `${change}` : change;
+    if (s.startsWith('+')) return 'hsl(var(--primary))';
+    if (s.startsWith('-')) return 'hsl(var(--destructive))';
     return 'hsl(var(--muted-foreground))';
   };
 
-
-  const filteredBalances = userBalances.filter(user =>
-    user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.address.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredBalances = userBalances.filter(
+    (u) =>
+      u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.address.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const totalReputation = userBalances.reduce((sum, user) => sum + user.reputation, 0);
-  const activeUsers = userBalances.filter(user => user.status === 'active').length;
+  const totalReputation = userBalances.reduce((sum, u) => sum + u.reputation, 0);
+  const activeUsers = userBalances.filter((u) => u.status === 'active').length;
 
   return (
-    <Box sx={{ 
-      p: 3, 
-      backgroundColor: 'hsl(var(--background))',
-      minHeight: '100vh'
-    }}>
-      <Typography 
-        variant="h4" 
-        sx={{ 
-          mb: 3, 
+    <Box
+      sx={{
+        p: 3,
+        backgroundColor: 'hsl(var(--background))',
+        minHeight: '100vh',
+      }}
+    >
+      <Typography
+        variant="h4"
+        sx={{
+          mb: 3,
           color: 'hsl(var(--foreground))',
           fontWeight: 600,
           display: 'flex',
           alignItems: 'center',
-          gap: 2
+          gap: 2,
         }}
       >
         <AccountBalanceWallet sx={{ color: 'hsl(var(--primary))' }} />
         View Balances
-        {orgId && (
-          <Chip 
-            label={`Org: ${orgId}`} 
-            size="small" 
+        {cid && (
+          <Chip
+            label={`Org: ${cid}`}
+            size="small"
             sx={{ ml: 2, bgcolor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }}
           />
         )}
@@ -230,17 +202,15 @@ const ViewBalances: React.FC = () => {
       <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', lg: 'row' } }}>
         {/* Search Section */}
         <Box sx={{ flex: 1 }}>
-        <UserBalanceSearchCard
-          fetchBalance={async (principalString: string) => {
-            if (!orgId) throw new Error('Org ID missing');
-            const principal = Principal.fromText(principalString);
-            const plugActor = await getPlugActor();
-            if (!plugActor) throw new Error('Actor not connected');
-            const balance = await plugActor.getBalance(orgId, principal);
-            return Number(balance);
-          }}
-        />
-      </Box>
+          <UserBalanceSearchCard
+            fetchBalance={async (principalString: string) => {
+              if (!child) throw new Error('Not connected to canister');
+              const principal = Principal.fromText(principalString.trim());
+              const bal = await child.getBalance(principal);
+              return Number(bal);
+            }}
+          />
+        </Box>
 
         {/* Statistics */}
         <OverviewCard
@@ -254,21 +224,13 @@ const ViewBalances: React.FC = () => {
 
       {/* User Balances Table */}
       <TopUsersCard
-      filteredBalances={filteredBalances}
-      getChangeColor={getChangeColor}
-      getStatusColor={getStatusColor}
-    />
+        filteredBalances={filteredBalances}
+        getChangeColor={getChangeColor}
+        getStatusColor={getStatusColor}
+      />
 
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={handleCloseSnackbar}
-      >
-        <Alert 
-          onClose={handleCloseSnackbar} 
-          severity={snackbar.severity}
-          sx={{ width: '100%' }}
-        >
+      <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={handleCloseSnackbar}>
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
           {snackbar.message}
         </Alert>
       </Snackbar>
@@ -276,12 +238,10 @@ const ViewBalances: React.FC = () => {
   );
 };
 
-const ViewBalancesWithProtection: React.FC = () => {
-  return (
-    <ProtectedPage>
-      <ViewBalances />
-    </ProtectedPage>
-  );
-};
+const ViewBalancesWithProtection: React.FC = () => (
+  <ProtectedPage>
+    <ViewBalances />
+  </ProtectedPage>
+);
 
 export default ViewBalancesWithProtection;
