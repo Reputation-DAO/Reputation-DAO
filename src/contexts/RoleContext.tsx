@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { Principal } from '@dfinity/principal';
-import { getPlugActor, getCurrentPrincipal } from '../components/canister/reputationDao';
+import { useAuth } from './AuthContext';
+import { actorService } from '../services/actorService';
 
 export type UserRole = 'Admin' | 'Awarder' | 'User' | 'Loading';
 
@@ -32,6 +33,7 @@ interface RoleProviderProps {
 }
 
 export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
+  const { isAuthenticated, principal, authMethod } = useAuth();
   const [currentPrincipal, setCurrentPrincipal] = useState<Principal | null>(null);
   const [userRole, setUserRole] = useState<UserRole>('Loading');
   const [userName, setUserName] = useState<string>('');
@@ -44,9 +46,18 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     setLoading(true);
 
     try {
-      // Get current principal
-      const principal = await getCurrentPrincipal();
-      console.log('👤 Current principal:', principal?.toString() || 'null');
+      // Check if user is authenticated
+      if (!isAuthenticated || !principal) {
+        console.log('❌ User not authenticated');
+        setCurrentPrincipal(null);
+        setUserRole('User');
+        setUserName('');
+        setLoading(false);
+        return;
+      }
+
+      console.log('👤 Current principal:', principal.toString());
+      setCurrentPrincipal(principal);
       
       if (!principal) {
         console.log('❌ No principal found, setting as User');
@@ -70,9 +81,12 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
 
       console.log('🏢 Selected organization:', selectedOrgId);
 
+      // Set the auth method in actor service
+      actorService.setAuthMethod(authMethod);
+
       // Get actor to check user's role in the selected organization
       console.log('🔗 Getting actor to check organization role...');
-      const actor = await getPlugActor();
+      const actor = await actorService.getActor();
       if (!actor) {
         console.log('❌ Failed to connect to canister, setting as User');
         setUserRole('User');
@@ -112,10 +126,10 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     }
   };
 
-  // Initial role determination
+  // Initial role determination and when authentication changes
   useEffect(() => {
     determineUserRole();
-  }, []);
+  }, [isAuthenticated, principal, authMethod]);
 
   // Listen for organization changes in localStorage
   useEffect(() => {

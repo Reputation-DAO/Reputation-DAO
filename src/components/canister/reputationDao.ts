@@ -3,6 +3,7 @@ import type { _SERVICE } from '../../declarations/reputation_dao/reputation_dao.
 import { Principal } from '@dfinity/principal';
 import { Actor, HttpAgent } from '@dfinity/agent';
 import { AuthClient } from '@dfinity/auth-client';
+import { actorService } from '../../services/actorService';
 
 // Routes where Plug should be completely blocked
 const RESTRICTED_ROUTES = ['/', '/docs', '/blog', '/community'];
@@ -27,7 +28,7 @@ const getSelectedOrgId = (): string => {
 };
 
 // Canister ID for the reputation DAO
-const CANISTER_ID = "zwbmv-jyaaa-aaaab-qacaa-cai";
+const CANISTER_ID = "5oxzc-3qaaa-aaaab-qaczq-cai";
 
 // === DECAY SYSTEM TYPES ===
 export type TransactionType = 'Award' | 'Revoke' | 'Decay';
@@ -76,7 +77,7 @@ export interface Awarder {
 }
 
 //modify this canisterID based on where the dfx playground hosts your backend
-const canisterId = 'zwbmv-jyaaa-aaaab-qacaa-cai';
+const canisterId = '5oxzc-3qaaa-aaaab-qaczq-cai';
 
 export const getPlugActor = async () => {
   // Block Plug access on restricted routes
@@ -90,6 +91,8 @@ export const getPlugActor = async () => {
 
   try {
     console.log('🔌 Checking Plug connection status...');
+    console.log('🔧 Plug Actor - Canister ID:', canisterId);
+    console.log('🔧 Plug Actor - Network: Playground');
     
     // 1. Check if already connected before requesting new connection
     const isConnected = await window.ic.plug.isConnected();
@@ -97,8 +100,11 @@ export const getPlugActor = async () => {
     
     if (!isConnected) {
       console.log('🔌 Not connected, requesting new connection...');
+      console.log('🔌 Whitelist canister ID:', canisterId);
+      
       const connected = await window.ic.plug.requestConnect({
         whitelist: [canisterId],
+        host: 'https://ic0.app' // Explicitly set the host for playground
       });
 
       if (!connected) {
@@ -113,6 +119,7 @@ export const getPlugActor = async () => {
     const agent = window.ic.plug.agent;
     if (!agent) {
       console.log('🌐 Creating new agent...');
+      console.log('🌐 Agent host: https://ic0.app');
       await window.ic.plug.createAgent({
         host: 'https://ic0.app', // IC mainnet host for playground canisters
       });
@@ -122,6 +129,7 @@ export const getPlugActor = async () => {
     }
 
     // 3. Return the actor
+    console.log('🎭 Creating actor with canister ID:', canisterId);
     const actor = (await window.ic.plug.createActor({
       canisterId,
       interfaceFactory: idlFactory,
@@ -134,10 +142,16 @@ export const getPlugActor = async () => {
       // Try a simple canister call to test connectivity
       const orgId = localStorage.getItem('selectedOrgId') || 'default';
       console.log('🔍 Testing connection with orgId:', orgId);
+      console.log('🔍 Testing connection to canister:', canisterId);
       const transactionCount = await actor.getTransactionCount(orgId);
       console.log('🔄 Connection test successful. Transaction count:', transactionCount);
     } catch (testError: any) {
       console.warn('⚠️ Connection test failed:', testError);
+      console.warn('⚠️ Test error details:', {
+        message: testError.message,
+        name: testError.name,
+        stack: testError.stack
+      });
       // For playground network, connection test failures are often due to network latency
       // Don't throw here, let the caller handle it - the actor might still work
       if (testError.message?.includes('Reply not received')) {
@@ -148,6 +162,12 @@ export const getPlugActor = async () => {
     return actor;
   } catch (error: any) {
     console.error('❌ Error creating Plug actor:', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      name: error.name,
+      stack: error.stack,
+      canisterId: canisterId
+    });
     throw new Error(`Failed to connect to canister: ${error.message || 'Unknown error'}`);
   }
 };
@@ -865,4 +885,12 @@ export const getOrgStats = async (orgId: string): Promise<{
     console.error('❌ getOrgStats: Error fetching org stats:', error);
     return null;
   }
+};
+
+/**
+ * Get unified actor that works with both Plug and Internet Identity
+ * This function automatically uses the correct authentication method
+ */
+export const getUnifiedActor = async (): Promise<_SERVICE> => {
+  return await actorService.getActor();
 };

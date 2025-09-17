@@ -1,0 +1,31 @@
+{
+  "replica_rev": "f195ba756bc3bf170a2888699e5e74101fdac6ba",
+  "effective_canister_id": "uqqxf-5h777-77774-qaaaa-cai",
+  "type": "pocket_ic",
+  "config": {
+    "http_handler": {
+      "port": null,
+      "write_port_to": null
+    },
+    "state_manager": {
+      "state_root": "/Users/dinasmain/Desktop/Reputaion-DAO/.dfx/network/local/state/replicated_state"
+    },
+    "crypto": {
+      "crypto_root": "/Users/dinasmain/Desktop/Reputaion-DAO/.dfx/network/local/state/crypto_store"
+    },
+    "artifact_pool": {
+      "consensus_pool_path": "/Users/dinasmain/Desktop/Reputaion-DAO/.dfx/network/local/state/consensus_pool"
+    },
+    "subnet_type": "application",
+    "btc_adapter": {
+      "enabled": false,
+      "socket_path": null
+    },
+    "canister_http_adapter": {
+      "enabled": true,
+      "socket_path": null
+    },
+    "log_level": "error",
+    "artificial_delay": 600
+  }
+}

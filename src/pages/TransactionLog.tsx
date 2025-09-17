@@ -14,7 +14,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { parseTransactionType, parseTransactionTypeAlternative, getTransactionTypeIcon, getTransactionTypeBgClass, convertTimestampToDate, getTransactionTypeDescription, formatTransactionAmount } from "@/utils/transactionUtils";
+import { parseTransactionType, parseTransactionTypeAlternative, getTransactionTypeIcon, getTransactionTypeBgClass, convertTimestampToDate, getTransactionTypeDescription, formatTransactionAmount, extractReason } from "@/utils/transactionUtils";
 import {
   FileText,
   Search,
@@ -115,6 +115,7 @@ const TransactionLog = () => {
           });
         });
         
+
         // Convert backend transactions to UI format
         const uiTransactions: Transaction[] = userTransactions.map((tx, index) => {
           // Parse transaction type using enhanced parsing
@@ -132,7 +133,10 @@ const TransactionLog = () => {
           console.log(`🔍 Transaction ${index}: Final type = ${transactionType}`, {
             original: tx.transactionType,
             parsed: transactionType,
-            keys: tx.transactionType ? Object.keys(tx.transactionType) : 'no keys'
+            keys: tx.transactionType ? Object.keys(tx.transactionType) : 'no keys',
+            reason: tx.reason,
+            reasonType: typeof tx.reason,
+            reasonLength: tx.reason.length
           });
           
           return {
@@ -143,7 +147,7 @@ const TransactionLog = () => {
             fromPrincipal: tx.from.toString(),
             toUser: `User ${tx.to.toString().slice(0, 8)}`,
             toPrincipal: tx.to.toString(),
-            reason: tx.reason.length > 0 ? tx.reason[0] : "No reason provided",
+            reason: extractReason(tx.reason),
             category: "General", // Default category since backend doesn't have this
             timestamp: convertTimestampToDate(tx.timestamp),
             blockHeight: Math.floor(Math.random() * 1000000), // Placeholder

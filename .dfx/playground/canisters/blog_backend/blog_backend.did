@@ -1,0 +1,36 @@
+type PostStatus = 
+ variant {
+   Archived;
+   Draft;
+   Published;
+ };
+type Post = 
+ record {
+   author: Author;
+   category: text;
+   content: text;
+   date: nat;
+   id: nat;
+   image: text;
+   isEditorsPick: bool;
+   isFeatured: bool;
+   status: PostStatus;
+   title: text;
+   views: nat;
+ };
+type Author = 
+ record {
+   avatar: text;
+   name: text;
+ };
+service : {
+  createPost: (title: text, content: text, category: text, date: nat, author:
+   Author, image: text, isFeatured: bool, isEditorsPick: bool, status:
+   PostStatus) -> (Post);
+  deletePost: (id: nat) -> (bool);
+  getPostById: (id: nat) -> (opt Post) query;
+  getPosts: () -> (vec Post) query;
+  updatePost: (id: nat, title: text, content: text, category: text, date:
+   nat, author: Author, image: text, isFeatured: bool, isEditorsPick: 
+   bool, views: nat, status: PostStatus) -> (opt Post);
+}

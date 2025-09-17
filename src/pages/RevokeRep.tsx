@@ -15,7 +15,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 import { toast } from "sonner";
-import { parseTransactionType, convertTimestampToDate } from "@/utils/transactionUtils";
+import { parseTransactionType, convertTimestampToDate, extractReason } from "@/utils/transactionUtils";
 import {
   UserMinus,
   AlertTriangle,
@@ -130,7 +130,7 @@ const RevokeRep = () => {
             recipientAddress: tx.to.toString(),
             amount: Number(tx.amount),
             category: "General",
-            reason: tx.reason.length > 0 ? tx.reason[0] : "No reason provided",
+            reason: extractReason(tx.reason),
             timestamp: convertTimestampToDate(tx.timestamp),
             revokedBy: `User ${tx.from.toString().slice(0, 8)}`
           }));
@@ -232,7 +232,7 @@ const RevokeRep = () => {
           recipientAddress: tx.to.toString(),
           amount: Number(tx.amount),
           category: "General",
-          reason: tx.reason.length > 0 ? tx.reason[0] : "No reason provided",
+          reason: extractReason(tx.reason),
           timestamp: convertTimestampToDate(tx.timestamp),
           revokedBy: tx.from.toString()
         }));

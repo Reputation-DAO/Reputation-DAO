@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Wallet, Shield, Zap, ArrowRight, CheckCircle } from "lucide-react";
 import Navigation from "@/components/ui/navigation";
-import { usePlugConnection } from "../hooks/usePlugConnection";
+import { useAuth } from "../contexts/AuthContext";
 import { useRole } from "../contexts/RoleContext";
 
 const WalletOption = ({ icon: Icon, name, description, isRecommended, isConnected, onConnect, isLoading }: {
@@ -61,46 +61,47 @@ const WalletOption = ({ icon: Icon, name, description, isRecommended, isConnecte
 
 const Auth = () => {
   const navigate = useNavigate();
-  const { isConnected, connect, disconnect, isLoading, principal, checkConnection } = usePlugConnection();
+  const { 
+    isAuthenticated, 
+    authMethod, 
+    principal, 
+    isLoading, 
+    loginWithPlug, 
+    loginWithInternetIdentity, 
+    logout, 
+    checkConnection 
+  } = useAuth();
   const { userRole, loading: roleLoading } = useRole();
   const [isConnecting, setIsConnecting] = useState<string | null>(null);
   const [showConnected, setShowConnected] = useState(false);
 
-  // Check connection status on mount without triggering connection
+  // Check connection status on mount
   useEffect(() => {
     checkConnection();
   }, []);
 
   // Show connected state without auto-redirect
   useEffect(() => {
-    if (isConnected && principal && !roleLoading) {
+    if (isAuthenticated && principal && !roleLoading) {
       setShowConnected(true);
     }
-  }, [isConnected, principal, roleLoading]);
+  }, [isAuthenticated, principal, roleLoading]);
 
   const handleWalletConnect = async (walletType: string) => {
-    if (walletType === "plug") {
-      setIsConnecting(walletType);
-      try {
-        await connect();
-        // Connection success is handled by the useEffect above
-      } catch (error) {
-        console.error('Failed to connect Plug wallet:', error);
-        setIsConnecting(null);
+    setIsConnecting(walletType);
+    try {
+      if (walletType === "plug") {
+        await loginWithPlug();
+      } else if (walletType === "ii") {
+        await loginWithInternetIdentity();
+      } else {
+        throw new Error(`Unsupported wallet type: ${walletType}`);
       }
-    } else {
-      // Handle other wallet types (Internet Identity, etc.) here
-      setIsConnecting(walletType);
-      try {
-        // Simulate connection for now
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        console.log(`Connected with ${walletType}`);
-        // Will need to implement other wallet connections later
-      } catch (error) {
-        console.error(`Failed to connect ${walletType}:`, error);
-      } finally {
-        setIsConnecting(null);
-      }
+      // Connection success is handled by the useEffect above
+    } catch (error) {
+      console.error(`Failed to connect ${walletType}:`, error);
+    } finally {
+      setIsConnecting(null);
     }
   };
 
@@ -110,21 +111,22 @@ const Auth = () => {
       name: "Plug Wallet",
       description: "Connect with Plug wallet for Internet Computer",
       isRecommended: true,
-      isConnected: isConnected,
+      isConnected: isAuthenticated && authMethod === 'plug',
       onConnect: () => handleWalletConnect("plug")
     },
     {
       icon: Shield,
       name: "Internet Identity",
       description: "Secure authentication with Internet Identity",
-      isConnected: false, // Will implement II later
+      isRecommended: true,
+      isConnected: isAuthenticated && authMethod === 'internet-identity',
       onConnect: () => handleWalletConnect("ii")
     },
     {
       icon: Wallet,
       name: "Stoic Wallet",
-      description: "Connect with Stoic wallet",
-      isConnected: false, // Will implement later
+      description: "Connect with Stoic wallet (Coming Soon)",
+      isConnected: false,
       onConnect: () => handleWalletConnect("stoic")
     }
   ];
@@ -157,7 +159,7 @@ const Auth = () => {
           </div>
 
           {/* Connected Status - Show if already connected */}
-          {isConnected && principal && (
+          {isAuthenticated && principal && (
             <div className="max-w-2xl mx-auto mb-8">
               <Card className="glass-card p-6 bg-green-500/10 border-green-500/20">
                 <div className="flex items-center justify-between">
@@ -166,7 +168,9 @@ const Auth = () => {
                       <CheckCircle className="w-6 h-6 text-green-500" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-semibold text-foreground">Wallet Connected</h3>
+                      <h3 className="text-lg font-semibold text-foreground">
+                        {authMethod === 'plug' ? 'Plug Wallet' : 'Internet Identity'} Connected
+                      </h3>
                       <p className="text-sm text-muted-foreground font-mono">
                         {principal.toString().slice(0, 8)}...{principal.toString().slice(-8)}
                       </p>
@@ -175,7 +179,7 @@ const Auth = () => {
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
-                      onClick={disconnect}
+                      onClick={logout}
                       className="text-red-500 border-red-500/20 hover:bg-red-500/10"
                     >
                       Disconnect

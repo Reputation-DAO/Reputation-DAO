@@ -14,7 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 import { toast } from "sonner";
-import { parseTransactionType, convertTimestampToDate } from "@/utils/transactionUtils";
+import { parseTransactionType, convertTimestampToDate, extractReason } from "@/utils/transactionUtils";
 import { 
   Award, 
   Star, 
@@ -177,7 +177,7 @@ const AwardRep = () => {
             recipientAddress: tx.to.toString(),
             amount: Number(tx.amount),
             category: "General", // Backend doesn't store category, so default
-            reason: tx.reason.length > 0 ? tx.reason[0] : "No reason provided",
+            reason: extractReason(tx.reason),
             timestamp: convertTimestampToDate(tx.timestamp),
             awardedBy: `User ${tx.from.toString().slice(0, 8)}`
           }));

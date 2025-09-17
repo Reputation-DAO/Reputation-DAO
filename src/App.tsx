@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { RoleProvider } from "./contexts/RoleContext";
 import { RouteProvider } from "./contexts/RouteContext";
+import { AuthProvider } from "./contexts/AuthContext";
 import Home from "./pages/Home";
 import Docs from "./pages/Docs";
 import Blog from "./pages/Blog";
@@ -24,13 +25,14 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <RoleProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <RouteProvider>
-            <Routes>
+    <AuthProvider>
+      <RoleProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <RouteProvider>
+              <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/docs" element={<Docs />} />
               <Route path="/blog" element={<Blog />} />
@@ -46,11 +48,12 @@ const App = () => (
               <Route path="/decay-system" element={<DecaySystem />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
-            </Routes>
-          </RouteProvider>
-        </BrowserRouter>
-      </TooltipProvider>
-    </RoleProvider>
+              </Routes>
+            </RouteProvider>
+          </BrowserRouter>
+        </TooltipProvider>
+      </RoleProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 

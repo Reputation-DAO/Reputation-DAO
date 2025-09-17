@@ -1,0 +1,21 @@
+// Version: 1.0.0
+type Author__238995538 = {avatar : Text; name : Text};
+type PostStatus__287347080 = {#Archived; #Draft; #Published};
+type Post__848058508 =
+  {
+    author : Author__238995538;
+    category : Text;
+    content : Text;
+    date : Nat;
+    id : Nat;
+    image : Text;
+    isEditorsPick : Bool;
+    isFeatured : Bool;
+    status : PostStatus__287347080;
+    title : Text;
+    views : Nat
+  };
+actor {
+  stable var nextPostId : Nat;
+  stable var posts : [Post__848058508]
+};

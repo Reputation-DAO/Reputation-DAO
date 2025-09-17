@@ -1,8 +1,10 @@
 {
   "frontend": {
-    "ic": "37le5-2yaaa-aaaam-qdwhq-cai"
+    "ic": "37le5-2yaaa-aaaam-qdwhq-cai",
+    "playground": "2prnp-dqaaa-aaaab-qacjq-cai"
   },
   "reputation_dao": {
-    "ic": "owyeu-jiaaa-aaaam-qdvwq-cai"
+    "ic": "owyeu-jiaaa-aaaam-qdvwq-cai",
+    "playground": "5oxzc-3qaaa-aaaab-qaczq-cai"
   }
 }

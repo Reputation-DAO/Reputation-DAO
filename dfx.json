@@ -3,12 +3,12 @@
     "reputation_dao": {
       "main": "src/reputation_dao/main.mo",
       "type": "motoko",
-      "id": "owyeu-jiaaa-aaaam-qdvwq-cai"
+      "id": "5oxzc-3qaaa-aaaab-qaczq-cai"
     },
     "frontend": {
       "type": "assets",
       "source": ["dist"],
-      "id": "37le5-2yaaa-aaaam-qdwhq-cai"
+      "id": "2prnp-dqaaa-aaaab-qacjq-cai"
     }
   },
   "dfx": "0.27.0",

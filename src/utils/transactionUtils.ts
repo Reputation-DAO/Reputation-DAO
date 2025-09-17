@@ -249,3 +249,14 @@ export const getTransactionTypeIconName = (type: 'award' | 'revoke' | 'decay'): 
       return 'Circle';
   }
 };
+
+/**
+ * Extract reason from backend reason array
+ * Backend uses: [] | [string] format
+ */
+export const extractReason = (reasonArray: [] | [string]): string => {
+  if (reasonArray.length > 0 && reasonArray[0]) {
+    return reasonArray[0];
+  }
+  return "No reason provided";
+};

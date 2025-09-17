@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { parseTransactionTypeForUI, convertTimestampToDate } from "@/utils/transactionUtils";
+import { parseTransactionTypeForUI, convertTimestampToDate, extractReason } from "@/utils/transactionUtils";
 import { 
   Star, 
   Users, 
@@ -244,7 +244,7 @@ const Dashboard = () => {
               id: `activity-${index}`,
               type: txType,
               points: Number(tx.amount),
-              reason: tx.reason.length > 0 ? tx.reason[0] : 'No reason provided',
+              reason: extractReason(tx.reason),
               timestamp: convertTimestampToDate(tx.timestamp),
               from: tx.from.toString().slice(0, 8),
               to: tx.to.toString().slice(0, 8)

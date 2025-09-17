@@ -25,7 +25,7 @@ import {
   getOrgDecayAnalytics,
   configureOrgDecay
 } from "@/components/canister/reputationDao";
-import { parseTransactionType, convertTimestampToDate } from "@/utils/transactionUtils";
+import { parseTransactionType, convertTimestampToDate, extractReason } from "@/utils/transactionUtils";
 import {
   Timer,
   Settings,
@@ -128,7 +128,7 @@ const DecaySystem = () => {
               amountDecayed: Number(tx.amount),
               previousAmount: Number(tx.amount) + Math.floor(Math.random() * 100), // Estimate previous amount
               newAmount: Number(tx.amount),
-              reason: tx.reason.length > 0 ? tx.reason[0] : 'Decay applied',
+              reason: extractReason(tx.reason),
               timestamp: convertTimestampToDate(tx.timestamp)
             }));
             setRecentDecayEvents(decayEvents);
@@ -315,7 +315,7 @@ const DecaySystem = () => {
             amountDecayed: Number(tx.amount),
             previousAmount: Number(tx.amount) + Math.floor(Math.random() * 100),
             newAmount: Number(tx.amount),
-            reason: tx.reason.length > 0 ? tx.reason[0] : 'Decay applied',
+            reason: extractReason(tx.reason),
             timestamp: convertTimestampToDate(tx.timestamp)
           }));
           setRecentDecayEvents(decayEvents);
