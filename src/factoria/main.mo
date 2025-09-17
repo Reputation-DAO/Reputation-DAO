@@ -129,9 +129,30 @@ actor ReputationFactory {
   };
 
   // -------------------- Auth & Utils --------------------
+
+
   func requireAdmin(caller : Principal) : () {
     if (caller != admin) { assert false };
   };
+  func requireOrgAdmin(caller : Principal, canister_id : Principal) : () {
+  // Allow global admin
+  if (caller == admin) return;
+
+  // Allow the factory canister itself
+  if (caller == Principal.fromActor(ReputationFactory)) return;
+
+  // Otherwise require the caller to be the recorded owner of that child
+  switch (byId.get(canister_id)) {
+    case (?c) {
+      if (c.owner == caller) return;
+      Debug.trap("unauthorized: caller is not owner of this canister");
+    };
+    case null Debug.trap("unauthorized: unknown canister");
+  };
+};
+
+
+
 
   func nowNs() : Nat64 = Nat64.fromIntWrap(Time.now());
 
@@ -207,7 +228,7 @@ actor ReputationFactory {
   /// Send `amount` cycles to a child’s `wallet_receive`, and let the child log it.
   public shared({ caller }) func topUpChild(canister_id : Principal, amount : Nat)
     : async { #ok : Nat; #err : Text } {
-    requireAdmin(caller);
+    requireOrgAdmin(caller, canister_id);
     let target : ChildWallet = actor (Principal.toText(canister_id));
     try {
       let accepted = await (with cycles = amount) target.wallet_receive();
@@ -220,6 +241,13 @@ actor ReputationFactory {
 
   // -------------------- Create / Reuse / CRUD --------------------
   /// Create new ReputationChild with app-level owner; if `controllers` empty, default to [factory, owner].
+
+  public shared({ caller }) func forceAddOwnerIndex(owner: Principal, cid: Principal) : async Text {
+    requireAdmin(caller);
+    addOwnerIndex(owner, cid);
+    "ok"
+  };
+
   public shared({ caller }) func createChildForOwner(
     owner             : Principal,
     cycles_for_create : Nat,
@@ -254,68 +282,106 @@ actor ReputationFactory {
     cid
   };
 
-  /// Create or reuse from pool for given owner; `init_arg` must candid-encode the SAME SINGLE arg the child expects (owner).
-  public shared({ caller }) func createOrReuseChildFor(
-    owner: Principal,
-    cycles_for_create: Nat,
-    controllers: [Principal],
-    note: Text
-  ) : async Principal {
-    requireAdmin(caller);
+  /// Create or reuse from pool for given owner; ensure final cycles >= cycles_for_create.
+/// If reused canister has fewer cycles than requested, top up the difference.
+public shared({ caller }) func createOrReuseChildFor(
+  owner: Principal,
+  cycles_for_create: Nat,
+  controllers: [Principal],
+  note: Text
+) : async Principal {
 
-    let defaultCtrls = [Principal.fromActor(ReputationFactory), owner];
-    let arg : Blob = to_candid(owner);  // <- factory encodes the arg
+  let defaultCtrls = [Principal.fromActor(ReputationFactory), owner];
+  let arg : Blob = to_candid(owner);
 
-    if (pool.size() > 0) {
-      switch (pool.removeLast()) {
-        case (?cid) {
-          await IC.stop_canister({ canister_id = cid });
-          await IC.update_settings({
-            canister_id = cid;
-            settings = {
-              controllers = ?(if (controllers.size() == 0) defaultCtrls else controllers);
-              compute_allocation = null; memory_allocation = null; freezing_threshold = null;
-            }
-          });
-          await IC.install_code({
-            mode = #reinstall;
-            canister_id = cid;
-            wasm_module = requireWasm();
-            arg = arg                       // <- use factory-built blob
-          });
-          await IC.start_canister({ canister_id = cid });
-
-          switch (byId.get(cid)) { case (?old) { removeOwnerIndex(old.owner, cid) }; case null {} };
-          let rec : Child = { id = cid; owner; created_at = nowNs(); note; status = #Active };
-          recordOrRefresh(rec);
-
-          storePool := Buffer.toArray(pool);
-          return cid;
-        };
-        case null {};
-      }
-    };
-
-    // fresh create
-    let res = await (with cycles = cycles_for_create) IC.create_canister({
-      settings = ?{
-        controllers = ?(if (controllers.size() == 0) defaultCtrls else controllers);
-        compute_allocation = null; memory_allocation = null; freezing_threshold = null;
-      }
-    });
-    let cid = res.canister_id;
-
-    await IC.install_code({ mode = #install; canister_id = cid; wasm_module = requireWasm(); arg = arg });
-    await IC.start_canister({ canister_id = cid });
-
-    let rec : Child = { id = cid; owner; created_at = nowNs(); note; status = #Active };
-    recordChild(rec);
-    cid
+  // Helper: fetch current cycles from the child directly (bypass factory guards)
+  func getChildCycles(cid: Principal) : async Nat {
+    let c : ChildMgmt = actor (Principal.toText(cid));
+    // If health traps or returns nonsense, treat as 0 to be safe.
+    try {
+      let h = await c.health();
+      h.cycles
+    } catch (_) { 0 }
   };
+
+  // Helper: top up from the factory's own cycles (same logic as topUpChild, but no guard)
+  func topUpInternal(cid: Principal, amount: Nat) : async () {
+    if (amount == 0) return;
+    let target : ChildWallet = actor (Principal.toText(cid));
+    // Ignore partial accepts; best-effort top-up.
+    ignore await (with cycles = amount) target.wallet_receive();
+  };
+
+  // Helper: ensure final balance >= target
+  func ensureCycles(cid: Principal, target: Nat) : async () {
+    if (target == 0) return;
+    let have = await getChildCycles(cid);
+    if (have < target) {
+      await topUpInternal(cid, target - have);
+    };
+  };
+
+  // ----- Reuse path -----
+  if (pool.size() > 0) {
+    switch (pool.removeLast()) {
+      case (?cid) {
+        await IC.stop_canister({ canister_id = cid });
+        await IC.update_settings({
+          canister_id = cid;
+          settings = {
+            controllers = ?(if (controllers.size() == 0) defaultCtrls else controllers);
+            compute_allocation = null; memory_allocation = null; freezing_threshold = null;
+          }
+        });
+        await IC.install_code({
+          mode = #reinstall;
+          canister_id = cid;
+          wasm_module = requireWasm();
+          arg = arg
+        });
+        await IC.start_canister({ canister_id = cid });
+
+        switch (byId.get(cid)) { case (?old) { removeOwnerIndex(old.owner, cid) }; case null {} };
+        let rec : Child = { id = cid; owner; created_at = nowNs(); note; status = #Active };
+        recordOrRefresh(rec);
+        addOwnerIndex(owner, cid);
+
+        storePool := Buffer.toArray(pool);
+
+        // Ensure cycles >= cycles_for_create (important for reuse case)
+        await ensureCycles(cid, cycles_for_create);
+
+        return cid;
+      };
+      case null {};
+    }
+  };
+
+  // ----- Fresh create -----
+  let res = await (with cycles = cycles_for_create) IC.create_canister({
+    settings = ?{
+      controllers = ?(if (controllers.size() == 0) defaultCtrls else controllers);
+      compute_allocation = null; memory_allocation = null; freezing_threshold = null;
+    }
+  });
+  let cid = res.canister_id;
+
+  await IC.install_code({ mode = #install; canister_id = cid; wasm_module = requireWasm(); arg = arg });
+  await IC.start_canister({ canister_id = cid });
+
+  let rec : Child = { id = cid; owner; created_at = nowNs(); note; status = #Active };
+  recordChild(rec);
+
+  // Creation burns fees, so top up the delta if needed to meet the user's requested amount exactly.
+  await ensureCycles(cid, cycles_for_create);
+
+  cid
+};
+
 
   /// Archive a child back to pool.
   public shared({ caller }) func archiveChild(canister_id : Principal) : async Text {
-    requireAdmin(caller);
+    requireOrgAdmin(caller, canister_id);
     switch (byId.get(canister_id)) {
       case null { "Error: unknown canister" };
       case (?c) {
@@ -341,7 +407,7 @@ actor ReputationFactory {
 
   /// Delete permanently.
   public shared({ caller }) func deleteChild(canister_id : Principal) : async Text {
-    requireAdmin(caller);
+    requireOrgAdmin(caller, canister_id);
     await IC.stop_canister({ canister_id = canister_id });
     await IC.delete_canister({ canister_id = canister_id });
 
@@ -371,7 +437,7 @@ actor ReputationFactory {
 
   // -------------------- Lifecycle helpers --------------------
   public shared({ caller }) func upgradeChild(canister_id : Principal) : async () {
-    requireAdmin(caller);
+    requireOrgAdmin(caller, canister_id);
     let child = switch (byId.get(canister_id)) { case (?c) c; case null Debug.trap("unknown child") };
     await IC.install_code({
       mode = #upgrade;
@@ -383,23 +449,25 @@ actor ReputationFactory {
 
 
   public shared({ caller }) func reinstallChild(canister_id : Principal, arg : Blob) : async () {
-    requireAdmin(caller);
+    requireOrgAdmin(caller, canister_id);
     await IC.stop_canister({ canister_id = canister_id });
     await IC.install_code({ mode = #reinstall; canister_id = canister_id; wasm_module = requireWasm(); arg = arg });
     await IC.start_canister({ canister_id = canister_id });
   };
 
   public shared({ caller }) func startChild(canister_id : Principal) : async () {
-    requireAdmin(caller); await IC.start_canister({ canister_id = canister_id })
+    requireOrgAdmin(caller, canister_id);
+    await IC.start_canister({ canister_id = canister_id })
   };
 
   public shared({ caller }) func stopChild(canister_id : Principal) : async () {
-    requireAdmin(caller); await IC.stop_canister({ canister_id = canister_id })
+    requireOrgAdmin(caller, canister_id);
+    await IC.stop_canister({ canister_id = canister_id })
   };
 
   /// Book-keeping only (does not touch actual controller list).
   public shared({ caller }) func reassignOwner(canister_id : Principal, newOwner : Principal) : async Text {
-    requireAdmin(caller);
+    requireOrgAdmin(caller, canister_id);
     switch (byId.get(canister_id)) {
       case null { "Error: unknown canister" };
       case (?c) {
@@ -434,7 +502,8 @@ actor ReputationFactory {
   /// Fetch child health straight from the child
   public shared({ caller }) func childHealth(cid : Principal)
     : async ?{ paused : Bool; cycles : Nat; users : Nat; txCount : Nat; topUpCount : Nat; decayConfigHash : Nat } {
-    requireAdmin(caller);
+    requireOrgAdmin(caller, cid);
+
     let c : ChildMgmt = actor (Principal.toText(cid));
     ?(await c.health())
   };

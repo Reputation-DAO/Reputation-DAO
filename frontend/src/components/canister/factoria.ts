@@ -1,7 +1,7 @@
 // frontend/src/canister/factoria.ts
 import { Actor, HttpAgent } from '@dfinity/agent';
-import { idlFactory } from '../../../src/declarations/factoria/factoria.did.js';
-import type { _SERVICE } from '../../../src/declarations/factoria/factoria.did.d.ts';
+import { idlFactory } from '../../../../src/declarations/factoria/factoria.did.js';
+import type { _SERVICE } from '../../../../src/declarations/factoria/factoria.did.d.ts';
 
 // If your declarations live elsewhere, adjust the two imports above accordingly.
 // From `frontend/src/canister` to project-root `src/declarations/...` is typically ../../../
