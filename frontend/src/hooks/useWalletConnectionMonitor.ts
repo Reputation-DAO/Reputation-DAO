@@ -1,102 +1,115 @@
+// src/hooks/useWalletConnectionMonitor.ts
 import { useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { isPlugConnected, getCurrentPrincipal } from '../components/canister/reputationDao';
 
 export const useWalletConnectionMonitor = () => {
   const navigate = useNavigate();
   const location = useLocation();
+
   const lastPrincipalRef = useRef<string | null>(null);
-  const monitoringRef = useRef<NodeJS.Timeout | null>(null);
+  const monitoringRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isAuthPageRef = useRef<boolean>(false);
 
-  // Update auth page status
+  // Update auth page status whenever the URL changes
   useEffect(() => {
     isAuthPageRef.current = location.pathname === '/auth' || location.pathname === '/';
   }, [location.pathname]);
 
   const handleDisconnection = () => {
     console.log('🚨 Wallet disconnection detected, redirecting to auth...');
-    
-    // Clear any stored organization data
     localStorage.removeItem('selectedOrgId');
     localStorage.removeItem('userRole');
     localStorage.removeItem('userName');
-    
-    // Only redirect if not already on auth page
-    if (!isAuthPageRef.current) {
-      navigate('/auth', { replace: true });
-    }
+
+    if (!isAuthPageRef.current) navigate('/auth', { replace: true });
   };
 
   const handlePrincipalChange = (newPrincipal: string) => {
     console.log('🔄 Principal change detected:', {
       old: lastPrincipalRef.current,
-      new: newPrincipal
+      new: newPrincipal,
     });
-    
-    // Clear organization data when principal changes
+
     localStorage.removeItem('selectedOrgId');
-    localStorage.removeItem('userRole'); 
+    localStorage.removeItem('userRole');
     localStorage.removeItem('userName');
-    
-    // Redirect to auth to re-authenticate with new principal
-    if (!isAuthPageRef.current) {
-      navigate('/auth', { replace: true });
-    }
+
+    if (!isAuthPageRef.current) navigate('/auth', { replace: true });
   };
 
   const checkWalletConnection = async () => {
     try {
-      // Skip monitoring if on auth page
-      if (isAuthPageRef.current) {
+      if (isAuthPageRef.current) return;
+
+      const plug = (window as any)?.ic?.plug;
+
+      // If Plug isn't present at all → treat as disconnected
+      if (!plug) {
+        handleDisconnection();
         return;
       }
 
-      // Check if wallet is still connected
-      const isConnected = await isPlugConnected();
-      
+      // Determine connection state (prefer isConnected, fall back to presence of agent)
+      let isConnected = false;
+      try {
+        isConnected = (await plug.isConnected?.()) ?? Boolean(plug.agent);
+      } catch {
+        isConnected = Boolean(plug.agent);
+      }
+
       if (!isConnected) {
         handleDisconnection();
         return;
       }
 
-      // Check if principal has changed
-      const currentPrincipal = await getCurrentPrincipal();
-      const currentPrincipalString = currentPrincipal?.toString();
-      
-      if (lastPrincipalRef.current === null) {
-        // First time setting the principal
-        lastPrincipalRef.current = currentPrincipalString || null;
-      } else if (lastPrincipalRef.current !== currentPrincipalString) {
-        // Principal has changed - different wallet connected
-        lastPrincipalRef.current = currentPrincipalString || null;
-        handlePrincipalChange(currentPrincipalString || 'unknown');
+      // Get current principal via Plug's agent (most reliable)
+      let currentPrincipalString: string | null = null;
+      try {
+        const principal = await plug.agent?.getPrincipal?.();
+        currentPrincipalString = principal?.toString?.() ?? null;
+      } catch {
+        currentPrincipalString = null;
       }
 
+      // If we cannot read principal, treat as disconnected
+      if (!currentPrincipalString) {
+        handleDisconnection();
+        return;
+      }
+
+      // First capture
+      if (lastPrincipalRef.current === null) {
+        lastPrincipalRef.current = currentPrincipalString;
+        return;
+      }
+
+      // Detect principal switch
+      if (lastPrincipalRef.current !== currentPrincipalString) {
+        lastPrincipalRef.current = currentPrincipalString;
+        handlePrincipalChange(currentPrincipalString);
+      }
     } catch (error) {
       console.error('Error checking wallet connection:', error);
-      // Treat errors as disconnection
       handleDisconnection();
     }
   };
 
+  // Start/stop monitoring when the route changes (auth vs app)
   useEffect(() => {
-    // Start monitoring when not on auth page
+    // Start monitoring if not on auth page
     if (!isAuthPageRef.current) {
-      // Initial check
-      checkWalletConnection();
-
-      // Set up periodic monitoring every 2 seconds
+      void checkWalletConnection(); // initial check
       monitoringRef.current = setInterval(checkWalletConnection, 2000);
-      
       console.log('🔍 Started wallet connection monitoring');
     } else {
-      // Stop monitoring when on auth page
+      // Stop monitoring on auth
       if (monitoringRef.current) {
         clearInterval(monitoringRef.current);
         monitoringRef.current = null;
         console.log('⏸️ Stopped wallet connection monitoring (on auth page)');
       }
+      // reset lastPrincipal when landing on auth so a new login is treated as fresh
+      lastPrincipalRef.current = null;
     }
 
     return () => {
@@ -106,15 +119,5 @@ export const useWalletConnectionMonitor = () => {
         console.log('🛑 Cleaned up wallet connection monitoring');
       }
     };
-  }, [isAuthPageRef.current]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (monitoringRef.current) {
-        clearInterval(monitoringRef.current);
-        monitoringRef.current = null;
-      }
-    };
-  }, []);
+  }, [location.pathname]); // react to route changes
 };

@@ -1,7 +1,7 @@
+// src/components/ConnectionStatus.tsx
 import React, { useEffect, useState } from 'react';
 import { Box, Chip, IconButton, Tooltip } from '@mui/material';
-import { CheckCircle, Error, Refresh } from '@mui/icons-material';
-import { isPlugConnected } from '../components/canister/reputationDao';
+import { CheckCircle, Error as ErrorIcon, Refresh } from '@mui/icons-material';
 
 interface ConnectionStatusProps {
   onConnectionChange?: (isConnected: boolean) => void;
@@ -14,11 +14,26 @@ const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ onConnectionChange 
   const checkConnection = async () => {
     setIsChecking(true);
     try {
-      const connected = await isPlugConnected();
+      const plug = (window as any)?.ic?.plug;
+
+      if (!plug) {
+        setIsConnected(false);
+        onConnectionChange?.(false);
+        return;
+      }
+
+      // Prefer official API; fall back to presence of agent
+      let connected = false;
+      try {
+        connected = (await plug.isConnected?.()) ?? Boolean(plug.agent);
+      } catch {
+        connected = Boolean(plug.agent);
+      }
+
       setIsConnected(connected);
       onConnectionChange?.(connected);
-    } catch (error) {
-      console.error('Connection check failed:', error);
+    } catch (err) {
+      console.error('Connection check failed:', err);
       setIsConnected(false);
       onConnectionChange?.(false);
     } finally {
@@ -28,17 +43,15 @@ const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ onConnectionChange 
 
   useEffect(() => {
     checkConnection();
-    
-    // Check connection status periodically
-    const interval = setInterval(checkConnection, 30000); // Check every 30 seconds
-    
+    const interval = setInterval(checkConnection, 30_000); // every 30s
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
       <Chip
-        icon={isConnected ? <CheckCircle /> : <Error />}
+        icon={isConnected ? <CheckCircle /> : <ErrorIcon />}
         label={isConnected ? 'Connected' : 'Disconnected'}
         color={isConnected ? 'success' : 'error'}
         size="small"
@@ -51,7 +64,12 @@ const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ onConnectionChange 
           disabled={isChecking}
           sx={{ color: 'hsl(var(--muted-foreground))' }}
         >
-          <Refresh sx={{ transform: isChecking ? 'rotate(360deg)' : 'none', transition: 'transform 1s' }} />
+          <Refresh
+            sx={{
+              transform: isChecking ? 'rotate(360deg)' : 'none',
+              transition: 'transform 1s',
+            }}
+          />
         </IconButton>
       </Tooltip>
     </Box>

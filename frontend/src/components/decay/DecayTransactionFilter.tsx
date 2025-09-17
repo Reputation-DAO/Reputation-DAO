@@ -1,3 +1,4 @@
+// src/components/decay/DecayTransactionFilter.tsx
 import React, { useState, useEffect } from "react";
 import {
   Card,
@@ -31,13 +32,10 @@ import {
   Refresh as RefreshIcon,
   Download as DownloadIcon,
 } from "@mui/icons-material";
+import { useParams } from "react-router-dom";
 import { useRole } from "../../contexts/RoleContext";
-import {
-  getOrgTransactionHistory,
-  getTransactionsByUser,
-  type Transaction,
-  type TransactionType,
-} from "../canister/reputationDao";
+import { makeChildWithPlug, type ChildActor } from "../canister/child";
+
 
 interface DecayTransactionFilterProps {
   className?: string;
@@ -45,44 +43,99 @@ interface DecayTransactionFilterProps {
   showOnlyDecay?: boolean;
 }
 
+/** UI-friendly transaction after normalizing Candid values */
+type UITx = {
+  id: number;
+  timestamp: number; // seconds since epoch
+  amount: number;
+  reason: string;
+  transactionType: "Award" | "Revoke" | "Decay";
+  from: string; // principal text
+  to: string;   // principal text
+};
+
+type TxKindFilter = "All" | "Award" | "Revoke" | "Decay";
+
 const DecayTransactionFilter: React.FC<DecayTransactionFilterProps> = ({
   className,
   userId,
   showOnlyDecay = false,
 }) => {
   const { currentPrincipal, isAdmin } = useRole();
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
+  const { cid } = useParams<{ cid: string }>();
+
+  const [orgId, setOrgId] = useState<string | null>(null);
+  const [transactions, setTransactions] = useState<UITx[]>([]);
+  const [filteredTransactions, setFilteredTransactions] = useState<UITx[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [orgId, setOrgId] = useState<string | null>(null);
-  const [typeFilter, setTypeFilter] = useState<TransactionType | "All">("All");
+
+  const [typeFilter, setTypeFilter] = useState<TxKindFilter>("All");
   const [dateRange, setDateRange] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState<string>("");
 
+  // Resolve orgId from route or localStorage
   useEffect(() => {
-    const storedOrgId = localStorage.getItem("selectedOrgId");
-    if (storedOrgId) setOrgId(storedOrgId);
-  }, []);
+    const stored = localStorage.getItem("selectedOrgId");
+    setOrgId(cid ?? stored ?? null);
+  }, [cid]);
 
   useEffect(() => {
     if (orgId) fetchTransactions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPrincipal, userId, orgId]);
 
   useEffect(() => {
     applyFilters();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transactions, typeFilter, dateRange, searchTerm, showOnlyDecay]);
+
+  const variantToString = (tt: any): "Award" | "Revoke" | "Decay" => {
+    if (tt && typeof tt === "object") {
+      if ("Award" in tt) return "Award";
+      if ("Revoke" in tt) return "Revoke";
+      if ("Decay" in tt) return "Decay";
+    }
+    // Fallback (shouldn't happen)
+    return "Award";
+  };
+
+  const normalizeTxs = (raw: any[]): UITx[] =>
+    raw.map((tx) => ({
+      id: Number(tx.id ?? 0n),
+      timestamp: Number(tx.timestamp ?? 0n),
+      amount: Number(tx.amount ?? 0n),
+      reason: Array.isArray(tx.reason) && tx.reason.length ? tx.reason[0] : "",
+      transactionType: variantToString(tx.transactionType),
+      from:
+        tx.from?.toText?.() ??
+        tx.from?.toString?.() ??
+        String(tx.from ?? ""),
+      to:
+        tx.to?.toText?.() ??
+        tx.to?.toString?.() ??
+        String(tx.to ?? ""),
+    }));
 
   const fetchTransactions = async () => {
     if (!orgId) return;
     setLoading(true);
     setError(null);
     try {
-      let txs: Transaction[];
-      if (userId && currentPrincipal) txs = await getTransactionsByUser(currentPrincipal);
-      else if (isAdmin && orgId) txs = await getOrgTransactionHistory(orgId);
-      else if (currentPrincipal) txs = await getTransactionsByUser(currentPrincipal);
-      else txs = [];
+      const actor: ChildActor = await makeChildWithPlug({ canisterId: orgId });
+
+      let raw: any[];
+      if (userId && currentPrincipal) {
+        raw = await actor.getTransactionsByUser(currentPrincipal);
+      } else if (isAdmin && orgId) {
+        raw = await actor.getTransactionHistory();
+      } else if (currentPrincipal) {
+        raw = await actor.getTransactionsByUser(currentPrincipal);
+      } else {
+        raw = [];
+      }
+
+      const txs = normalizeTxs(raw);
       setTransactions(txs);
     } catch (err) {
       console.error(err);
@@ -94,13 +147,17 @@ const DecayTransactionFilter: React.FC<DecayTransactionFilterProps> = ({
 
   const applyFilters = () => {
     let filtered = [...transactions];
-    if (showOnlyDecay) filtered = filtered.filter((tx) => tx.transactionType === "Decay");
-    else if (typeFilter !== "All") filtered = filtered.filter((tx) => tx.transactionType === typeFilter);
+
+    if (showOnlyDecay) {
+      filtered = filtered.filter((tx) => tx.transactionType === "Decay");
+    } else if (typeFilter !== "All") {
+      filtered = filtered.filter((tx) => tx.transactionType === typeFilter);
+    }
 
     const now = Date.now() / 1000;
     const ranges = { day: 86400, week: 604800, month: 2592000 };
-    if (dateRange !== "all" && ranges[dateRange as keyof typeof ranges]) {
-      const cutoff = now - ranges[dateRange as keyof typeof ranges];
+    if (dateRange !== "all" && (ranges as any)[dateRange]) {
+      const cutoff = now - (ranges as any)[dateRange];
       filtered = filtered.filter((tx) => tx.timestamp >= cutoff);
     }
 
@@ -108,7 +165,7 @@ const DecayTransactionFilter: React.FC<DecayTransactionFilterProps> = ({
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(
         (tx) =>
-          tx.reason?.toLowerCase().includes(term) ||
+          tx.reason.toLowerCase().includes(term) ||
           tx.amount.toString().includes(term)
       );
     }
@@ -118,10 +175,10 @@ const DecayTransactionFilter: React.FC<DecayTransactionFilterProps> = ({
   };
 
   const formatDate = (ts: number) => new Date(ts * 1000).toLocaleString();
-  const formatPrincipal = (p: any) =>
-    `${p.toString().slice(0, 5)}...${p.toString().slice(-3)}`;
+  const formatPrincipal = (p: string) =>
+    `${p.slice(0, 5)}...${p.slice(-3)}`;
 
-  const getTransactionIcon = (type: TransactionType) => {
+  const getTransactionIcon = (type: UITx["transactionType"]) => {
     switch (type) {
       case "Award":
         return <TrendingUpIcon sx={{ color: "hsl(var(--success))" }} />;
@@ -133,7 +190,6 @@ const DecayTransactionFilter: React.FC<DecayTransactionFilterProps> = ({
         return <TrendingDownIcon sx={{ color: "hsl(var(--muted-foreground))" }} />;
     }
   };
-
 
   const exportToCSV = () => {
     const csv = [
@@ -162,9 +218,7 @@ const DecayTransactionFilter: React.FC<DecayTransactionFilterProps> = ({
   };
 
   const decayCount = transactions.filter((tx) => tx.transactionType === "Decay").length;
-  const totalDecayAmount = transactions
-    .filter((tx) => tx.transactionType === "Decay")
-    .reduce((sum, tx) => sum + tx.amount, 0);
+
 
   if (!orgId)
     return (
@@ -244,7 +298,7 @@ const DecayTransactionFilter: React.FC<DecayTransactionFilterProps> = ({
       <CardContent sx={{ p: 3 }}>
         {!showOnlyDecay && (
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mb: 3 }}>
-            {/** Type Filter **/}
+            {/* Type Filter */}
             <FormControl
               size="small"
               sx={{
@@ -258,9 +312,7 @@ const DecayTransactionFilter: React.FC<DecayTransactionFilterProps> = ({
               <InputLabel>Type</InputLabel>
               <Select
                 value={typeFilter}
-                onChange={(e) =>
-                  setTypeFilter(e.target.value as TransactionType | "All")
-                }
+                onChange={(e) => setTypeFilter(e.target.value as TxKindFilter)}
                 label="Type"
               >
                 <MenuItem value="All">All Types</MenuItem>
@@ -270,7 +322,7 @@ const DecayTransactionFilter: React.FC<DecayTransactionFilterProps> = ({
               </Select>
             </FormControl>
 
-            {/** Date Range Filter **/}
+            {/* Date Range */}
             <FormControl
               size="small"
               sx={{
@@ -294,7 +346,7 @@ const DecayTransactionFilter: React.FC<DecayTransactionFilterProps> = ({
               </Select>
             </FormControl>
 
-            {/** Search Box **/}
+            {/* Search */}
             <TextField
               size="small"
               label="Search"
@@ -313,7 +365,7 @@ const DecayTransactionFilter: React.FC<DecayTransactionFilterProps> = ({
           </Box>
         )}
 
-        {decayCount > 0 && (
+        {transactions.filter((tx) => tx.transactionType === "Decay").length > 0 && (
           <Alert
             severity="info"
             sx={{
@@ -323,26 +375,48 @@ const DecayTransactionFilter: React.FC<DecayTransactionFilterProps> = ({
               borderColor: "hsl(var(--warning))",
             }}
           >
-            Total {decayCount} decay events: {totalDecayAmount} points decayed
+            Total {transactions.filter((t) => t.transactionType === "Decay").length} decay events:{" "}
+            {transactions
+              .filter((t) => t.transactionType === "Decay")
+              .reduce((sum, t) => sum + t.amount, 0)}{" "}
+            points decayed
           </Alert>
         )}
 
-        {loading && <LinearProgress sx={{ mb: 2, background: "hsl(var(--muted))", "& .MuiLinearProgress-bar": { backgroundColor: "hsl(var(--primary))" } }} />}
+        {loading && (
+          <LinearProgress
+            sx={{
+              mb: 2,
+              background: "hsl(var(--muted))",
+              "& .MuiLinearProgress-bar": { backgroundColor: "hsl(var(--primary))" },
+            }}
+          />
+        )}
         {error && (
           <Alert
             severity="error"
-            sx={{ mb: 2, color: "hsl(var(--destructive-foreground))", backgroundColor: "hsl(var(--destructive)/0.1)" }}
+            sx={{
+              mb: 2,
+              color: "hsl(var(--destructive-foreground))",
+              backgroundColor: "hsl(var(--destructive)/0.1)",
+            }}
           >
             {error}
           </Alert>
         )}
 
-        <TableContainer component={Paper} variant="outlined" sx={{ borderColor: "hsl(var(--border))",background:"hsl(var(--background))" }}>
+        <TableContainer
+          component={Paper}
+          variant="outlined"
+          sx={{ borderColor: "hsl(var(--border))", background: "hsl(var(--background))" }}
+        >
           <Table size="small">
             <TableHead sx={{ background: "hsl(var(--muted)/0.2)" }}>
               <TableRow>
                 {["Date", "Type", "From", "To", "Amount", "Reason"].map((label) => (
-                  <TableCell key={label} sx={{ color: "hsl(var(--foreground))" }}>{label}</TableCell>
+                  <TableCell key={label} sx={{ color: "hsl(var(--foreground))" }}>
+                    {label}
+                  </TableCell>
                 ))}
               </TableRow>
             </TableHead>
@@ -386,10 +460,14 @@ const DecayTransactionFilter: React.FC<DecayTransactionFilterProps> = ({
                         />
                       </Box>
                     </TableCell>
-                    <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem", color: "hsl(var(--foreground))" }}>
+                    <TableCell
+                      sx={{ fontFamily: "monospace", fontSize: "0.75rem", color: "hsl(var(--foreground))" }}
+                    >
                       {formatPrincipal(tx.from)}
                     </TableCell>
-                    <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem", color: "hsl(var(--foreground))" }}>
+                    <TableCell
+                      sx={{ fontFamily: "monospace", fontSize: "0.75rem", color: "hsl(var(--foreground))" }}
+                    >
                       {formatPrincipal(tx.to)}
                     </TableCell>
                     <TableCell

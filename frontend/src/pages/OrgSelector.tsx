@@ -1,4 +1,7 @@
+// @ts-nocheck
+
 import React, { useEffect, useMemo, useState } from "react";
+
 import {
   Box,
   Button,
@@ -33,7 +36,6 @@ import {
   makeFactoriaWithPlug,
   getFactoriaCanisterId,
 } from "../components/canister/factoria";
-
 /* ---------------------------------------------------------
    Styled
 --------------------------------------------------------- */

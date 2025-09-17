@@ -7,9 +7,3 @@ export { default as DecayHistoryChart } from './DecayHistoryChart';
 export { default as DecayDashboard } from './DecayDashboard';
 
 // Re-export types for convenience
-export type {
-  DecayConfig,
-  UserDecayInfo,
-  BalanceWithDetails,
-  TransactionType,
-} from '../canister/reputationDao';
