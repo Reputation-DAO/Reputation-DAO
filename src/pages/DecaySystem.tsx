@@ -12,6 +12,7 @@ import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { 
@@ -128,7 +129,7 @@ const DecaySystem = () => {
               amountDecayed: Number(tx.amount),
               previousAmount: Number(tx.amount) + Math.floor(Math.random() * 100), // Estimate previous amount
               newAmount: Number(tx.amount),
-              reason: extractReason(tx.reason),
+              reason: tx.reason || "No reason provided",
               timestamp: convertTimestampToDate(tx.timestamp)
             }));
             setRecentDecayEvents(decayEvents);
@@ -193,8 +194,11 @@ const DecaySystem = () => {
 
   // Handle testing mode toggle
   const handleTestingModeToggle = (enabled: boolean) => {
+    console.log('🧪 Testing mode toggle:', enabled);
+    
     if (enabled) {
       // Enable testing mode: 10% decay every 1 minute
+      console.log('🧪 Enabling testing mode: 10% decay every 1 minute');
       setSettings(prev => ({
         ...prev,
         testingMode: true,
@@ -204,6 +208,7 @@ const DecaySystem = () => {
       }));
     } else {
       // Disable testing mode: restore normal settings
+      console.log('🧪 Disabling testing mode: restoring normal settings');
       setSettings(prev => ({
         ...prev,
         testingMode: false,
@@ -219,9 +224,16 @@ const DecaySystem = () => {
       setLoading(true);
       const selectedOrgId = localStorage.getItem('selectedOrgId');
       
+      console.log('🔧 Saving decay settings:', {
+        selectedOrgId,
+        settings,
+        isOrgSpecific: !!selectedOrgId
+      });
+      
       if (selectedOrgId) {
         // Save organization-specific decay settings
-        await configureOrgDecay(
+        console.log('🏢 Configuring org-specific decay for:', selectedOrgId);
+        const result = await configureOrgDecay(
           selectedOrgId,
           settings.rate,
           settings.interval,
@@ -229,15 +241,18 @@ const DecaySystem = () => {
           settings.gracePeriod,
           settings.enabled
         );
+        console.log('✅ Org decay config result:', result);
       } else {
         // Save global decay settings
-        await configureDecay(
+        console.log('🌍 Configuring global decay settings');
+        const result = await configureDecay(
           settings.rate,
           settings.interval,
           settings.minimumThreshold,
           settings.gracePeriod,
           settings.enabled
         );
+        console.log('✅ Global decay config result:', result);
       }
       
       setHasUnsavedChanges(false);
@@ -286,9 +301,12 @@ const DecaySystem = () => {
     try {
       setLoading(true);
       
+      console.log('🔄 Running manual batch decay process...');
+      
       // Run batch decay process
       const result = await processBatchDecay();
       
+      console.log('✅ Manual decay result:', result);
       toast.success(`Manual decay process completed: ${result}`);
       
       // Reload data to show updated decay events
@@ -315,7 +333,7 @@ const DecaySystem = () => {
             amountDecayed: Number(tx.amount),
             previousAmount: Number(tx.amount) + Math.floor(Math.random() * 100),
             newAmount: Number(tx.amount),
-            reason: extractReason(tx.reason),
+            reason: tx.reason || "No reason provided",
             timestamp: convertTimestampToDate(tx.timestamp)
           }));
           setRecentDecayEvents(decayEvents);
@@ -355,9 +373,7 @@ const DecaySystem = () => {
     usersAffected: recentDecayEvents.length,
     totalDecayed: recentDecayEvents.reduce((sum, event) => sum + event.amountDecayed, 0),
     lastRun: recentDecayEvents[0]?.timestamp || new Date(),
-    nextScheduled: new Date(Date.now() + (settings.period === 'daily' ? 86400000 : 
-                                         settings.period === 'weekly' ? 604800000 : 
-                                         2592000000))
+    nextScheduled: new Date(Date.now() + (settings.interval * 1000))
   };
 
   return (
@@ -410,6 +426,9 @@ const DecaySystem = () => {
                   </Button>
                 )}
               </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
             </div>
           </header>
 

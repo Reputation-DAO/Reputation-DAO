@@ -4,7 +4,7 @@ import { Actor, HttpAgent } from '@dfinity/agent';
 import { idlFactory } from '../declarations/reputation_dao/reputation_dao.did.js';
 import type { _SERVICE } from '../declarations/reputation_dao/reputation_dao.did.d.ts';
 // Canister ID for the reputation DAO (playground network)
-const REPUTATION_DAO_CANISTER_ID = "5oxzc-3qaaa-aaaab-qaczq-cai";
+const REPUTATION_DAO_CANISTER_ID = "xblvd-yqaaa-aaaab-qaddq-cai";
 
 // Network configuration
 const getNetworkConfig = () => ({

@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { RoleProvider } from "./contexts/RoleContext";
 import { RouteProvider } from "./contexts/RouteContext";
 import { AuthProvider } from "./contexts/AuthContext";
+import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Docs from "./pages/Docs";
 import Blog from "./pages/Blog";
@@ -25,35 +26,37 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <RoleProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <RouteProvider>
-              <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/docs" element={<Docs />} />
-              <Route path="/blog" element={<Blog />} />
-              <Route path="/community" element={<Community />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/org-selector" element={<OrgSelector />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/award-rep" element={<AwardRep />} />
-              <Route path="/revoke-rep" element={<RevokeRep />} />
-              <Route path="/manage-awarders" element={<ManageAwarders />} />
-              <Route path="/view-balances" element={<ViewBalances />} />
-              <Route path="/transaction-log" element={<TransactionLog />} />
-              <Route path="/decay-system" element={<DecaySystem />} />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-              </Routes>
-            </RouteProvider>
-          </BrowserRouter>
-        </TooltipProvider>
-      </RoleProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <RoleProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <RouteProvider>
+                <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/docs" element={<Docs />} />
+                <Route path="/blog" element={<Blog />} />
+                <Route path="/community" element={<Community />} />
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/org-selector" element={<OrgSelector />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/award-rep" element={<AwardRep />} />
+                <Route path="/revoke-rep" element={<RevokeRep />} />
+                <Route path="/manage-awarders" element={<ManageAwarders />} />
+                <Route path="/view-balances" element={<ViewBalances />} />
+                <Route path="/transaction-log" element={<TransactionLog />} />
+                <Route path="/decay-system" element={<DecaySystem />} />
+                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                <Route path="*" element={<NotFound />} />
+                </Routes>
+              </RouteProvider>
+            </BrowserRouter>
+          </TooltipProvider>
+        </RoleProvider>
+      </AuthProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 

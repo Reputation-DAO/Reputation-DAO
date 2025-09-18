@@ -78,7 +78,7 @@
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
-  /* Dark mode kept for future use */
+  /* Dark mode theme */
   .dark {
     --background: 215 25% 8%;
     --foreground: 210 15% 92%;
@@ -91,6 +91,8 @@
 
     --primary: 217 91% 60%;
     --primary-foreground: 0 0% 100%;
+    --primary-glow: 217 91% 70%;
+    --primary-light: 217 91% 15%;
 
     --secondary: 215 25% 15%;
     --secondary-foreground: 210 15% 92%;
@@ -108,8 +110,31 @@
     --input: 215 25% 15%;
     --ring: 217 91% 60%;
 
+    /* Glass morphism colors for dark mode */
     --glass: 0 0% 0% / 0.3;
     --glass-border: 0 0% 100% / 0.1;
+
+    /* Gradients for dark mode */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-glow)));
+    --gradient-hero: linear-gradient(135deg, hsl(215 25% 8%), hsl(215 25% 12%));
+    --gradient-mesh: radial-gradient(circle at 20% 80%, hsl(217 91% 15%) 0%, transparent 50%),
+                     radial-gradient(circle at 80% 20%, hsl(215 25% 12%) 0%, transparent 50%),
+                     radial-gradient(circle at 40% 40%, hsl(215 25% 10%) 0%, transparent 50%);
+
+    /* Shadows for dark mode */
+    --shadow-soft: 0 2px 20px -5px hsl(0 0% 0% / 0.3);
+    --shadow-glow: 0 0 40px hsl(217 91% 70% / 0.2);
+    --shadow-card: 0 4px 30px -10px hsl(0 0% 0% / 0.3);
+
+    /* Sidebar colors for dark mode */
+    --sidebar-background: 215 25% 8%;
+    --sidebar-foreground: 210 15% 92%;
+    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 215 25% 15%;
+    --sidebar-accent-foreground: 210 15% 92%;
+    --sidebar-border: 215 25% 15%;
+    --sidebar-ring: 217 91% 60%;
   }
 }
 

@@ -1,6 +1,8 @@
 {
-  "frontend": {},
+  "frontend": {
+    "playground": "2025-09-18T12:05:42.373974135Z"
+  },
   "reputation_dao": {
-    "playground": "2025-09-17T22:31:30.575021194Z"
+    "playground": "2025-09-18T12:18:50.972650343Z"
   }
 }

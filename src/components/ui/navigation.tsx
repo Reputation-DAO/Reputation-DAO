@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Menu, X, Zap } from "lucide-react";
 import { Button } from "./button";
 import { cn } from "@/lib/utils";
+import { ThemeToggle } from "./theme-toggle";
 
 const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -58,11 +59,14 @@ const Navigation = () => {
                 {item.name}
               </Link>
             ))}
-            <Link to="/auth">
-              <Button variant="default" className="hover-lift">
-                Get Started
-              </Button>
-            </Link>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <Link to="/auth">
+                <Button variant="default" className="hover-lift">
+                  Get Started
+                </Button>
+              </Link>
+            </div>
           </div>
 
           {/* Mobile menu button */}
@@ -95,11 +99,14 @@ const Navigation = () => {
                   {item.name}
                 </Link>
               ))}
-              <Link to="/auth">
-                <Button variant="default" className="mt-2">
-                  Get Started
-                </Button>
-              </Link>
+              <div className="flex items-center gap-2 mt-2">
+                <ThemeToggle />
+                <Link to="/auth">
+                  <Button variant="default">
+                    Get Started
+                  </Button>
+                </Link>
+              </div>
             </div>
           </div>
         )}

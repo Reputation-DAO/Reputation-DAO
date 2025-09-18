@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { toast } from "sonner";
 import { parseTransactionType, convertTimestampToDate, extractReason } from "@/utils/transactionUtils";
 import {
@@ -130,7 +131,7 @@ const RevokeRep = () => {
             recipientAddress: tx.to.toString(),
             amount: Number(tx.amount),
             category: "General",
-            reason: extractReason(tx.reason),
+            reason: tx.reason || "No reason provided",
             timestamp: convertTimestampToDate(tx.timestamp),
             revokedBy: `User ${tx.from.toString().slice(0, 8)}`
           }));
@@ -232,7 +233,7 @@ const RevokeRep = () => {
           recipientAddress: tx.to.toString(),
           amount: Number(tx.amount),
           category: "General",
-          reason: extractReason(tx.reason),
+          reason: tx.reason || "No reason provided",
           timestamp: convertTimestampToDate(tx.timestamp),
           revokedBy: tx.from.toString()
         }));
@@ -291,9 +292,9 @@ const RevokeRep = () => {
         
         <div className="flex-1">
           {/* Header */}
-          <header className="h-16 border-b border-border/40 flex items-center px-6 glass-header">
-            <SidebarTrigger className="mr-4" />
+          <header className="h-16 border-b border-border/40 flex items-center justify-between px-6 glass-header">
             <div className="flex items-center gap-3">
+              <SidebarTrigger className="mr-4" />
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500/20 to-red-600/20 flex items-center justify-center">
                 <UserMinus className="w-4 h-4 text-red-600" />
               </div>
@@ -301,6 +302,9 @@ const RevokeRep = () => {
                 <h1 className="text-lg font-semibold text-foreground">Revoke Reputation</h1>
                 <p className="text-xs text-muted-foreground">Remove reputation points for violations</p>
               </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
             </div>
           </header>
 

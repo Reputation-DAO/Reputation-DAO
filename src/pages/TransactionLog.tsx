@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { parseTransactionType, parseTransactionTypeAlternative, getTransactionTypeIcon, getTransactionTypeBgClass, convertTimestampToDate, getTransactionTypeDescription, formatTransactionAmount, extractReason } from "@/utils/transactionUtils";
@@ -147,7 +148,7 @@ const TransactionLog = () => {
             fromPrincipal: tx.from.toString(),
             toUser: `User ${tx.to.toString().slice(0, 8)}`,
             toPrincipal: tx.to.toString(),
-            reason: extractReason(tx.reason),
+            reason: tx.reason || "No reason provided",
             category: "General", // Default category since backend doesn't have this
             timestamp: convertTimestampToDate(tx.timestamp),
             blockHeight: Math.floor(Math.random() * 1000000), // Placeholder
@@ -274,23 +275,24 @@ const TransactionLog = () => {
         
         <div className="flex-1">
           {/* Header */}
-          <header className="h-16 border-b border-border/40 flex items-center px-6 glass-header">
-            <SidebarTrigger className="mr-4" />
-            <div className="flex items-center justify-between w-full">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-600/20 flex items-center justify-center">
-                  <FileText className="w-4 h-4 text-blue-600" />
-                </div>
-                <div>
-                  <h1 className="text-lg font-semibold text-foreground">Transaction Log</h1>
-                  <p className="text-xs text-muted-foreground">View all reputation transactions and activity</p>
-                </div>
+          <header className="h-16 border-b border-border/40 flex items-center justify-between px-6 glass-header">
+            <div className="flex items-center gap-3">
+              <SidebarTrigger className="mr-4" />
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-600/20 flex items-center justify-center">
+                <FileText className="w-4 h-4 text-blue-600" />
               </div>
-              
+              <div>
+                <h1 className="text-lg font-semibold text-foreground">Transaction Log</h1>
+                <p className="text-xs text-muted-foreground">View all reputation transactions and activity</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2">
               <Button variant="outline" className="group">
                 <Download className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
                 Export CSV
               </Button>
+              <ThemeToggle />
             </div>
           </header>
 

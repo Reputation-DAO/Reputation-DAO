@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 import { useRole } from "@/contexts/RoleContext";
-import { usePlugConnection } from "@/hooks/usePlugConnection";
+import { useAuth } from "@/contexts/AuthContext";
 import { getBalance, getOrgUserBalances, getOrgTransactionHistory, getOrgStats } from "@/components/canister/reputationDao";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 interface ReputationActivity {
   id: string;
@@ -139,7 +140,7 @@ const MemberItem = ({ member }: { member: Member }) => (
           {member.role}
         </Badge>
       </div>
-      <p className="text-sm text-muted-foreground">{member.principal.slice(0, 20)}...</p>
+      <p className="text-sm text-muted-foreground">{member.principal.toString().slice(0, 20)}...</p>
     </div>
     
     <div className="text-right">
@@ -154,7 +155,7 @@ const MemberItem = ({ member }: { member: Member }) => (
 const Dashboard = () => {
   const navigate = useNavigate();
   const { userRole, loading: roleLoading } = useRole();
-  const { isConnected, principal } = usePlugConnection({ autoCheck: true });
+  const { isAuthenticated, principal } = useAuth();
   const [userName] = useState("John Doe");
   const [userBalance, setUserBalance] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -168,21 +169,21 @@ const Dashboard = () => {
   // Debug logging
   useEffect(() => {
     console.log('🏠 Dashboard mounted with state:', {
-      isConnected,
+      isAuthenticated,
       principal: principal?.toString(),
       userRole,
       roleLoading,
       selectedOrgId: localStorage.getItem('selectedOrgId')
     });
-  }, [isConnected, principal, userRole, roleLoading]);
+  }, [isAuthenticated, principal, userRole, roleLoading]);
   
   // Load user's balance
   useEffect(() => {
     const loadBalance = async () => {
-      if (isConnected && principal) {
+      if (isAuthenticated && principal) {
         try {
           setLoading(true);
-          const principalObj = Principal.fromText(principal);
+          const principalObj = principal;
           const balance = await getBalance(principalObj);
           if (typeof balance === 'number') {
             setUserBalance(balance);
@@ -196,13 +197,13 @@ const Dashboard = () => {
       }
     };
     loadBalance();
-  }, [isConnected, principal]);
+  }, [isAuthenticated, principal]);
   
   // Load organization stats
   useEffect(() => {
     const loadOrgStats = async () => {
       const selectedOrgId = localStorage.getItem('selectedOrgId');
-      if (!selectedOrgId || !isConnected) return;
+      if (!selectedOrgId || !isAuthenticated) return;
       
       try {
         console.log('📊 Loading organization stats for:', selectedOrgId);
@@ -244,7 +245,7 @@ const Dashboard = () => {
               id: `activity-${index}`,
               type: txType,
               points: Number(tx.amount),
-              reason: extractReason(tx.reason),
+              reason: tx.reason || "No reason provided",
               timestamp: convertTimestampToDate(tx.timestamp),
               from: tx.from.toString().slice(0, 8),
               to: tx.to.toString().slice(0, 8)
@@ -276,7 +277,7 @@ const Dashboard = () => {
     };
     
     loadOrgStats();
-  }, [isConnected, principal]);
+  }, [isAuthenticated, principal]);
   
   const handleDisconnect = () => {
     navigate('/auth');
@@ -293,7 +294,7 @@ const Dashboard = () => {
       const userRole = localStorage.getItem('userRole');
       
       console.log('🔍 Dashboard redirect check:', {
-        isConnected,
+        isAuthenticated,
         principal: principal?.toString(),
         selectedOrgId,
         userRole,
@@ -307,7 +308,7 @@ const Dashboard = () => {
       }
       
       // Only redirect if truly not connected and no valid session exists
-      if (!isConnected && !principal) {
+      if (!isAuthenticated && !principal) {
         if (!selectedOrgId || !userRole) {
           console.log('❌ No connection and no valid session, redirecting to auth');
           navigate('/auth');
@@ -319,7 +320,7 @@ const Dashboard = () => {
     }, 3000); // 3 second delay to allow all state to fully stabilize
 
     return () => clearTimeout(timer);
-  }, [isConnected, principal, roleLoading, navigate]);
+  }, [isAuthenticated, principal, roleLoading, navigate]);
 
   const quickActions = [
     {
@@ -356,7 +357,7 @@ const Dashboard = () => {
     }
   ].filter(action => action.show);
 
-  if (!isConnected) {
+  if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-muted/20 flex items-center justify-center">
         <Card className="glass-card p-8 max-w-md mx-auto text-center">
@@ -378,14 +379,14 @@ const Dashboard = () => {
         <DashboardSidebar 
           userRole={userRole?.toLowerCase() as 'admin' | 'awarder' | 'member' || 'member'}
           userName={userName}
-          userPrincipal={principal || ""}
+          userPrincipal={principal?.toString() || ""}
           onDisconnect={handleDisconnect}
         />
         
         <div className="flex-1">
-          <header className="h-16 border-b border-border/40 flex items-center px-6 glass-header">
-            <SidebarTrigger className="mr-4" />
+          <header className="h-16 border-b border-border/40 flex items-center justify-between px-6 glass-header">
             <div className="flex items-center gap-3">
+              <SidebarTrigger className="mr-4" />
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/20 to-primary-glow/20 flex items-center justify-center">
                 <LayoutDashboard className="w-4 h-4 text-primary" />
               </div>
@@ -393,6 +394,9 @@ const Dashboard = () => {
                 <h1 className="text-lg font-semibold text-foreground">Dashboard</h1>
                 <p className="text-xs text-muted-foreground">Welcome back to {localStorage.getItem('selectedOrgId') || "Reputation DAO"}</p>
               </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
             </div>
           </header>
           
