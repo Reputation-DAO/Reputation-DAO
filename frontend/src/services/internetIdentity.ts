@@ -1,8 +1,8 @@
 import { AuthClient } from '@dfinity/auth-client';
 import { Principal } from '@dfinity/principal';
 import { Actor, HttpAgent } from '@dfinity/agent';
-import { idlFactory } from '../declarations/reputation_dao/reputation_dao.did.js';
-import type { _SERVICE } from '../declarations/reputation_dao/reputation_dao.did.d.ts';
+import { idlFactory } from '../../../src/declarations/reputation_dao/reputation_dao.did.js';
+import type { _SERVICE } from '../../../src/declarations/reputation_dao/reputation_dao.did.d.ts';
 // Canister ID for the reputation DAO (playground network)
 const REPUTATION_DAO_CANISTER_ID = "owyeu-jiaaa-aaaam-qdvwq-cai";
 

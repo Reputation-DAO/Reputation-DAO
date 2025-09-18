@@ -1,5 +1,5 @@
-import { idlFactory } from '../../declarations/reputation_dao/reputation_dao.did.js';
-import type { _SERVICE } from '../../declarations/reputation_dao/reputation_dao.did.d.ts';
+import { idlFactory } from '../../../src/declarations/reputation_dao/reputation_dao.did.js';
+import type { _SERVICE } from '../../../src/declarations/reputation_dao/reputation_dao.did.d.ts';
 import { Principal } from '@dfinity/principal';
 import { Actor, HttpAgent } from '@dfinity/agent';
 import { AuthClient } from '@dfinity/auth-client';

@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Play, ArrowRight, Zap, Shield, Network } from "lucide-react";
 import { Link } from "react-router-dom";
-import heroBackground from "@/assets/hero-bg.jpg";
+import heroBackground from "/assets/bgimage.png";
 
 const HeroSection = () => {
   return (

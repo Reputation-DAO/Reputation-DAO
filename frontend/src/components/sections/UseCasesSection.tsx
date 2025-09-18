@@ -1,6 +1,6 @@
-import governanceIcon from "@/assets/governance-icon.jpg";
-import defiIcon from "@/assets/defi-icon.jpg";
-import identityIcon from "@/assets/identity-icon.jpg";
+import governanceIcon from "@/assets/governance.png";
+import defiIcon from "@/assets/defi.png";
+import identityIcon from "@/assets/defi.png";
 
 const UseCasesSection = () => {
   const useCases = [
