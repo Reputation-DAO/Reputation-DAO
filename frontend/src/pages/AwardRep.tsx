@@ -95,7 +95,7 @@ const AwardRep = () => {
             const defaultOrgId = "sample";
             localStorage.setItem('selectedOrgId', defaultOrgId);
             
-            const orgStats = await getOrgStats(defaultOrgId);
+            const orgStats = await getOrgStats();
             console.log('📊 AwardRep: Default org stats:', orgStats);
             
             if (orgStats) {
@@ -117,7 +117,7 @@ const AwardRep = () => {
         
         // Get organization stats for total awarded points
         console.log('📊 AwardRep: Calling getOrgStats...');
-        const orgStats = await getOrgStats(selectedOrgId);
+        const orgStats = await getOrgStats();
         console.log('📊 AwardRep: orgStats result:', orgStats);
         
         const totalREPAwarded = orgStats?.totalPoints || 0;
@@ -125,7 +125,7 @@ const AwardRep = () => {
         
         // Get transaction history to analyze awards
         console.log('📊 AwardRep: Calling getOrgTransactionHistory...');
-        const transactions = await getOrgTransactionHistory(selectedOrgId);
+        const transactions = await getOrgTransactionHistory();
         console.log('📊 AwardRep: transactions result:', transactions);
         
 
@@ -208,6 +208,12 @@ const AwardRep = () => {
       return;
     }
 
+    // Basic Principal ID validation (should contain hyphens and be reasonable length)
+    if (!formData.recipientAddress.includes('-') || formData.recipientAddress.length < 20) {
+      toast.error("Please enter a valid Principal ID");
+      return;
+    }
+
     if (!isConnected || !principal) {
       toast.error("Please connect your wallet first");
       return;
@@ -220,11 +226,19 @@ const AwardRep = () => {
 
     setIsAwarding(true);
     try {
+      console.log('🎯 Awarding reputation:', {
+        recipient: formData.recipientAddress,
+        amount: parseInt(formData.reputationAmount),
+        reason: formData.reason
+      });
+      
       const result = await awardRep(
         formData.recipientAddress, 
         parseInt(formData.reputationAmount), 
         formData.reason
       );
+      
+      console.log('✅ Award result:', result);
       
       // Simple string result from canister
       toast.success(`Successfully awarded ${formData.reputationAmount} REP points!`);
@@ -269,9 +283,9 @@ const AwardRep = () => {
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
         <DashboardSidebar 
-          userRole={userRole?.toLowerCase() as 'admin' | 'awarder' | 'member' || 'member'}
+          userRole={(userRole?.toLowerCase() as 'admin' | 'awarder' | 'member') || 'member'}
           userName={principal ? `${principal.toString().slice(0, 8)}...${principal.toString().slice(-8)}` : 'Anonymous'}
-          userPrincipal={principal}
+          userPrincipal={principal ?? ''}
           onDisconnect={handleDisconnect}
         />
         

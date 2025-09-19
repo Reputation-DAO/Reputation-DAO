@@ -112,12 +112,12 @@ const DecaySystem = () => {
           
           if (orgStats) {
             setDecayStats({
-              totalDecayedPoints: orgStats.totalDecayedPoints,
-              lastGlobalDecayProcess: orgStats.lastGlobalDecayProcess,
+              totalDecayedPoints: Number(orgStats.totalDecayedPoints),
+              lastGlobalDecayProcess: Number(orgStats.lastGlobalDecayProcess),
               configEnabled: orgStats.configEnabled,
-              usersWithDecay: orgStats.userCount,
-              totalUsers: orgStats.userCount,
-              averageDecayPerUser: orgStats.totalDecayedPoints / Math.max(orgStats.userCount, 1)
+              usersWithDecay: Number(orgStats.userCount),
+              totalUsers: Number(orgStats.userCount),
+              averageDecayPerUser: Number(orgStats.totalDecayedPoints) / Math.max(Number(orgStats.userCount), 1)
             });
           }
           
@@ -138,10 +138,10 @@ const DecaySystem = () => {
           if (config) {
             setSettings({
               enabled: config.enabled,
-              rate: config.decayRate,
-              interval: config.decayInterval,
-              minimumThreshold: config.minThreshold,
-              gracePeriod: config.gracePeriod,
+              rate: Number(config.decayRate),
+              interval: Number(config.decayInterval),
+              minimumThreshold: Number(config.minThreshold),
+              gracePeriod: Number(config.gracePeriod),
               testingMode: false
             });
           }
@@ -155,8 +155,8 @@ const DecaySystem = () => {
           
           if (stats) {
             setDecayStats({
-              totalDecayedPoints: stats.totalDecayedPoints,
-              lastGlobalDecayProcess: stats.lastGlobalDecayProcess,
+              totalDecayedPoints: Number(stats.totalDecayedPoints),
+              lastGlobalDecayProcess: Number(stats.lastGlobalDecayProcess),
               configEnabled: stats.configEnabled,
               usersWithDecay: 0, // Not available in global stats
               totalUsers: 0,
@@ -167,10 +167,10 @@ const DecaySystem = () => {
           if (config) {
             setSettings({
               enabled: config.enabled,
-              rate: config.decayRate,
-              interval: config.decayInterval,
-              minimumThreshold: config.minThreshold,
-              gracePeriod: config.gracePeriod,
+              rate: Number(config.decayRate),
+              interval: Number(config.decayInterval),
+              minimumThreshold: Number(config.minThreshold),
+              gracePeriod: Number(config.gracePeriod),
               testingMode: false
             });
           }

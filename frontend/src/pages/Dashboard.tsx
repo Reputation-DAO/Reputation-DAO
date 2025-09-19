@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 import { useRole } from "@/contexts/RoleContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { getBalance, getOrgUserBalances, getOrgTransactionHistory, getOrgStats } from "@/services/childCanisterService";
+import { getBalance, getOrgUserBalances, getOrgTransactionHistory, getOrgStats, testCanisterConnection } from "@/services/childCanisterService";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -396,6 +396,20 @@ const Dashboard = () => {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={async () => {
+                  const success = await testCanisterConnection();
+                  if (success) {
+                    toast.success("Canister connection test passed!");
+                  } else {
+                    toast.error("Canister connection test failed!");
+                  }
+                }}
+              >
+                Test Connection
+              </Button>
               <ThemeToggle />
             </div>
           </header>

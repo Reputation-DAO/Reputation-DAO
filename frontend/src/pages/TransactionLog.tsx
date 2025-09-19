@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 import { useRole } from "@/contexts/RoleContext";
 import { usePlugConnection } from "@/hooks/usePlugConnection";
-import { getTransactionsByUser } from "@/services/childCanisterService";
+import { getOrgTransactionHistory } from "@/services/childCanisterService";
 import type { Transaction as BackendTransaction } from "@/declarations/reputation_dao/reputation_dao.did.d.ts";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -73,9 +73,9 @@ const TransactionLog = () => {
         
         const principalObj = Principal.fromText(principal);
         
-        // Get transactions for current user
-        const userTransactions = await getTransactionsByUser(principalObj);
-        console.log('📦 Received user transactions:', userTransactions);
+        // Get all transactions for the organization
+        const userTransactions = await getOrgTransactionHistory();
+        console.log('📦 Received organization transactions:', userTransactions);
         
         // Debug: Log transaction type summary
         const typeSummary = userTransactions.reduce((acc, tx) => {

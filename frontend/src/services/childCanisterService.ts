@@ -22,14 +22,23 @@ export const setCurrentUserPrincipal = (principal: string): void => {
 // Get child canister actor for the selected organization
 export const getChildActor = async (): Promise<ChildActor> => {
   const canisterId = getSelectedChildCanisterId();
+  console.log('🔍 Getting child actor for canister ID:', canisterId);
+  
   if (!canisterId) {
     throw new Error('No organization selected. Please select an organization first.');
   }
   
-  return await makeChildWithPlug({
-    canisterId,
-    host: 'https://ic0.app'
-  });
+  try {
+    const actor = await makeChildWithPlug({
+      canisterId,
+      host: 'https://ic0.app'
+    });
+    console.log('✅ Successfully created child actor for:', canisterId);
+    return actor;
+  } catch (error) {
+    console.error('❌ Failed to create child actor for:', canisterId, error);
+    throw error;
+  }
 };
 
 // Get child canister actor for a specific canister ID
@@ -59,18 +68,25 @@ export const getOrgUserBalances = async (): Promise<{ userId: Principal; balance
 };
 
 export const getOrgTransactionHistory = async (): Promise<any[]> => {
+  console.log('📋 getOrgTransactionHistory called');
   const actor = await getChildActor();
-  const transactions = await actor.getTransactionHistory();
+  console.log('🎭 Calling actor.getTransactionHistory()');
   
-  return transactions.map((tx: any) => ({
+  const transactions = await actor.getTransactionHistory();
+  console.log('📦 Raw transactions from canister:', transactions);
+  
+  const mappedTransactions = transactions.map((tx: any) => ({
     id: Number(tx.id),
     transactionType: Object.keys(tx.transactionType)[0],
     from: tx.from,
     to: tx.to,
     amount: Number(tx.amount),
-    timestamp: Number(tx.timestamp),
+    timestamp: tx.timestamp, // Keep as BigInt/number, let convertTimestampToDate handle it
     reason: tx.reason?.[0] || "No reason provided"
   }));
+  
+  console.log('✅ Mapped transactions:', mappedTransactions);
+  return mappedTransactions;
 };
 
 export const getOrgStats = async (): Promise<any> => {
@@ -96,20 +112,31 @@ export const getTransactionsByUser = async (principal: Principal): Promise<any[]
     from: tx.from,
     to: tx.to,
     amount: Number(tx.amount),
-    timestamp: Number(tx.timestamp),
+    timestamp: tx.timestamp, // Keep as BigInt/number, let convertTimestampToDate handle it
     reason: tx.reason?.[0] || "No reason provided"
   }));
 };
 
 export const awardRep = async (recipient: string, amount: number, reason?: string): Promise<string> => {
+  console.log('🎯 awardRep called with:', { recipient, amount, reason });
+  
   const actor = await getChildActor();
   const recipientPrincipal = Principal.fromText(recipient);
   
-  return await actor.awardRep(
+  console.log('🎭 Calling actor.awardRep with:', {
+    recipient: recipientPrincipal.toString(),
+    amount: BigInt(amount),
+    reason: reason ? [reason] : []
+  });
+  
+  const result = await actor.awardRep(
     recipientPrincipal,
     BigInt(amount),
     reason ? [reason] : []
   );
+  
+  console.log('✅ awardRep result:', result);
+  return result;
 };
 
 export const revokeRep = async (user: Principal, amount: number, reason?: string): Promise<string> => {
@@ -192,14 +219,29 @@ export const processBatchDecay = async (): Promise<string> => {
 // === ORGANIZATION MANAGEMENT FUNCTIONS ===
 
 export const getAllOrganizations = async (): Promise<Array<{id: string; name: string; description: string}>> => {
+  console.log('🏭 Getting all organizations from factory...');
   const factoryActor = await makeFactoriaWithPlug();
   const children = await factoryActor.listChildren();
+  console.log('📋 Raw children from factory:', children);
   
-  return children.map((child) => ({
+  // Filter only active organizations (not archived)
+  const activeChildren = children.filter((child) => {
+    // Check if status is Active (not Archived)
+    const isActive = 'Active' in child.status;
+    console.log(`🔍 Child ${child.id.toString()}: status=${JSON.stringify(child.status)}, isActive=${isActive}`);
+    return isActive;
+  });
+  
+  console.log('✅ Active children:', activeChildren);
+  
+  const result = activeChildren.map((child) => ({
     id: child.id.toString(),
     name: child.note || `Organization ${child.id.toString().slice(0, 8)}`,
     description: `Reputation DAO for ${child.id.toString().slice(0, 8)}`
   }));
+  
+  console.log('📦 Final organizations result:', result);
+  return result;
 };
 
 export const createOrganization = async (name: string, description: string, category: string): Promise<string> => {
@@ -219,6 +261,23 @@ export const createOrganization = async (name: string, description: string, cate
   );
   
   return childId.toString();
+};
+
+// === TEST FUNCTIONS ===
+
+export const testCanisterConnection = async (): Promise<boolean> => {
+  try {
+    console.log('🧪 Testing canister connection...');
+    const actor = await getChildActor();
+    console.log('✅ Actor created, testing health check...');
+    
+    const health = await actor.health();
+    console.log('✅ Health check successful:', health);
+    return true;
+  } catch (error) {
+    console.error('❌ Canister connection test failed:', error);
+    return false;
+  }
 };
 
 // === AUTHENTICATION FUNCTIONS ===

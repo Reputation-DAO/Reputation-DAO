@@ -206,16 +206,44 @@ export const formatTransactionAmount = (type: 'award' | 'revoke' | 'decay', amou
 };
 
 /**
- * Convert timestamp from backend (nanoseconds) to Date object
+ * Convert timestamp from backend to Date object
  */
 export const convertTimestampToDate = (timestamp: bigint | number): Date => {
   // Convert to number if it's a BigInt
   const timestampNum = typeof timestamp === 'bigint' ? Number(timestamp) : timestamp;
   
-  // Backend timestamps are in nanoseconds, convert to milliseconds
-  const milliseconds = timestampNum / 1000000;
+  console.log('🕐 Converting timestamp:', {
+    original: timestamp,
+    type: typeof timestamp,
+    asNumber: timestampNum,
+    asString: timestampNum.toString()
+  });
   
-  return new Date(milliseconds);
+  // Try different timestamp formats
+  let milliseconds = timestampNum;
+  
+  // If the timestamp is very small (like 1758), it might be in seconds
+  if (timestampNum < 1000000000) { // Less than year 2001 in seconds
+    console.log('🕐 Timestamp appears to be in seconds, converting to milliseconds');
+    milliseconds = timestampNum * 1000;
+  }
+  // If the timestamp is very large (like 1703123456789000000), it might be in nanoseconds
+  else if (timestampNum > 1000000000000) { // More than year 2001 in milliseconds
+    console.log('🕐 Timestamp appears to be in nanoseconds, converting to milliseconds');
+    milliseconds = timestampNum / 1000000;
+  }
+  // Otherwise, assume it's already in milliseconds
+  else {
+    console.log('🕐 Timestamp appears to be in milliseconds, using as-is');
+    milliseconds = timestampNum;
+  }
+  
+  console.log('🕐 Final milliseconds:', milliseconds);
+  
+  const date = new Date(milliseconds);
+  console.log('🕐 Final date:', date.toISOString());
+  
+  return date;
 };
 
 /**
