@@ -67,7 +67,6 @@ const Auth = () => {
     principal, 
     isLoading, 
     loginWithPlug, 
-    loginWithInternetIdentity, 
     logout, 
     checkConnection 
   } = useAuth();
@@ -92,8 +91,6 @@ const Auth = () => {
     try {
       if (walletType === "plug") {
         await loginWithPlug();
-      } else if (walletType === "ii") {
-        await loginWithInternetIdentity();
       } else {
         throw new Error(`Unsupported wallet type: ${walletType}`);
       }
@@ -113,21 +110,6 @@ const Auth = () => {
       isRecommended: true,
       isConnected: isAuthenticated && authMethod === 'plug',
       onConnect: () => handleWalletConnect("plug")
-    },
-    {
-      icon: Shield,
-      name: "Internet Identity",
-      description: "Secure authentication with Internet Identity",
-      isRecommended: true,
-      isConnected: isAuthenticated && authMethod === 'internet-identity',
-      onConnect: () => handleWalletConnect("ii")
-    },
-    {
-      icon: Wallet,
-      name: "Stoic Wallet",
-      description: "Connect with Stoic wallet (Coming Soon)",
-      isConnected: false,
-      onConnect: () => handleWalletConnect("stoic")
     }
   ];
 

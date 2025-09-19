@@ -3,14 +3,8 @@ import { Actor, HttpAgent } from '@dfinity/agent';
 import { idlFactory } from '../../declarations/factoria/factoria.did.js';
 import type { _SERVICE } from '../../declarations/factoria/factoria.did.d.ts';
 
-const FACTORIA_CANISTER_ID = import.meta.env.VITE_FACTORIA_CANISTER_ID as string | undefined;
-if (!FACTORIA_CANISTER_ID) {
-  throw new Error(
-    'VITE_FACTORIA_CANISTER_ID is not set. Add it to your .env (or .env.local), e.g.\n' +
-    'VITE_FACTORIA_CANISTER_ID=aaaaa-aa'
-  );
-}
-const DEFAULT_HOST = 'https://icp-api.io';
+const FACTORIA_CANISTER_ID = import.meta.env.VITE_FACTORIA_CANISTER_ID || "ttoz7-uaaaa-aaaam-qd34a-cai";
+const DEFAULT_HOST = 'https://ic0.app';
 
 export async function makeFactoriaActor(opts?: {
   agent?: HttpAgent;
@@ -63,20 +57,4 @@ export async function makeFactoriaWithPlug(opts?: {
 
 export const getFactoriaCanisterId = () => FACTORIA_CANISTER_ID!;
 
-// --- FIX: Global types -------------------------------------------------------
-declare global {
-  interface Window {
-    // Make this non-optional to match other declarations elsewhere in the project
-    ic: {
-      plug?: {
-        /** Present in some Plug versions */
-        disconnect?: () => Promise<void> | void;
-        isConnected?: () => Promise<boolean>;
-        requestConnect?: (opts: { whitelist?: string[]; host?: string }) => Promise<boolean>;
-        createAgent?: (opts: { whitelist?: string[]; host?: string }) => Promise<void>;
-        agent?: HttpAgent;
-      };
-    };
-  }
-}
-export {};
+// Global types are handled by @connect2ic library

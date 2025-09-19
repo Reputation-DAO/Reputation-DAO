@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 import { useRole } from "@/contexts/RoleContext";
 import { usePlugConnection } from "@/hooks/usePlugConnection";
-import { getTransactionsByUser } from "@/components/canister/reputationDao";
+import { getTransactionsByUser } from "@/services/childCanisterService";
 import type { Transaction as BackendTransaction } from "@/declarations/reputation_dao/reputation_dao.did.d.ts";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

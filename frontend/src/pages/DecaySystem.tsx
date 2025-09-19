@@ -25,7 +25,7 @@ import {
   getOrgDecayStatistics,
   getOrgDecayAnalytics,
   configureOrgDecay
-} from "@/components/canister/reputationDao";
+} from "@/services/childCanisterService";
 import { parseTransactionType, convertTimestampToDate, extractReason } from "@/utils/transactionUtils";
 import {
   Timer,
@@ -105,8 +105,8 @@ const DecaySystem = () => {
         if (selectedOrgId) {
           // Load organization-specific decay data
           const [orgStats, orgAnalytics, config] = await Promise.all([
-            getOrgDecayStatistics(selectedOrgId),
-            getOrgDecayAnalytics(selectedOrgId),
+            getOrgDecayStatistics(),
+            getOrgDecayAnalytics(),
             getDecayConfig()
           ]);
           
@@ -234,7 +234,6 @@ const DecaySystem = () => {
         // Save organization-specific decay settings
         console.log('🏢 Configuring org-specific decay for:', selectedOrgId);
         const result = await configureOrgDecay(
-          selectedOrgId,
           settings.rate,
           settings.interval,
           settings.minimumThreshold,
@@ -262,8 +261,8 @@ const DecaySystem = () => {
       const loadDecayData = async () => {
         if (selectedOrgId) {
           const [orgStats, orgAnalytics] = await Promise.all([
-            getOrgDecayStatistics(selectedOrgId),
-            getOrgDecayAnalytics(selectedOrgId)
+            getOrgDecayStatistics(),
+            getOrgDecayAnalytics()
           ]);
           
           if (orgStats) {
@@ -313,8 +312,8 @@ const DecaySystem = () => {
       const selectedOrgId = localStorage.getItem('selectedOrgId');
       if (selectedOrgId) {
         const [orgStats, orgAnalytics] = await Promise.all([
-          getOrgDecayStatistics(selectedOrgId),
-          getOrgDecayAnalytics(selectedOrgId)
+          getOrgDecayStatistics(),
+          getOrgDecayAnalytics()
         ]);
         
         if (orgStats) {

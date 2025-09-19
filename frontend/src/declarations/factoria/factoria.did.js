@@ -8,6 +8,7 @@ export const idlFactory = ({ IDL }) => {
     'created_at' : IDL.Nat64,
   });
   return IDL.Service({
+    'adminSetPool' : IDL.Func([IDL.Vec(IDL.Principal)], [IDL.Text], []),
     'archiveChild' : IDL.Func([IDL.Principal], [IDL.Text], []),
     'childHealth' : IDL.Func(
         [IDL.Principal],
@@ -47,6 +48,11 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'deleteChild' : IDL.Func([IDL.Principal], [IDL.Text], []),
+    'forceAddOwnerIndex' : IDL.Func(
+        [IDL.Principal, IDL.Principal],
+        [IDL.Text],
+        [],
+      ),
     'getAdmin' : IDL.Func([], [IDL.Principal], ['query']),
     'getChild' : IDL.Func([IDL.Principal], [IDL.Opt(Child)], ['query']),
     'listByOwner' : IDL.Func(
@@ -57,7 +63,11 @@ export const idlFactory = ({ IDL }) => {
     'listChildren' : IDL.Func([], [IDL.Vec(Child)], ['query']),
     'poolSize' : IDL.Func([], [IDL.Nat], ['query']),
     'reassignOwner' : IDL.Func([IDL.Principal, IDL.Principal], [IDL.Text], []),
-    'reinstallChild' : IDL.Func([IDL.Principal, IDL.Vec(IDL.Nat8)], [], []),
+    'reinstallChild' : IDL.Func(
+        [IDL.Principal, IDL.Principal, IDL.Principal],
+        [],
+        [],
+      ),
     'setAdmin' : IDL.Func([IDL.Principal], [], []),
     'setDefaultChildWasm' : IDL.Func([IDL.Vec(IDL.Nat8)], [], []),
     'startChild' : IDL.Func([IDL.Principal], [], []),

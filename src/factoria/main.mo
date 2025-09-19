@@ -10,7 +10,7 @@ import Blob "mo:base/Blob";
 import Cycles "mo:base/ExperimentalCycles";
 import Debug "mo:base/Debug";
 
-actor ReputationFactory {
+persistent actor ReputationFactory {
 
   // -------------------- IC Management (subset) --------------------
 
@@ -53,7 +53,7 @@ actor ReputationFactory {
     settings    : CanisterSettings;
   };
 
-  let IC : actor {
+  transient let IC : actor {
     create_canister : (CreateCanisterArgs) -> async CreateCanisterResult;
     install_code    : (InstallCodeArgs)    -> async ();
     start_canister  : (StartStopArgs)      -> async ();
@@ -90,9 +90,9 @@ actor ReputationFactory {
   stable var admin           : Principal = Principal.fromText("ly6rq-d4d23-63ct7-e2j6c-257jk-627xo-wwwd4-lnxm6-qt7xb-573bv-bqe");
 
   // -------------------- Runtime Indexes (rebuilt each upgrade) --------------------
-  var byId    = TrieMap.TrieMap<Principal, Child>(Principal.equal, Principal.hash);
-  var byOwner = TrieMap.TrieMap<Principal, Buffer.Buffer<Principal>>(Principal.equal, Principal.hash);
-  var pool    = Buffer.Buffer<Principal>(0);
+  transient var byId    = TrieMap.TrieMap<Principal, Child>(Principal.equal, Principal.hash);
+  transient var byOwner = TrieMap.TrieMap<Principal, Buffer.Buffer<Principal>>(Principal.equal, Principal.hash);
+  transient var pool    = Buffer.Buffer<Principal>(0);
 
   // -------------------- Upgrade hooks --------------------
   system func postupgrade() {

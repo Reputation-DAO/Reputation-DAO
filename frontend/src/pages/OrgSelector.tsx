@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { usePlugConnection } from "@/hooks/usePlugConnection";
-import { getAllOrganizations, createOrganization } from "@/components/canister/reputationDao";
+import { getAllOrganizations, createOrganization } from "@/services/childCanisterService";
+import { Principal } from "@dfinity/principal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -209,6 +210,63 @@ const OrgSelector = () => {
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
 
+  // Handle organization selection
+  const handleSelectOrg = (org: Organization) => {
+    setSelectedOrg(org);
+  };
+
+  // Handle continue to dashboard
+  const handleContinue = () => {
+    if (selectedOrg) {
+      // Set the selected organization in localStorage
+      localStorage.setItem('selectedOrgId', selectedOrg.id);
+      localStorage.setItem('selectedOrgName', selectedOrg.name);
+      navigate('/dashboard');
+    }
+  };
+
+  // Handle organization creation
+  const handleCreateOrg = async (name: string, description: string, category: string) => {
+    if (!principal) return;
+    
+    try {
+      setCreating(true);
+      console.log('🏗️ Creating organization:', name);
+      
+      // Set a flag to indicate organization creation is in progress
+      localStorage.setItem('orgCreationInProgress', 'true');
+      
+      // Create organization on backend
+      const result = await createOrganization(name, description, category);
+      console.log('✅ Organization created:', result);
+      
+      // Add to local state
+      const newOrg: Organization = {
+        id: result,
+        name,
+        description,
+        category,
+        memberCount: 1,
+        reputationPoints: 0,
+        role: "admin",
+        isOwner: true
+      };
+      
+      setOrganizations(prev => [...prev, newOrg]);
+      
+      // Clear the creation flag
+      localStorage.removeItem('orgCreationInProgress');
+      
+      console.log('✅ Organization added to local state');
+      
+    } catch (error) {
+      console.error('❌ Error creating organization:', error);
+      localStorage.removeItem('orgCreationInProgress');
+    } finally {
+      setCreating(false);
+    }
+  };
+
   // Load organizations from backend
   useEffect(() => {
     const loadOrganizations = async () => {
@@ -219,7 +277,7 @@ const OrgSelector = () => {
         console.log('🔄 Loading organizations...');
         
         const orgs = await getAllOrganizations();
-        console.log('� Received organizations:', orgs);
+
         
         // Convert backend orgs to UI format
         const uiOrgs: Organization[] = orgs.map((org, index) => ({
@@ -254,83 +312,6 @@ const OrgSelector = () => {
     (filter === "owned" && org.isOwner)
   );
 
-  const handleSelectOrg = (org: Organization) => {
-    setSelectedOrg(org);
-  };
-
-  const handleContinue = () => {
-    if (selectedOrg) {
-      // Store organization data in the format expected by Dashboard
-      localStorage.setItem('selectedOrgId', selectedOrg.id);
-      localStorage.setItem('userRole', selectedOrg.role);
-      localStorage.setItem('selectedOrganization', JSON.stringify(selectedOrg));
-      
-      // Trigger custom event for RoleContext to refresh
-      window.dispatchEvent(new Event('orgChanged'));
-      
-      navigate('/dashboard');
-    }
-  };
-
-  const handleCreateOrg = async (name: string, description: string, category: string) => {
-    if (!isConnected || !principal) {
-      toast.error("Please connect your wallet first");
-      return;
-    }
-
-    try {
-      setCreating(true);
-      console.log('🏗️ Creating organization:', name);
-      
-      // Set a flag to indicate organization creation is in progress
-      localStorage.setItem('orgCreationInProgress', 'true');
-      
-      // Create organization on backend
-      const result = await createOrganization(name, description, category);
-      console.log('✅ Organization created:', result);
-      
-      // Add to local state
-      const newOrg: Organization = {
-        id: name,
-        name,
-        description,
-        category,
-        memberCount: 1,
-        reputationPoints: 0,
-        role: 'admin',
-        isOwner: true
-      };
-      setOrganizations([...organizations, newOrg]);
-      setSelectedOrg(newOrg);
-      
-      // Store organization data in localStorage immediately
-      localStorage.setItem('selectedOrgId', newOrg.id);
-      localStorage.setItem('userRole', newOrg.role);
-      localStorage.setItem('selectedOrganization', JSON.stringify(newOrg));
-      
-      console.log('📦 Stored in localStorage:', {
-        selectedOrgId: localStorage.getItem('selectedOrgId'),
-        userRole: localStorage.getItem('userRole')
-      });
-      
-      // Trigger custom event for RoleContext to refresh
-      window.dispatchEvent(new Event('orgChanged'));
-      
-      toast.success(`Organization "${name}" created successfully! Redirecting to dashboard...`);
-      
-      // Wait a bit longer for all state updates to complete
-      setTimeout(() => {
-        console.log('🧭 Navigating to dashboard...');
-        navigate('/dashboard');
-      }, 2500);
-      
-    } catch (error) {
-      console.error('❌ Error creating organization:', error);
-      toast.error("Failed to create organization");
-    } finally {
-      setCreating(false);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-muted/20">

@@ -8,8 +8,8 @@
     },
     "factoria": {
       "main": "src/factoria/main.mo",
-      "type": "motoko"
-
+      "type": "motoko",
+      "id": "ttoz7-uaaaa-aaaam-qd34a-cai"
     },
     "frontend": {
       "type": "assets",

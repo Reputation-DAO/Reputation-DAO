@@ -1,9 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { Principal } from '@dfinity/principal';
-import { internetIdentityService } from '../services/internetIdentity';
-import { isPlugConnected, getCurrentPrincipal, getPlugActor } from '../components/canister/reputationDao';
+import { isPlugConnected, getCurrentPrincipal, getPlugActor } from '../services/childCanisterService';
 
-export type AuthMethod = 'plug' | 'internet-identity' | null;
+export type AuthMethod = 'plug' | null;
 
 interface AuthContextType {
   // Authentication state
@@ -14,7 +14,6 @@ interface AuthContextType {
   
   // Authentication methods
   loginWithPlug: () => Promise<void>;
-  loginWithInternetIdentity: () => Promise<void>;
   logout: () => Promise<void>;
   
   // Connection checking
@@ -43,18 +42,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsLoading(true);
     
     try {
-      // Check Internet Identity first
-      const isIIAuthenticated = await internetIdentityService.isAuthenticated();
-      if (isIIAuthenticated) {
-        const iiPrincipal = internetIdentityService.getPrincipal();
-        setIsAuthenticated(true);
-        setAuthMethod('internet-identity');
-        setPrincipal(iiPrincipal);
-        console.log('✅ Authenticated with Internet Identity:', iiPrincipal?.toString());
-        setIsLoading(false);
-        return;
-      }
-
       // Check Plug wallet
       const isPlugAuth = await isPlugConnected();
       if (isPlugAuth) {
@@ -89,11 +76,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsLoading(true);
     
     try {
-      // First logout from Internet Identity if connected
-      if (authMethod === 'internet-identity') {
-        await internetIdentityService.logout();
-      }
-
       // Connect with Plug
       await getPlugActor();
       const plugPrincipal = await getCurrentPrincipal();
@@ -112,43 +94,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   /**
-   * Login with Internet Identity
-   */
-  const loginWithInternetIdentity = async () => {
-    setIsLoading(true);
-    
-    try {
-      // First disconnect Plug if connected
-      if (authMethod === 'plug' && window.ic?.plug) {
-        await window.ic.plug.disconnect();
-      }
-
-      // Login with Internet Identity
-      const iiPrincipal = await internetIdentityService.login();
-      
-      setIsAuthenticated(true);
-      setAuthMethod('internet-identity');
-      setPrincipal(iiPrincipal);
-      
-      console.log('✅ Internet Identity login successful:', iiPrincipal.toString());
-    } catch (error) {
-      console.error('❌ Internet Identity login failed:', error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  /**
    * Logout from current authentication method
    */
   const logout = async () => {
     setIsLoading(true);
     
     try {
-      if (authMethod === 'internet-identity') {
-        await internetIdentityService.logout();
-      } else if (authMethod === 'plug' && window.ic?.plug) {
+      if (authMethod === 'plug' && window.ic?.plug) {
         await window.ic.plug.disconnect();
       }
 
@@ -173,9 +125,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       throw new Error('Not authenticated. Please login first.');
     }
 
-    if (authMethod === 'internet-identity') {
-      return internetIdentityService.getActor();
-    } else if (authMethod === 'plug') {
+    if (authMethod === 'plug') {
       // This will be handled by the existing getPlugActor function
       return getPlugActor();
     } else {
@@ -194,7 +144,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     principal,
     isLoading,
     loginWithPlug,
-    loginWithInternetIdentity,
     logout,
     checkConnection,
     getActor,

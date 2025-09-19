@@ -26,7 +26,7 @@ import {
   MoreVertical
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { addTrustedAwarder, removeTrustedAwarder, getTrustedAwarders, getOrgUserBalances, getOrgTransactionHistory } from "@/components/canister/reputationDao";
+import { addTrustedAwarder, removeTrustedAwarder, getTrustedAwarders, getOrgUserBalances, getOrgTransactionHistory } from "@/services/childCanisterService";
 import { Principal } from "@dfinity/principal";
 import { usePlugConnection } from "@/hooks/usePlugConnection";
 import { parseTransactionType, convertTimestampToDate } from "@/utils/transactionUtils";
@@ -83,12 +83,12 @@ const ManageAwarders = () => {
           return;
         }
 
-        const backendAwarders = await getTrustedAwarders(selectedOrgId);
+        const backendAwarders = await getTrustedAwarders();
         console.log('📦 Received awarders:', backendAwarders);
         
         // Get real data for awarders
-        const userBalances = await getOrgUserBalances(selectedOrgId);
-        const transactions = await getOrgTransactionHistory(selectedOrgId);
+        const userBalances = await getOrgUserBalances();
+        const transactions = await getOrgTransactionHistory();
         
         // Create a map of user balances for quick lookup
         const balanceMap = new Map<string, number>();
@@ -180,7 +180,7 @@ const ManageAwarders = () => {
 
       // Add awarder via backend
       const principalObj = Principal.fromText(newAwarder.principal);
-      const result = await addTrustedAwarder(selectedOrgId, principalObj, newAwarder.name);
+      const result = await addTrustedAwarder( principalObj, newAwarder.name);
       console.log('✅ Awarder added successfully:', result);
       
       const newAwarderData: Awarder = {
@@ -222,7 +222,7 @@ const ManageAwarders = () => {
 
       // Remove awarder via backend
       const principalObj = Principal.fromText(awarder.principal);
-      const result = await removeTrustedAwarder(selectedOrgId, principalObj);
+      const result = await removeTrustedAwarder (principalObj);
       console.log('✅ Awarder removed successfully:', result);
       
       setAwarders(prev => prev.filter(awarder => awarder.id !== id));

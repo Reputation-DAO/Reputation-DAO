@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { isPlugConnected, getCurrentPrincipal, getPlugActor } from '../components/canister/reputationDao';
+import { isPlugConnected, getCurrentPrincipal, getPlugActor } from '../services/childCanisterService';
 import { useRoute } from '../contexts/RouteContext';
 
 interface UsePlugConnectionOptions {

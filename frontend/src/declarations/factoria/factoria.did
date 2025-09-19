@@ -12,6 +12,7 @@ type Child =
    status: Status;
  };
 service : {
+  adminSetPool: (newPool: vec principal) -> (text);
   /// Archive a child back to pool.
   archiveChild: (canister_id: principal) -> (text);
   /// Fetch child health straight from the child
@@ -30,14 +31,15 @@ service : {
                    archived: nat;
                    total: nat;
                  }) query;
-  /// Create new ReputationChild with app-level owner; if `controllers` empty, default to [factory, owner].
   createChildForOwner: (owner: principal, cycles_for_create: nat,
    controllers: vec principal, note: text) -> (principal);
-  /// Create or reuse from pool for given owner; `init_arg` must candid-encode the SAME SINGLE arg the child expects (owner).
+  /// Create or reuse from pool for given owner; ensure final cycles >= cycles_for_create.
+  /// If reused canister has fewer cycles than requested, top up the difference.
   createOrReuseChildFor: (owner: principal, cycles_for_create: nat,
    controllers: vec principal, note: text) -> (principal);
   /// Delete permanently.
   deleteChild: (canister_id: principal) -> (text);
+  forceAddOwnerIndex: (owner: principal, cid: principal) -> (text);
   getAdmin: () -> (principal) query;
   getChild: (canister_id: principal) -> (opt Child) query;
   listByOwner: (owner: principal) -> (vec principal) query;
@@ -45,7 +47,8 @@ service : {
   poolSize: () -> (nat) query;
   /// Book-keeping only (does not touch actual controller list).
   reassignOwner: (canister_id: principal, newOwner: principal) -> (text);
-  reinstallChild: (canister_id: principal, arg: blob) -> ();
+  reinstallChild: (canister_id: principal, owner: principal, factory:
+   principal) -> ();
   setAdmin: (p: principal) -> ();
   setDefaultChildWasm: (w: blob) -> ();
   startChild: (canister_id: principal) -> ();

@@ -8,13 +8,13 @@ import type { _SERVICE } from '../../declarations/reputation_dao/reputation_dao.
 export type ChildActor = ActorSubclass<_SERVICE>;
 
 type MakeChildOpts = {
-  host?: string;          // defaults to icp-api.io
+  host?: string;          // defaults to ic0.app
   canisterId: string;     // child canister id (:cid)
   whitelist?: string[];   // optional extra canisters
 };
 
 export async function makeChildWithPlug(opts: MakeChildOpts): Promise<ChildActor> {
-  const host = opts.host ?? "https://icp-api.io";
+  const host = opts.host ?? "https://ic0.app";
   const whitelist = opts.whitelist ?? [opts.canisterId];
 
   const plug = (window as any)?.ic?.plug;

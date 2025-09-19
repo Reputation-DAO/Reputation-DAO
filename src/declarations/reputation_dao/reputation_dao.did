@@ -104,6 +104,10 @@ type ReputationChild =
    processBatchDecay: () -> (text);
    removeTrustedAwarder: (p: principal) -> (text);
    resetUser: (user: principal, reason: opt text) -> (text);
+   /// Drain (almost) all cycles to the factory's wallet_receive.
+   /// Only callable by the factory or the owner.
+   /// Returns the number of cycles successfully transferred.
+   returnCyclesToFactory: (minRemain: nat) -> (nat);
    revokeRep: (from: principal, amount: nat, reason: opt text) -> (text);
    setDailyMintLimit: (limit: nat) -> (text);
    setMinCyclesAlert: (threshold: nat) -> (text);
@@ -136,4 +140,4 @@ type Awarder =
    id: principal;
    name: text;
  };
-service : (initOwner: principal) -> ReputationChild
+service : (initOwner: principal, initFactory: principal) -> ReputationChild

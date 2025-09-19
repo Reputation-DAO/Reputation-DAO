@@ -5,7 +5,7 @@ import { StoicWallet } from '@connect2ic/core/providers/stoic-wallet';
 import { InternetIdentity } from '@connect2ic/core/providers/internet-identity';
 
 // Use the same canister ID as in reputationDao.ts
-const canisterId = '2iql3-oiaaa-aaaab-qacja-cai';
+const canisterId = import.meta.env.VITE_REPUTATION_DAO_CANISTER_ID || 'owyeu-jiaaa-aaaam-qdvwq-cai';
 
 const client = createClient({
   providers: [

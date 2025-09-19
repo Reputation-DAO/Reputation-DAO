@@ -175,6 +175,7 @@ export const idlFactory = ({ IDL }) => {
     'processBatchDecay' : IDL.Func([], [IDL.Text], []),
     'removeTrustedAwarder' : IDL.Func([IDL.Principal], [IDL.Text], []),
     'resetUser' : IDL.Func([IDL.Principal, IDL.Opt(IDL.Text)], [IDL.Text], []),
+    'returnCyclesToFactory' : IDL.Func([IDL.Nat], [IDL.Nat], []),
     'revokeRep' : IDL.Func(
         [IDL.Principal, IDL.Nat, IDL.Opt(IDL.Text)],
         [IDL.Text],
@@ -198,4 +199,4 @@ export const idlFactory = ({ IDL }) => {
   });
   return ReputationChild;
 };
-export const init = ({ IDL }) => { return [IDL.Principal]; };
+export const init = ({ IDL }) => { return [IDL.Principal, IDL.Principal]; };

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRole } from "@/contexts/RoleContext";
 import { usePlugConnection } from "@/hooks/usePlugConnection";
-import { getBalance } from "@/components/canister/reputationDao";
+import { getBalance } from "@/services/childCanisterService";
 import { Principal } from "@dfinity/principal";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -167,9 +167,17 @@ const ViewBalances = () => {
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
         <DashboardSidebar 
-          userRole={userRole?.toLowerCase() as 'admin' | 'awarder' | 'member' || 'member'}
-          userName={principal ? `${principal.toString().slice(0, 8)}...${principal.toString().slice(-8)}` : 'Anonymous'}
-          userPrincipal={principal}
+          userRole={
+            userRole
+              ? (userRole.toLowerCase() as 'admin' | 'awarder' | 'member')
+              : 'member'
+          }
+          userName={
+            principal
+              ? `${principal.toString().slice(0, 8)}...${principal.toString().slice(-8)}`
+              : 'Anonymous'
+          }
+          userPrincipal={principal ?? ''}
           onDisconnect={handleDisconnect}
         />
         

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 import { useRole } from "@/contexts/RoleContext";
 import { usePlugConnection } from "@/hooks/usePlugConnection";
-import { getPlugActor, revokeRep, getTransactionsByUser, getOrgTransactionHistory, getOrgStats } from "@/components/canister/reputationDao";
+import { getPlugActor, revokeRep, getTransactionsByUser, getOrgTransactionHistory, getOrgStats } from "@/services/childCanisterService";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,10 +84,9 @@ const RevokeRep = () => {
       
       try {
         console.log('📊 RevokeRep: Loading revocation data for:', selectedOrgId);
-        
+
         // Get all organization transactions
-        const transactions = await getOrgTransactionHistory(selectedOrgId);
-        
+        const transactions = await getOrgTransactionHistory();
 
         // Filter only Revoke transactions
         const revokeTransactions = transactions.filter(tx => {
@@ -197,7 +196,7 @@ const RevokeRep = () => {
       });
 
       // Call backend revokeRep function
-      const result = await revokeRep(selectedOrgId, recipientPrincipal, amount, formData.reason);
+      const result = await revokeRep( recipientPrincipal, amount, formData.reason);
       
       // Check if result indicates an error
       if (typeof result === 'string') {

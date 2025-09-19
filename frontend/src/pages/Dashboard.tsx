@@ -3,17 +3,17 @@ import { useNavigate } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 import { useRole } from "@/contexts/RoleContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { getBalance, getOrgUserBalances, getOrgTransactionHistory, getOrgStats } from "@/components/canister/reputationDao";
+import { getBalance, getOrgUserBalances, getOrgTransactionHistory, getOrgStats } from "@/services/childCanisterService";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { parseTransactionTypeForUI, convertTimestampToDate, extractReason } from "@/utils/transactionUtils";
-import { 
+import {
   Star, 
   Users, 
-  TrendingUp, 
+  TrendingUp,
   Award, 
   Settings, 
   Plus,
@@ -209,12 +209,12 @@ const Dashboard = () => {
         console.log('📊 Loading organization stats for:', selectedOrgId);
         
         // Get organization stats (total points distributed, not current balances)
-        const orgStatsData = await getOrgStats(selectedOrgId);
+        const orgStatsData = await getOrgStats();
         const totalPointsDistributed = orgStatsData?.totalPoints || 0;
         const totalMembers = orgStatsData?.userCount || 0;
         
         // Get all users and their current balances for member list
-        const userBalances = await getOrgUserBalances(selectedOrgId);
+        const userBalances = await getOrgUserBalances();
         
         // Convert user balances to members data
         const membersData: Member[] = userBalances.map((user, index) => ({
@@ -230,7 +230,7 @@ const Dashboard = () => {
         setMembers(membersData);
         
         // Get recent transactions for activity count and recent activity
-        const recentTransactions = await getOrgTransactionHistory(selectedOrgId);
+        const recentTransactions = await getOrgTransactionHistory();
         const recentCount = recentTransactions.length;
         
 
@@ -447,7 +447,7 @@ const Dashboard = () => {
               />
             </div>
             <div className="animate-fade-in" style={{ animationDelay: '0.3s' }}>
-              <StatCard
+        <StatCard
                 title="Your Reputation"
                 value={loading ? "Loading..." : userBalance}
                 icon={Award}
@@ -456,7 +456,7 @@ const Dashboard = () => {
               />
             </div>
             <div className="animate-fade-in" style={{ animationDelay: '0.4s' }}>
-              <StatCard
+        <StatCard
                 title="Growth Rate"
                 value={orgStats.growthRate}
                 icon={BarChart3}
