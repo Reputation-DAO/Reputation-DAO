@@ -32,7 +32,7 @@ export default function BlogPage() {
       const data = await blogActor.getPosts();
       const formatted = data.map((p: Post) => ({
         ...p,
-        status: Object.keys(p.status)[0] as "Draft" | "Published" | "Archived",
+        status: p.status, // Keep the original PostStatus variant type
       }));
       setPosts(formatted);
     } finally {
