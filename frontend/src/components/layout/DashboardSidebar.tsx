@@ -176,7 +176,7 @@ export function DashboardSidebar({ userRole, userName, userPrincipal, onDisconne
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <p className="text-slate-900 dark:text-slate-100 truncate text-sm font-medium">
-                    {userPrincipal ? `${userPrincipal.slice(0, 8)}...${userPrincipal.slice(-4)}` : 'Unknown User'}
+                    {userName || (userPrincipal ? `${userPrincipal.slice(0, 8)}...${userPrincipal.slice(-4)}` : 'Unknown User')}
                   </p>
                   <p className="text-slate-500 dark:text-slate-400 text-xs capitalize">{userRole}</p>
                 </div>

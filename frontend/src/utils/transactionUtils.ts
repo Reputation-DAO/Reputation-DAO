@@ -207,6 +207,7 @@ export const formatTransactionAmount = (type: 'award' | 'revoke' | 'decay', amou
 
 /**
  * Convert timestamp from backend to Date object
+ * IC typically uses nanoseconds since Unix epoch
  */
 export const convertTimestampToDate = (timestamp: bigint | number): Date => {
   // Convert to number if it's a BigInt
@@ -219,29 +220,36 @@ export const convertTimestampToDate = (timestamp: bigint | number): Date => {
     asString: timestampNum.toString()
   });
   
-  // Try different timestamp formats
-  let milliseconds = timestampNum;
+  let milliseconds: number;
   
-  // If the timestamp is very small (like 1758), it might be in seconds
-  if (timestampNum < 1000000000) { // Less than year 2001 in seconds
-    console.log('🕐 Timestamp appears to be in seconds, converting to milliseconds');
-    milliseconds = timestampNum * 1000;
-  }
-  // If the timestamp is very large (like 1703123456789000000), it might be in nanoseconds
-  else if (timestampNum > 1000000000000) { // More than year 2001 in milliseconds
+  // IC timestamps are typically in nanoseconds since Unix epoch
+  // Check if it's in nanoseconds (very large number)
+  if (timestampNum > 1000000000000000) { // More than year 2001 in nanoseconds
     console.log('🕐 Timestamp appears to be in nanoseconds, converting to milliseconds');
     milliseconds = timestampNum / 1000000;
   }
-  // Otherwise, assume it's already in milliseconds
-  else {
+  // If it's a reasonable timestamp in seconds (like 1703123456)
+  else if (timestampNum > 1000000000 && timestampNum < 1000000000000) {
+    console.log('🕐 Timestamp appears to be in seconds, converting to milliseconds');
+    milliseconds = timestampNum * 1000;
+  }
+  // If it's already in milliseconds
+  else if (timestampNum > 1000000000000) {
     console.log('🕐 Timestamp appears to be in milliseconds, using as-is');
     milliseconds = timestampNum;
+  }
+  // For very small numbers, assume they're seconds (like 1758)
+  else {
+    console.log('🕐 Timestamp appears to be in seconds (small number), converting to milliseconds');
+    milliseconds = timestampNum * 1000;
   }
   
   console.log('🕐 Final milliseconds:', milliseconds);
   
   const date = new Date(milliseconds);
   console.log('🕐 Final date:', date.toISOString());
+  console.log('🕐 Local date string:', date.toLocaleDateString());
+  console.log('🕐 Local time string:', date.toLocaleTimeString());
   
   return date;
 };
@@ -287,4 +295,40 @@ export const extractReason = (reasonArray: [] | [string]): string => {
     return reasonArray[0];
   }
   return "No reason provided";
+};
+
+/**
+ * Format date for display in device's local format
+ */
+export const formatDateForDisplay = (date: Date): string => {
+  return date.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+};
+
+/**
+ * Format date and time for display in device's local format
+ */
+export const formatDateTimeForDisplay = (date: Date): string => {
+  return date.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
+};
+
+/**
+ * Format time for display in device's local format
+ */
+export const formatTimeForDisplay = (date: Date): string => {
+  return date.toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
 };

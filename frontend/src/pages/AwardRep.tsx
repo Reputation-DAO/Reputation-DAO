@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRole } from "@/contexts/RoleContext";
 import { usePlugConnection } from "@/hooks/usePlugConnection";
+import { getUserDisplayData } from "@/utils/userUtils";
 import { awardRep, getOrgTransactionHistory, getOrgStats } from "@/services/childCanisterService";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { toast } from "sonner";
-import { parseTransactionType, convertTimestampToDate, extractReason } from "@/utils/transactionUtils";
+import { parseTransactionType, convertTimestampToDate, extractReason, formatDateForDisplay } from "@/utils/transactionUtils";
 import { 
   Award, 
   Star, 
@@ -252,7 +253,28 @@ const AwardRep = () => {
       });
     } catch (error) {
       console.error("Error awarding reputation:", error);
-      toast.error("Failed to award reputation. Please try again.");
+      
+      if (error instanceof Error) {
+        if (error.message.includes("Not a trusted awarder")) {
+          toast.error("You are not authorized to award reputation. Only trusted awarders can award points.");
+        } else if (error.message.includes("Paused")) {
+          toast.error("The reputation system is currently paused.");
+        } else if (error.message.includes("Amount must be > 0")) {
+          toast.error("Amount must be greater than 0.");
+        } else if (error.message.includes("Cannot self-award")) {
+          toast.error("You cannot award reputation to yourself.");
+        } else if (error.message.includes("Blacklisted principal")) {
+          toast.error("This principal is blacklisted and cannot receive reputation.");
+        } else if (error.message.includes("Invalid principal")) {
+          toast.error("Invalid recipient address. Please check the principal format.");
+        } else if (error.message.includes("Organization does not exist")) {
+          toast.error("Organization not found. Please check your organization selection.");
+        } else {
+          toast.error(`Failed to award reputation: ${error.message}`);
+        }
+      } else {
+        toast.error("Failed to award reputation. Please try again.");
+      }
     } finally {
       setIsAwarding(false);
     }
@@ -284,8 +306,8 @@ const AwardRep = () => {
       <div className="min-h-screen flex w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
         <DashboardSidebar 
           userRole={(userRole?.toLowerCase() as 'admin' | 'awarder' | 'member') || 'member'}
-          userName={principal ? `${principal.toString().slice(0, 8)}...${principal.toString().slice(-8)}` : 'Anonymous'}
-          userPrincipal={principal ?? ''}
+          userName={getUserDisplayData(principal).userName}
+          userPrincipal={getUserDisplayData(principal).userPrincipal}
           onDisconnect={handleDisconnect}
         />
         
@@ -484,7 +506,7 @@ const AwardRep = () => {
                                 {award.category}
                               </Badge>
                               <span className="text-xs text-muted-foreground">
-                                {award.timestamp.toLocaleDateString()}
+                                {formatDateForDisplay(award.timestamp)}
                               </span>
                             </div>
                           </div>

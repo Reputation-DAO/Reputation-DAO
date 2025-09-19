@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 import { usePlugConnection } from "@/hooks/usePlugConnection";
+import { getUserDisplayData } from "@/utils/userUtils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +27,7 @@ import {
   getOrgDecayAnalytics,
   configureOrgDecay
 } from "@/services/childCanisterService";
-import { parseTransactionType, convertTimestampToDate, extractReason } from "@/utils/transactionUtils";
+import { parseTransactionType, convertTimestampToDate, extractReason, formatDateForDisplay } from "@/utils/transactionUtils";
 import {
   Timer,
   Settings,
@@ -68,8 +69,8 @@ const DecaySystem = () => {
   const navigate = useNavigate();
   const { isConnected, principal } = usePlugConnection({ autoCheck: true });
   const [userRole] = useState<'admin' | 'awarder' | 'member'>('admin');
-  const [userName] = useState("");
-  const [userPrincipal] = useState("rdmx6-jaaaa-aaaah-qcaiq-cai");
+  // Get user display data
+  const userDisplayData = getUserDisplayData(principal);
   const [loading, setLoading] = useState(false);
   
   const [settings, setSettings] = useState<DecaySettings>({
@@ -380,8 +381,8 @@ const DecaySystem = () => {
       <div className="min-h-screen flex w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
         <DashboardSidebar 
           userRole={userRole}
-          userName={userName}
-          userPrincipal={userPrincipal}
+          userName={userDisplayData.userName}
+          userPrincipal={userDisplayData.userPrincipal}
           onDisconnect={handleDisconnect}
         />
         
@@ -677,7 +678,7 @@ const DecaySystem = () => {
                                 {event.previousAmount} → {event.newAmount}
                               </span>
                               <span className="text-xs text-muted-foreground">
-                                {event.timestamp.toLocaleDateString()}
+                                {formatDateForDisplay(event.timestamp)}
                               </span>
                             </div>
                           </div>

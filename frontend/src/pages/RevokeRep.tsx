@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 import { useRole } from "@/contexts/RoleContext";
 import { usePlugConnection } from "@/hooks/usePlugConnection";
+import { getUserDisplayData } from "@/utils/userUtils";
 import { getPlugActor, revokeRep, getTransactionsByUser, getOrgTransactionHistory, getOrgStats } from "@/services/childCanisterService";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { toast } from "sonner";
-import { parseTransactionType, convertTimestampToDate, extractReason } from "@/utils/transactionUtils";
+import { parseTransactionType, convertTimestampToDate, extractReason, formatDateForDisplay } from "@/utils/transactionUtils";
 import {
   UserMinus,
   AlertTriangle,
@@ -198,13 +199,6 @@ const RevokeRep = () => {
       // Call backend revokeRep function
       const result = await revokeRep( recipientPrincipal, amount, formData.reason);
       
-      // Check if result indicates an error
-      if (typeof result === 'string') {
-        console.error('❌ Backend returned error:', result);
-        toast.error(`Failed to revoke reputation: ${result}`);
-        return;
-      }
-      
       console.log('✅ Reputation revoked successfully:', result);
       toast.success(`Successfully revoked ${amount} REP points from ${formData.recipientAddress}`);
       
@@ -241,12 +235,18 @@ const RevokeRep = () => {
     } catch (error) {
       console.error("❌ Error revoking reputation:", error);
       if (error instanceof Error) {
-        if (error.message.includes("Invalid principal")) {
+        if (error.message.includes("Only owner can revoke")) {
+          toast.error("Only the organization owner can revoke reputation.");
+        } else if (error.message.includes("Paused")) {
+          toast.error("The reputation system is currently paused.");
+        } else if (error.message.includes("Amount must be > 0")) {
+          toast.error("Amount must be greater than 0.");
+        } else if (error.message.includes("Blacklisted principal")) {
+          toast.error("This principal is blacklisted.");
+        } else if (error.message.includes("Invalid principal")) {
           toast.error("Invalid recipient address. Please check the principal format.");
         } else if (error.message.includes("Organization does not exist")) {
           toast.error("Organization not found. Please check your organization selection.");
-        } else if (error.message.includes("User not authorized")) {
-          toast.error("You don't have permission to revoke reputation in this organization.");
         } else {
           toast.error(`Failed to revoke reputation: ${error.message}`);
         }
@@ -284,8 +284,8 @@ const RevokeRep = () => {
       <div className="min-h-screen flex w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
         <DashboardSidebar 
           userRole={userRole.toLowerCase() as 'admin' | 'awarder' | 'member'}
-          userName={`User ${principal?.slice(0, 8) || 'Unknown'}`}
-          userPrincipal={principal || ''}
+          userName={getUserDisplayData(principal).userName}
+          userPrincipal={getUserDisplayData(principal).userPrincipal}
           onDisconnect={handleDisconnect}
         />
         
@@ -544,7 +544,7 @@ const RevokeRep = () => {
                                 {revocation.category}
                               </Badge>
                               <span className="text-xs text-muted-foreground">
-                                {revocation.timestamp.toLocaleDateString()}
+                                {formatDateForDisplay(revocation.timestamp)}
                               </span>
                             </div>
                           </div>

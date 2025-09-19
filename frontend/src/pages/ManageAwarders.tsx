@@ -29,7 +29,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { addTrustedAwarder, removeTrustedAwarder, getTrustedAwarders, getOrgUserBalances, getOrgTransactionHistory } from "@/services/childCanisterService";
 import { Principal } from "@dfinity/principal";
 import { usePlugConnection } from "@/hooks/usePlugConnection";
-import { parseTransactionType, convertTimestampToDate } from "@/utils/transactionUtils";
+import { getUserDisplayData } from "@/utils/userUtils";
+import { parseTransactionType, convertTimestampToDate, formatDateForDisplay } from "@/utils/transactionUtils";
 
 interface Awarder {
   id: string;
@@ -64,8 +65,8 @@ const ManageAwarders = () => {
   const navigate = useNavigate();
   const { isConnected, principal } = usePlugConnection({ autoCheck: true });
   const [userRole] = useState<'admin' | 'awarder' | 'member'>('admin');
-  const [userName] = useState("");
-  const [userPrincipal] = useState("rdmx6-jaaaa-aaaah-qcaiq-cai");
+  // Get user display data
+  const userDisplayData = getUserDisplayData(principal);
   const [loading, setLoading] = useState(false);
   
   const [awarders, setAwarders] = useState<Awarder[]>([]);
@@ -280,8 +281,8 @@ const ManageAwarders = () => {
       <div className="min-h-screen flex w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
         <DashboardSidebar 
           userRole={userRole}
-          userName={userName}
-          userPrincipal={userPrincipal}
+          userName={userDisplayData.userName}
+          userPrincipal={userDisplayData.userPrincipal}
           onDisconnect={handleDisconnect}
         />
         
@@ -483,7 +484,7 @@ const ManageAwarders = () => {
                           <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
                             <div className="flex items-center gap-1">
                               <Calendar className="w-3 h-3" />
-                              Joined {awarder.joinDate.toLocaleDateString()}
+                              Joined {formatDateForDisplay(awarder.joinDate)}
                             </div>
                             <div className="flex items-center gap-1">
                               <Activity className="w-3 h-3" />
@@ -497,7 +498,7 @@ const ManageAwarders = () => {
                         <div className="text-right">
                           <div className="font-medium text-foreground">{awarder.reputation} REP</div>
                           <div className="text-xs text-muted-foreground">
-                            Active {awarder.lastActive.toLocaleDateString()}
+                            Active {formatDateForDisplay(awarder.lastActive)}
                           </div>
                         </div>
                         

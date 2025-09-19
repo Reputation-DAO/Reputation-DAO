@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRole } from "@/contexts/RoleContext";
 import { usePlugConnection } from "@/hooks/usePlugConnection";
+import { getUserDisplayData } from "@/utils/userUtils";
+import { formatDateForDisplay } from "@/utils/transactionUtils";
 import { getBalance } from "@/services/childCanisterService";
 import { Principal } from "@dfinity/principal";
 import { Card } from "@/components/ui/card";
@@ -172,12 +174,8 @@ const ViewBalances = () => {
               ? (userRole.toLowerCase() as 'admin' | 'awarder' | 'member')
               : 'member'
           }
-          userName={
-            principal
-              ? `${principal.toString().slice(0, 8)}...${principal.toString().slice(-8)}`
-              : 'Anonymous'
-          }
-          userPrincipal={principal ?? ''}
+          userName={getUserDisplayData(principal).userName}
+          userPrincipal={getUserDisplayData(principal).userPrincipal}
           onDisconnect={handleDisconnect}
         />
         

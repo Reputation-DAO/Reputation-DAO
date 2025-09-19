@@ -3,13 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 import { useRole } from "@/contexts/RoleContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { getUserDisplayData } from "@/utils/userUtils";
 import { getBalance, getOrgUserBalances, getOrgTransactionHistory, getOrgStats, testCanisterConnection } from "@/services/childCanisterService";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { parseTransactionTypeForUI, convertTimestampToDate, extractReason } from "@/utils/transactionUtils";
+import { parseTransactionTypeForUI, convertTimestampToDate, extractReason, formatDateForDisplay } from "@/utils/transactionUtils";
 import {
   Star, 
   Users, 
@@ -121,7 +122,7 @@ const ActivityItem = ({ activity }: { activity: ReputationActivity }) => (
     </div>
     
     <div className="text-xs text-muted-foreground">
-      {activity.timestamp.toLocaleDateString()}
+      {formatDateForDisplay(activity.timestamp)}
     </div>
   </div>
 );
@@ -156,7 +157,8 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { userRole, loading: roleLoading } = useRole();
   const { isAuthenticated, principal } = useAuth();
-  const [userName] = useState("John Doe");
+  // Get user display data
+  const userDisplayData = getUserDisplayData(principal);
   const [userBalance, setUserBalance] = useState(0);
   const [loading, setLoading] = useState(false);
   const [orgStats, setOrgStats] = useState({
@@ -378,8 +380,8 @@ const Dashboard = () => {
       <div className="min-h-screen flex w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
         <DashboardSidebar 
           userRole={userRole?.toLowerCase() as 'admin' | 'awarder' | 'member' || 'member'}
-          userName={userName}
-          userPrincipal={principal?.toString() || ""}
+          userName={userDisplayData.userName}
+          userPrincipal={userDisplayData.userPrincipal}
           onDisconnect={handleDisconnect}
         />
         

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 import { useRole } from "@/contexts/RoleContext";
 import { usePlugConnection } from "@/hooks/usePlugConnection";
+import { getUserDisplayData } from "@/utils/userUtils";
 import { getOrgTransactionHistory } from "@/services/childCanisterService";
 import type { Transaction as BackendTransaction } from "@/declarations/reputation_dao/reputation_dao.did.d.ts";
 import { Card } from "@/components/ui/card";
@@ -15,7 +16,7 @@ import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { parseTransactionType, parseTransactionTypeAlternative, getTransactionTypeIcon, getTransactionTypeBgClass, convertTimestampToDate, getTransactionTypeDescription, formatTransactionAmount, extractReason } from "@/utils/transactionUtils";
+import { parseTransactionType, parseTransactionTypeAlternative, getTransactionTypeIcon, getTransactionTypeBgClass, convertTimestampToDate, getTransactionTypeDescription, formatTransactionAmount, extractReason, formatDateTimeForDisplay } from "@/utils/transactionUtils";
 import {
   FileText,
   Search,
@@ -268,8 +269,8 @@ const TransactionLog = () => {
       <div className="min-h-screen flex w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
         <DashboardSidebar 
           userRole={userRole.toLowerCase() as 'admin' | 'awarder' | 'member'}
-          userName={`User ${principal?.slice(0, 8) || 'Unknown'}`}
-          userPrincipal={principal || ''}
+          userName={getUserDisplayData(principal).userName}
+          userPrincipal={getUserDisplayData(principal).userPrincipal}
           onDisconnect={handleDisconnect}
         />
         
@@ -458,7 +459,7 @@ const TransactionLog = () => {
                             <div className="flex items-center gap-4 text-xs text-muted-foreground">
                               <div className="flex items-center gap-1">
                                 <Calendar className="w-3 h-3" />
-                                {transaction.timestamp.toLocaleString()}
+                                {formatDateTimeForDisplay(transaction.timestamp)}
                               </div>
                               {transaction.category && (
                                 <Badge variant="outline" className="text-xs">
