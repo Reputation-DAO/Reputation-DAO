@@ -1,0 +1,17 @@
+// Version: 1.0.0
+type Child__477702549 =
+  {
+    created_at : Nat64;
+    id : Principal;
+    note : Text;
+    owner : Principal;
+    status : Status__364183048
+  };
+type Status__364183048 = {#Active; #Archived};
+actor {
+  stable var admin : Principal;
+  stable var store : [Child__477702549];
+  stable var storeOwnerPairs : [(Principal, Principal)];
+  stable var storePool : [Principal];
+  stable var wasm : ?Blob
+};

@@ -1,0 +1,102 @@
+// Version: 1.0.0
+type AssocList__1070081661<K, V> = AssocList__350321376<K, V>;
+type AssocList__350321376<K, V> = List__300693946<(K, V)>;
+type Branch__23217752<K, V> =
+  {left : Trie__667510501<K, V>; right : Trie__667510501<K, V>; size : Nat};
+type Event__181007155 =
+  {id : Nat; kind : Text; payload : Blob; timestamp : Nat};
+type Hash__437950368 = Nat32;
+type Key__916294360<K> = {hash : Hash__437950368; key : K};
+type Leaf__671877739<K, V> =
+  {keyvals : AssocList__1070081661<Key__916294360<K>, V>; size : Nat};
+type List__300693946<T> = ?(T, List__300693946<T>);
+type TopUp__1008859068 =
+  {amount : Nat; from : Principal; id : Nat; timestamp : Nat};
+type TransactionType__847121993 = {#Award; #Decay; #Revoke};
+type Transaction__753434484 =
+  {
+    amount : Nat;
+    from : Principal;
+    id : Nat;
+    reason : ?Text;
+    timestamp : Nat;
+    to : Principal;
+    transactionType : TransactionType__847121993
+  };
+type Trie__667510501<K, V> =
+  {#branch : Branch__23217752<K, V>; #empty; #leaf : Leaf__671877739<K, V>};
+type UserDecayInfo__420269834 =
+  {
+    lastActivityTime : Nat;
+    lastDecayTime : Nat;
+    registrationTime : Nat;
+    totalDecayed : Nat
+  };
+actor {
+  stable VERSION : Text;
+  stable var balances :
+    {
+      #branch : Branch__23217752<Principal, Nat>;
+      #empty;
+      #leaf : Leaf__671877739<Principal, Nat>
+    };
+  stable var blacklistT :
+    {
+      #branch : Branch__23217752<Principal, Bool>;
+      #empty;
+      #leaf : Leaf__671877739<Principal, Bool>
+    };
+  stable var dailyMintLimit : Nat;
+  stable var dailyMinted :
+    {
+      #branch : Branch__23217752<Principal, Nat>;
+      #empty;
+      #leaf : Leaf__671877739<Principal, Nat>
+    };
+  stable var decayConfig :
+    {
+      decayInterval : Nat;
+      decayRate : Nat;
+      enabled : Bool;
+      gracePeriod : Nat;
+      minThreshold : Nat
+    };
+  stable var events : [Event__181007155];
+  stable var factory : Principal;
+  stable var lastGlobalDecayProcess : Nat;
+  stable var lastMintTimestamp :
+    {
+      #branch : Branch__23217752<Principal, Nat>;
+      #empty;
+      #leaf : Leaf__671877739<Principal, Nat>
+    };
+  stable var minCyclesAlert : Nat;
+  stable var nextEventId : Nat;
+  stable var nextTopUpId : Nat;
+  stable var nextTransactionId : Nat;
+  stable var owner : Principal;
+  stable var parent : ?Principal;
+  stable var paused : Bool;
+  stable var pendingOwner : ?Principal;
+  stable var perAwarderDailyLimit :
+    {
+      #branch : Branch__23217752<Principal, Nat>;
+      #empty;
+      #leaf : Leaf__671877739<Principal, Nat>
+    };
+  stable var topUps : [TopUp__1008859068];
+  stable var totalDecayedPoints : Nat;
+  stable var transactionHistory : [Transaction__753434484];
+  stable var trustedAwarders :
+    {
+      #branch : Branch__23217752<Principal, Text>;
+      #empty;
+      #leaf : Leaf__671877739<Principal, Text>
+    };
+  stable var userDecayInfo :
+    {
+      #branch : Branch__23217752<Principal, UserDecayInfo__420269834>;
+      #empty;
+      #leaf : Leaf__671877739<Principal, UserDecayInfo__420269834>
+    }
+};

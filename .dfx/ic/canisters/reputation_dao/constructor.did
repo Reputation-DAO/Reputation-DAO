@@ -1,0 +1,116 @@
+type Awarder = record { id : principal; name : text };
+type AwarderBreakdown = record {
+  total : nat;
+  lastAward : nat;
+  awarder : principal;
+};
+type DecayConfig = record {
+  minThreshold : nat;
+  gracePeriod : nat;
+  enabled : bool;
+  decayInterval : nat;
+  decayRate : nat;
+};
+type ReputationChild = service {
+  acceptOwnership : () -> (text);
+  addTrustedAwarder : (principal, text) -> (text);
+  awardRep : (principal, nat, opt text) -> (text);
+  awarderStats : (principal) -> (vec AwarderBreakdown) query;
+  blacklist : (principal, bool) -> (text);
+  configureDecay : (nat, nat, nat, nat, bool) -> (text);
+  cycles_balance : () -> (nat) query;
+  emitEvent : (text, blob) -> (text);
+  findTransactionsByReason : (text, nat) -> (vec Transaction) query;
+  getBalance : (principal) -> (nat) query;
+  getBalanceWithDetails : (principal) -> (
+      record {
+        rawBalance : nat;
+        currentBalance : nat;
+        pendingDecay : nat;
+        decayInfo : opt UserDecayInfo;
+      },
+    ) query;
+  getDecayConfig : () -> (DecayConfig) query;
+  getDecayStatistics : () -> (
+      record {
+        lastGlobalDecayProcess : nat;
+        configEnabled : bool;
+        totalDecayedPoints : nat;
+      },
+    ) query;
+  getTopUpCount : () -> (nat) query;
+  getTopUpsPaged : (nat, nat) -> (vec TopUp) query;
+  getTransactionById : (nat) -> (opt Transaction) query;
+  getTransactionCount : () -> (nat) query;
+  getTransactionHistory : () -> (vec Transaction) query;
+  getTransactionsByUser : (principal) -> (vec Transaction) query;
+  getTransactionsPaged : (nat, nat) -> (vec Transaction) query;
+  getTrustedAwarders : () -> (vec Awarder) query;
+  getUserDecayInfo : (principal) -> (opt UserDecayInfo) query;
+  health : () -> (
+      record {
+        topUpCount : nat;
+        decayConfigHash : nat;
+        cycles : nat;
+        users : nat;
+        txCount : nat;
+        paused : bool;
+      },
+    ) query;
+  leaderboard : (nat, nat) -> (vec record { principal; nat }) query;
+  multiAward : (vec record { principal; nat; opt text }, bool) -> (text);
+  myStats : (principal) -> (
+      record {
+        lifetimeRevoked : nat;
+        balance : nat;
+        lastActivity : nat;
+        lifetimeAwarded : nat;
+        totalDecayed : nat;
+      },
+    ) query;
+  nominateOwner : (principal) -> (text);
+  orgPulse : (nat) -> (
+      record { revokes : nat; decays : nat; awards : nat },
+    ) query;
+  pause : (bool) -> (text);
+  previewDecayAmount : (principal) -> (nat) query;
+  processBatchDecay : () -> (text);
+  removeTrustedAwarder : (principal) -> (text);
+  resetUser : (principal, opt text) -> (text);
+  returnCyclesToFactory : (nat) -> (nat);
+  revokeRep : (principal, nat, opt text) -> (text);
+  setDailyMintLimit : (nat) -> (text);
+  setMinCyclesAlert : (nat) -> (text);
+  setParent : (principal) -> (text);
+  setPerAwarderDailyLimit : (principal, nat) -> (text);
+  snapshotHash : () -> (nat) query;
+  topUp : () -> (nat);
+  transferOwnership : (principal) -> (text);
+  triggerManualDecay : () -> (text);
+  version : () -> (text) query;
+  wallet_receive : () -> (nat);
+  withdrawCycles : (principal, nat) -> (text);
+};
+type TopUp = record {
+  id : nat;
+  from : principal;
+  timestamp : nat;
+  amount : nat;
+};
+type Transaction = record {
+  id : nat;
+  to : principal;
+  transactionType : TransactionType;
+  from : principal;
+  timestamp : nat;
+  amount : nat;
+  reason : opt text;
+};
+type TransactionType = variant { Revoke; Decay; Award };
+type UserDecayInfo = record {
+  lastActivityTime : nat;
+  totalDecayed : nat;
+  lastDecayTime : nat;
+  registrationTime : nat;
+};
+service : (principal, principal) -> ReputationChild

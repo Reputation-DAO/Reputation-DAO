@@ -1,0 +1,64 @@
+type Status = 
+ variant {
+   Active;
+   Archived;
+ };
+type Child = 
+ record {
+   created_at: nat64;
+   id: principal;
+   note: text;
+   owner: principal;
+   status: Status;
+ };
+service : {
+  adminSetPool: (newPool: vec principal) -> (text);
+  /// Archive a child back to pool.
+  archiveChild: (canister_id: principal) -> (text);
+  /// Fetch child health straight from the child
+  childHealth: (cid: principal) ->
+   (opt
+     record {
+       cycles: nat;
+       decayConfigHash: nat;
+       paused: bool;
+       topUpCount: nat;
+       txCount: nat;
+       users: nat;
+     });
+  counts: () -> (record {
+                   active: nat;
+                   archived: nat;
+                   total: nat;
+                 }) query;
+  createChildForOwner: (owner: principal, cycles_for_create: nat,
+   controllers: vec principal, note: text) -> (principal);
+  /// Create or reuse from pool for given owner; ensure final cycles >= cycles_for_create.
+  /// If reused canister has fewer cycles than requested, top up the difference.
+  createOrReuseChildFor: (owner: principal, cycles_for_create: nat,
+   controllers: vec principal, note: text) -> (principal);
+  /// Delete permanently.
+  deleteChild: (canister_id: principal) -> (text);
+  forceAddOwnerIndex: (owner: principal, cid: principal) -> (text);
+  getAdmin: () -> (principal) query;
+  getChild: (canister_id: principal) -> (opt Child) query;
+  listByOwner: (owner: principal) -> (vec principal) query;
+  listChildren: () -> (vec Child) query;
+  poolSize: () -> (nat) query;
+  /// Book-keeping only (does not touch actual controller list).
+  reassignOwner: (canister_id: principal, newOwner: principal) -> (text);
+  reinstallChild: (canister_id: principal, owner: principal, factory:
+   principal) -> ();
+  setAdmin: (p: principal) -> ();
+  setDefaultChildWasm: (w: blob) -> ();
+  startChild: (canister_id: principal) -> ();
+  stopChild: (canister_id: principal) -> ();
+  /// Send `amount` cycles to a child’s `wallet_receive`, and let the child log it.
+  topUpChild: (canister_id: principal, amount: nat) ->
+   (variant {
+      err: text;
+      ok: nat;
+    });
+  upgradeChild: (canister_id: principal) -> ();
+  wallet_receive: () -> (nat);
+}
