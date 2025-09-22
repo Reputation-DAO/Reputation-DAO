@@ -1,8 +1,11 @@
+// src/contexts/RoleContext.tsx
+// @ts-nocheck
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { Principal } from '@dfinity/principal';
 import { useAuth } from './AuthContext';
-import { getChildActor, getCurrentPrincipal } from '../services/childCanisterService';
+import { makeFactoriaWithPlug, getFactoriaCanisterId } from '../components/canister/factoria';
+import { makeChildWithPlug } from '../components/canister/child';
 
 export type UserRole = 'Admin' | 'Awarder' | 'User' | 'Loading';
 
@@ -22,18 +25,29 @@ const RoleContext = createContext<RoleContextType | undefined>(undefined);
 
 export const useRole = () => {
   const context = useContext(RoleContext);
-  if (context === undefined) {
-    throw new Error('useRole must be used within a RoleProvider');
-  }
+  if (!context) throw new Error('useRole must be used within a RoleProvider');
   return context;
 };
 
-interface RoleProviderProps {
-  children: ReactNode;
+interface RoleProviderProps { children: ReactNode; }
+
+/** Extract :cid from current URL without requiring useParams (works even if Provider sits outside Router) */
+function getCidFromUrl(): string | null {
+  try {
+    const path = window.location.pathname;
+    // Match any of your dashboard routes that end with /:cid
+    // e.g. /dashboard/home/aaaaa-bbbbb-...
+    const m = path.match(/\/dashboard\/(?:home|award-rep|revoke-rep|manage-awarders|view-balances|transaction-log|decay-system)\/([^/]+)/i);
+    if (m?.[1]) return m[1];
+  } catch {}
+  // Fallback to legacy storage if someone stored it
+  const legacy = localStorage.getItem('selectedOrgId');
+  return legacy || null;
 }
 
 export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
-  const { isAuthenticated, principal, authMethod } = useAuth();
+  const { isAuthenticated, principal } = useAuth();
+
   const [currentPrincipal, setCurrentPrincipal] = useState<Principal | null>(null);
   const [userRole, setUserRole] = useState<UserRole>('Loading');
   const [userName, setUserName] = useState<string>('');
@@ -41,109 +55,113 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   const [error, setError] = useState<string | null>(null);
 
   const determineUserRole = async (): Promise<void> => {
-    console.log('🔍 Starting role determination...');
     setError(null);
     setLoading(true);
 
     try {
-      // Check if user is authenticated
+      // must be authenticated with a principal
       if (!isAuthenticated || !principal) {
-        console.log('❌ User not authenticated');
         setCurrentPrincipal(null);
         setUserRole('User');
         setUserName('');
+        // clear persisted role if you want
+        localStorage.removeItem('userRole');
         setLoading(false);
         return;
       }
 
-      console.log('👤 Current principal:', principal.toString());
       setCurrentPrincipal(principal);
-      
-      if (!principal) {
-        console.log('❌ No principal found, setting as User');
-        setCurrentPrincipal(null);
+      const me = principal.toText();
+      setUserName(`${me.slice(0, 5)}...${me.slice(-3)}`);
+
+      // resolve cid from URL (or storage fallback)
+      const cid = getCidFromUrl();
+      if (!cid) {
         setUserRole('User');
-        setUserName('');
+        setLoading(false);
         return;
       }
 
-      setCurrentPrincipal(principal);
-      const principalText = principal.toString();
-      setUserName(`${principalText.slice(0, 5)}...${principalText.slice(-3)}`);
+      // keep storage in sync for legacy consumers
+      localStorage.setItem('selectedOrgId', cid);
 
-      // Get currently selected organization from localStorage
-      const selectedOrgId = localStorage.getItem('selectedOrgId');
-      if (!selectedOrgId) {
-        console.log('❌ No organization selected, setting as User');
-        setUserRole('User');
-        return;
+      // --- Determine role ---
+      let isAdmin = false;
+      let isAwarder = false;
+
+      // 1) Admin via Factory registry: child.owner === me
+      try {
+        const factoria = await makeFactoriaWithPlug({
+          host: 'https://icp-api.io',
+          canisterId: getFactoriaCanisterId(),
+        });
+        const childOpt = await factoria.getChild(Principal.fromText(cid));
+        // Motoko ?Child returns [] | [Child] in JS bindings
+        const child = Array.isArray(childOpt) ? childOpt[0] : null;
+        const ownerText = child?.owner?.toText?.() ?? child?.owner?.toString?.();
+        if (ownerText && ownerText === me) {
+          isAdmin = true;
+        }
+      } catch (e) {
+        // non-fatal: if Factory lookup fails, we’ll still try the child
+        console.warn('Factory getChild failed; continuing', e);
       }
 
-      console.log('🏢 Selected organization:', selectedOrgId);
-
-      // Get actor to check user's role in the selected organization
-      console.log('🔗 Getting actor to check organization role...');
-      const actor = await getChildActor();
-      if (!actor) {
-        console.log('❌ Failed to connect to canister, setting as User');
-        setUserRole('User');
-        return;
+      // 2) Awarder via Child canister ACL: in getTrustedAwarders()
+      if (!isAdmin) {
+        try {
+          const childActor = await makeChildWithPlug({ canisterId: cid, host: 'https://icp-api.io' });
+          // Expecting something like [{ id: Principal, name: Text }, ...]
+          const awarders = await childActor.getTrustedAwarders();
+          isAwarder = !!awarders?.find?.((a: any) => {
+            const aid = a?.id?.toText?.() ?? a?.id?.toString?.();
+            return aid === me;
+          });
+        } catch (e) {
+          console.warn('Child getTrustedAwarders failed; treating as non-awarder', e);
+        }
       }
 
-      // For now, we'll use a simplified role determination
-      // In a real implementation, you would check the organization's admin and trusted awarders
-      console.log('🔍 Determining user role...');
-      
-      // Check if user is admin by checking if they created the organization
-      // This is a simplified check - in reality you'd check the organization's admin field
-      const currentPrincipal = await getCurrentPrincipal();
-      if (currentPrincipal && currentPrincipal.toString() === principalText) {
-        // For now, assume the user is an admin if they're authenticated
-        // In a real implementation, you'd check against the organization's admin
-        console.log('✅ User is Admin of the selected organization');
-        setUserRole('Admin');
-        return;
-      }
+      // 3) Final role
+      const finalRole: UserRole = isAdmin ? 'Admin' : isAwarder ? 'Awarder' : 'User';
+      setUserRole(finalRole);
+      // mirror into storage for your Dashboard redirect checks
+      localStorage.setItem('userRole', finalRole);
 
-      // For now, set as regular user
-      // In a real implementation, you'd check trusted awarders list
-      console.log('👤 User is regular User in the selected organization');
+    } catch (err: any) {
+      console.error('❌ Error determining role:', err);
+      setError(`Failed to determine role: ${err?.message || String(err)}`);
       setUserRole('User');
-
-    } catch (error: any) {
-      console.error('❌ Error determining role:', error);
-      setError(`Failed to determine role: ${error.message}`);
-      setUserRole('User');
+      localStorage.setItem('userRole', 'User');
     } finally {
       setLoading(false);
     }
   };
 
-  // Initial role determination and when authentication changes
+  // Run when auth or URL changes (URL change is captured by popstate/hashchange)
   useEffect(() => {
     determineUserRole();
-  }, [isAuthenticated, principal, authMethod]);
-
-  // Listen for organization changes in localStorage
-  useEffect(() => {
-    const handleStorageChange = () => {
-      console.log('🔄 Organization changed in localStorage, refreshing role...');
-      determineUserRole();
-    };
-
-    // Listen for storage changes
-    window.addEventListener('storage', handleStorageChange);
-
-    // Also listen for custom events when org changes within the same tab
-    window.addEventListener('orgChanged', handleStorageChange as EventListener);
-
+    // Re-run on URL changes (same tab navigation)
+    const onNav = () => determineUserRole();
+    window.addEventListener('popstate', onNav);
+    window.addEventListener('hashchange', onNav);
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('orgChanged', handleStorageChange as EventListener);
+      window.removeEventListener('popstate', onNav);
+      window.removeEventListener('hashchange', onNav);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, principal]);
+
+  // Optional: if another tab changes selectedOrgId, refresh here too
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'selectedOrgId' || e.key === 'userRole') determineUserRole();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Context value
   const contextValue: RoleContextType = {
     currentPrincipal,
     userRole,

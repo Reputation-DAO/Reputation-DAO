@@ -1,5 +1,10 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+// src/pages/ManageAwarders.tsx
+// @ts-nocheck
+import React, { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { Principal } from "@dfinity/principal";
+import { makeChildWithPlug } from "@/components/canister/child";
+
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import {
   Users,
@@ -25,245 +31,240 @@ import {
   CheckCircle,
   MoreVertical
 } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { addTrustedAwarder, removeTrustedAwarder, getTrustedAwarders, getOrgUserBalances, getOrgTransactionHistory } from "@/services/childCanisterService";
-import { Principal } from "@dfinity/principal";
-import { usePlugConnection } from "@/hooks/usePlugConnection";
+
+import { formatDateForDisplay } from "@/utils/transactionUtils";
+import { useRole } from "@/contexts/RoleContext";
 import { getUserDisplayData } from "@/utils/userUtils";
-import { parseTransactionType, convertTimestampToDate, formatDateForDisplay } from "@/utils/transactionUtils";
 
 interface Awarder {
   id: string;
   name: string;
   principal: string;
-  role: 'admin' | 'awarder';
+  role: "admin" | "awarder";
   reputation: number;
   joinDate: Date;
   lastActive: Date;
   awardsGiven: number;
-  status: 'active' | 'inactive';
+  status: "active" | "inactive";
 }
 
 interface NewAwarderForm {
   name: string;
   principal: string;
-  role: 'admin' | 'awarder';
+  role: "admin" | "awarder";
 }
 
 const RoleIcon = ({ role }: { role: string }) => {
   switch (role) {
-    case 'admin':
+    case "admin":
       return <Crown className="w-4 h-4 text-yellow-500" />;
-    case 'awarder':
+    case "awarder":
       return <Shield className="w-4 h-4 text-blue-500" />;
     default:
       return <User className="w-4 h-4 text-green-500" />;
   }
 };
 
-const ManageAwarders = () => {
+const ManageAwarders: React.FC = () => {
   const navigate = useNavigate();
-  const { isConnected, principal } = usePlugConnection({ autoCheck: true });
-  const [userRole] = useState<'admin' | 'awarder' | 'member'>('admin');
-  // Get user display data
-  const userDisplayData = getUserDisplayData(principal);
+  const { cid } = useParams<{ cid: string }>();
+
+  // Use your role context to gate access + show user in sidebar
+  const { isAdmin, currentPrincipal, userName } = useRole();
+  const userDisplayData = getUserDisplayData(currentPrincipal || null);
+
+  // Child actor state
+  const [child, setChild] = useState<any>(null);
+  const [connecting, setConnecting] = useState(true);
+  const [connectError, setConnectError] = useState<string | null>(null);
+
+  // UI state
   const [loading, setLoading] = useState(false);
-  
   const [awarders, setAwarders] = useState<Awarder[]>([]);
-
-  // Load awarders from backend
-  React.useEffect(() => {
-    const loadAwarders = async () => {
-      if (!isConnected || !principal) return;
-      
-      setLoading(true);
-      try {
-        const selectedOrgId = localStorage.getItem('selectedOrgId');
-        if (!selectedOrgId) {
-          console.error('No organization selected');
-          return;
-        }
-
-        const backendAwarders = await getTrustedAwarders();
-        console.log('📦 Received awarders:', backendAwarders);
-        
-        // Get real data for awarders
-        const userBalances = await getOrgUserBalances();
-        const transactions = await getOrgTransactionHistory();
-        
-        // Create a map of user balances for quick lookup
-        const balanceMap = new Map<string, number>();
-        userBalances.forEach(user => {
-          balanceMap.set(user.userId.toString(), user.balance);
-        });
-        
-        // Create a map of awards given by each user
-        const awardsGivenMap = new Map<string, number>();
-        transactions.forEach(tx => {
-          const transactionType = parseTransactionType(tx.transactionType);
-          if (transactionType === 'award') {
-            const fromUser = tx.from.toString();
-            awardsGivenMap.set(fromUser, (awardsGivenMap.get(fromUser) || 0) + 1);
-          }
-        });
-        
-        // Create a map of last activity (most recent transaction)
-        const lastActivityMap = new Map<string, Date>();
-        transactions.forEach(tx => {
-          const fromUser = tx.from.toString();
-          const txDate = convertTimestampToDate(tx.timestamp);
-          const existingDate = lastActivityMap.get(fromUser);
-          if (!existingDate || txDate > existingDate) {
-            lastActivityMap.set(fromUser, txDate);
-          }
-        });
-        
-        // Transform backend data to UI format with real data
-        const uiAwarders: Awarder[] = Array.isArray(backendAwarders) 
-          ? backendAwarders.map((awarder, index) => {
-              const principalStr = awarder.toString();
-              const reputation = balanceMap.get(principalStr) || 0;
-              const awardsGiven = awardsGivenMap.get(principalStr) || 0;
-              const lastActive = lastActivityMap.get(principalStr) || new Date();
-              
-              return {
-                id: index.toString(),
-                name: `User ${principalStr.slice(0, 8)}`,
-                principal: principalStr,
-                role: 'awarder' as const,
-                reputation: reputation,
-                joinDate: new Date(Date.now() - Math.random() * 31536000000), // Still placeholder as we don't have join date in backend
-                lastActive: lastActive,
-                awardsGiven: awardsGiven,
-                status: 'active' as const
-              };
-            })
-          : [];
-        
-        setAwarders(uiAwarders);
-        console.log('✅ Awarders loaded successfully');
-        
-      } catch (error) {
-        console.error('Error loading awarders:', error);
-        toast.error('Failed to load awarders');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadAwarders();
-  }, [isConnected, principal]);
-
+  const [isAddingAwarder, setIsAddingAwarder] = useState(false);
   const [newAwarder, setNewAwarder] = useState<NewAwarderForm>({
-    name: '',
-    principal: '',
-    role: 'awarder'
+    name: "",
+    principal: "",
+    role: "awarder",
   });
 
-  const [isAddingAwarder, setIsAddingAwarder] = useState(false);
+  // --- Build child actor from :cid (no localStorage) ---
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!cid) throw new Error("No organization selected.");
+        setConnecting(true);
+        const actor = await makeChildWithPlug({ canisterId: cid, host: "https://icp-api.io" });
+        setChild(actor);
+      } catch (e: any) {
+        setConnectError(e?.message || "Failed to connect to org canister");
+      } finally {
+        setConnecting(false);
+      }
+    })();
+  }, [cid]);
 
+  // --- Load awarders + lightweight stats from child ---
+  const loadAwarders = async () => {
+    if (!child) return;
+    setLoading(true);
+    try {
+      // Expect shape: [{ id: Principal, name: Text }]
+      const backendAwarders = await (child.getTrustedAwarders?.() ?? child.get_trusted_awarders?.());
+      const list = Array.isArray(backendAwarders) ? backendAwarders : [];
+
+      // Enrich with simple stats (optional): awardsGiven + lastActive via transactions-by-user
+      const toNum = (v: number | bigint) => (typeof v === "bigint" ? Number(v) : v);
+      const enriched: Awarder[] = await Promise.all(
+        list.map(async (a: any, idx: number) => {
+          const pStr = (a.id?.toString?.() ?? a.toString?.() ?? "").trim();
+          let awardsGiven = 0;
+          let lastActive = new Date(0);
+
+          try {
+            const txs = await (child.getTransactionsByUser?.(a.id) ?? child.get_transactions_by_user?.(a.id));
+            if (Array.isArray(txs)) {
+              for (const tx of txs) {
+                const isAward = tx?.transactionType && "Award" in tx.transactionType;
+                if (isAward && tx?.from?.toString?.() === pStr) {
+                  awardsGiven += 1;
+                }
+                const ts = toNum(tx?.timestamp ?? 0);
+                if (ts > 0) {
+                  const d = new Date(ts * 1000);
+                  if (d > lastActive) lastActive = d;
+                }
+              }
+            }
+          } catch {
+            // ignore tx stats errors
+          }
+
+          return {
+            id: String(idx),
+            name: a.name ?? `User ${pStr.slice(0, 8)}`,
+            principal: pStr,
+            role: "awarder",
+            reputation: 0, // not available here; could be computed if you expose balances
+            joinDate: new Date(), // unknown from backend; placeholder
+            lastActive: lastActive.getTime() ? lastActive : new Date(),
+            awardsGiven,
+            status: "active",
+          };
+        })
+      );
+
+      setAwarders(enriched);
+      toast.success("Awarders loaded");
+    } catch (error: any) {
+      console.error("Error loading awarders:", error);
+      toast.error("Failed to load awarders");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (child) loadAwarders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [child]);
+
+  // --- Add awarder on child ---
   const handleAddAwarder = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!newAwarder.name || !newAwarder.principal) {
+    if (!child) return;
+
+    if (!newAwarder.name.trim() || !newAwarder.principal.trim()) {
       toast.error("Please fill in all required fields");
       return;
     }
 
     try {
-      setIsAddingAwarder(true);
-      
-      const selectedOrgId = localStorage.getItem('selectedOrgId');
-      if (!selectedOrgId) {
-        toast.error('No organization selected');
-        return;
+      setLoading(true);
+      const p = Principal.fromText(newAwarder.principal.trim());
+      // Expect string/variant; treat anything containing "Success" as success
+      const res: string =
+        (await child.addTrustedAwarder?.(p, newAwarder.name.trim())) ??
+        (await child.add_trusted_awarder?.(p, newAwarder.name.trim()));
+
+      if (typeof res === "string" && res.toLowerCase().includes("success")) {
+        toast.success(`Added ${newAwarder.name} as ${newAwarder.role}`);
+        setNewAwarder({ name: "", principal: "", role: "awarder" });
+        setIsAddingAwarder(false);
+        await loadAwarders();
+      } else {
+        throw new Error(res || "Failed to add awarder");
       }
-
-      // Add awarder via backend
-      const principalObj = Principal.fromText(newAwarder.principal);
-      const result = await addTrustedAwarder( principalObj, newAwarder.name);
-      console.log('✅ Awarder added successfully:', result);
-      
-      const newAwarderData: Awarder = {
-        id: Date.now().toString(),
-        name: newAwarder.name,
-        principal: newAwarder.principal,
-        role: newAwarder.role,
-        reputation: 0,
-        joinDate: new Date(),
-        lastActive: new Date(),
-        awardsGiven: 0,
-        status: 'active'
-      };
-
-      setAwarders(prev => [...prev, newAwarderData]);
-      setNewAwarder({ name: '', principal: '', role: 'awarder' });
-      setIsAddingAwarder(false);
-      
-      toast.success(`Successfully added ${newAwarder.name} as ${newAwarder.role}`);
-    } catch (error) {
-      toast.error("Failed to add awarder. Please try again.");
+    } catch (error: any) {
+      toast.error(error?.message?.includes("Invalid principal") ? "Invalid Principal ID format" : "Failed to add awarder");
+    } finally {
+      setLoading(false);
     }
   };
 
+  // --- Remove awarder on child ---
   const handleRemoveAwarder = async (id: string, name: string) => {
+    if (!child) return;
     try {
-      const selectedOrgId = localStorage.getItem('selectedOrgId');
-      if (!selectedOrgId) {
-        toast.error('No organization selected');
-        return;
-      }
+      const target = awarders.find((a) => a.id === id);
+      if (!target) return toast.error("Awarder not found");
 
-      // Find the awarder to get their principal
-      const awarder = awarders.find(a => a.id === id);
-      if (!awarder) {
-        toast.error('Awarder not found');
-        return;
-      }
+      const p = Principal.fromText(target.principal);
+      const res: string =
+        (await child.removeTrustedAwarder?.(p)) ??
+        (await child.remove_trusted_awarder?.(p));
 
-      // Remove awarder via backend
-      const principalObj = Principal.fromText(awarder.principal);
-      const result = await removeTrustedAwarder (principalObj);
-      console.log('✅ Awarder removed successfully:', result);
-      
-      setAwarders(prev => prev.filter(awarder => awarder.id !== id));
-      toast.success(`Removed ${name} from awarders`);
-    } catch (error) {
-      console.error('Error removing awarder:', error);
-      toast.error("Failed to remove awarder. Please try again.");
+      if (typeof res === "string" && res.toLowerCase().includes("success")) {
+        toast.success(`Removed ${name}`);
+        setAwarders((prev) => prev.filter((a) => a.id !== id));
+      } else {
+        throw new Error(res || "Failed to remove awarder");
+      }
+    } catch (error: any) {
+      console.error("Error removing awarder:", error);
+      toast.error("Failed to remove awarder");
     }
   };
 
-  const handleRoleChange = async (id: string, newRole: 'admin' | 'awarder') => {
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      setAwarders(prev => prev.map(awarder => 
-        awarder.id === id ? { ...awarder, role: newRole } : awarder
-      ));
-      toast.success(`Role updated successfully`);
-    } catch (error) {
-      toast.error("Failed to update role. Please try again.");
-    }
+  // --- Local-only role toggle (no on-chain role in sample) ---
+  const handleRoleChange = async (id: string, newRole: "admin" | "awarder") => {
+    setAwarders((prev) => prev.map((a) => (a.id === id ? { ...a, role: newRole } : a)));
+    toast.success("Role updated");
   };
 
-  const handleDisconnect = () => {
-    navigate('/auth');
-  };
+  const handleDisconnect = () => navigate("/auth");
 
-  if (userRole !== 'admin') {
+  if (connecting) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <div className="text-sm text-muted-foreground">Connecting to organization…</div>
+      </div>
+    );
+  }
+  if (!cid || connectError) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <Card className="glass-card p-6">
+          <AlertTriangle className="w-6 h-6 text-orange-500 mb-2" />
+          <p className="text-sm text-muted-foreground">
+            {connectError || "No organization selected."}
+          </p>
+          <div className="mt-3">
+            <Button onClick={() => navigate("/org-selector")} variant="outline">Choose Org</Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-muted/20 flex items-center justify-center">
         <Card className="glass-card p-8 max-w-md mx-auto text-center">
           <AlertTriangle className="w-12 h-12 text-orange-500 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-foreground mb-2">Access Denied</h2>
-          <p className="text-muted-foreground mb-4">
-            Only administrators can manage awarders.
-          </p>
-          <Button onClick={() => navigate('/dashboard')}>
-            Return to Dashboard
-          </Button>
+          <p className="text-muted-foreground mb-4">Only administrators can manage awarders.</p>
+          <Button onClick={() => navigate(`/dashboard/home/${cid}`)}>Return to Dashboard</Button>
         </Card>
       </div>
     );
@@ -271,21 +272,21 @@ const ManageAwarders = () => {
 
   const stats = {
     totalAwarders: awarders.length,
-    activeAwarders: awarders.filter(a => a.status === 'active').length,
+    activeAwarders: awarders.filter((a) => a.status === "active").length,
     totalAwards: awarders.reduce((sum, a) => sum + a.awardsGiven, 0),
-    admins: awarders.filter(a => a.role === 'admin').length
+    admins: awarders.filter((a) => a.role === "admin").length,
   };
 
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
-        <DashboardSidebar 
-          userRole={userRole}
+        <DashboardSidebar
+          userRole={"admin"}
           userName={userDisplayData.userName}
           userPrincipal={userDisplayData.userPrincipal}
           onDisconnect={handleDisconnect}
         />
-        
+
         <div className="flex-1">
           {/* Header */}
           <header className="h-16 border-b border-border/40 flex items-center px-6 glass-header">
@@ -297,10 +298,10 @@ const ManageAwarders = () => {
                 </div>
                 <div>
                   <h1 className="text-lg font-semibold text-foreground">Manage Awarders</h1>
-                  <p className="text-xs text-muted-foreground">Add, remove, and manage organization members</p>
+                  <p className="text-xs text-muted-foreground">Org: {cid}</p>
                 </div>
               </div>
-              
+
               <Dialog open={isAddingAwarder} onOpenChange={setIsAddingAwarder}>
                 <DialogTrigger asChild>
                   <Button variant="hero" className="group">
@@ -315,7 +316,7 @@ const ManageAwarders = () => {
                       Add New Awarder
                     </DialogTitle>
                   </DialogHeader>
-                  
+
                   <form onSubmit={handleAddAwarder} className="space-y-4 mt-4">
                     <div className="space-y-2">
                       <Label htmlFor="name">Name *</Label>
@@ -323,31 +324,29 @@ const ManageAwarders = () => {
                         id="name"
                         placeholder="Enter full name"
                         value={newAwarder.name}
-                        onChange={(e) => setNewAwarder(prev => ({ ...prev, name: e.target.value }))}
+                        onChange={(e) => setNewAwarder((p) => ({ ...p, name: e.target.value }))}
                         className="glass-input"
                         required
                       />
                     </div>
-                    
+
                     <div className="space-y-2">
                       <Label htmlFor="principal">Principal ID *</Label>
                       <Input
                         id="principal"
                         placeholder="Enter ICP Principal ID"
                         value={newAwarder.principal}
-                        onChange={(e) => setNewAwarder(prev => ({ ...prev, principal: e.target.value }))}
+                        onChange={(e) => setNewAwarder((p) => ({ ...p, principal: e.target.value }))}
                         className="glass-input"
                         required
                       />
                     </div>
-                    
+
                     <div className="space-y-2">
                       <Label>Role *</Label>
-                      <Select 
-                        value={newAwarder.role} 
-                        onValueChange={(value: 'admin' | 'awarder') => 
-                          setNewAwarder(prev => ({ ...prev, role: value }))
-                        }
+                      <Select
+                        value={newAwarder.role}
+                        onValueChange={(value: "admin" | "awarder") => setNewAwarder((p) => ({ ...p, role: value }))}
                       >
                         <SelectTrigger className="glass-input">
                           <SelectValue />
@@ -368,7 +367,7 @@ const ManageAwarders = () => {
                         </SelectContent>
                       </Select>
                     </div>
-                    
+
                     <div className="flex gap-2 pt-4">
                       <Button type="submit" variant="hero" className="flex-1" disabled={loading}>
                         {loading ? (
@@ -380,12 +379,7 @@ const ManageAwarders = () => {
                           "Add Awarder"
                         )}
                       </Button>
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        onClick={() => setIsAddingAwarder(false)}
-                        disabled={loading}
-                      >
+                      <Button type="button" variant="outline" onClick={() => setIsAddingAwarder(false)} disabled={loading}>
                         Cancel
                       </Button>
                     </div>
@@ -398,9 +392,9 @@ const ManageAwarders = () => {
           {/* Main Content */}
           <main className="p-6">
             <div className="max-w-7xl mx-auto space-y-6">
-              {/* Stats Cards */}
+              {/* Stats */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card className="glass-card p-4 animate-fade-in">
+                <Card className="glass-card p-4">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-muted-foreground">Total Awarders</p>
@@ -409,8 +403,8 @@ const ManageAwarders = () => {
                     <Users className="w-8 h-8 text-primary" />
                   </div>
                 </Card>
-                
-                <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: '0.1s' }}>
+
+                <Card className="glass-card p-4">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-muted-foreground">Active Members</p>
@@ -419,8 +413,8 @@ const ManageAwarders = () => {
                     <CheckCircle className="w-8 h-8 text-green-500" />
                   </div>
                 </Card>
-                
-                <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: '0.2s' }}>
+
+                <Card className="glass-card p-4">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-muted-foreground">Total Awards</p>
@@ -429,8 +423,8 @@ const ManageAwarders = () => {
                     <Activity className="w-8 h-8 text-blue-500" />
                   </div>
                 </Card>
-                
-                <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: '0.3s' }}>
+
+                <Card className="glass-card p-4">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-muted-foreground">Administrators</p>
@@ -442,28 +436,27 @@ const ManageAwarders = () => {
               </div>
 
               {/* Awarders List */}
-              <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: '0.4s' }}>
+              <Card className="glass-card p-6">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-lg font-semibold text-foreground">Organization Members</h2>
                   <Badge variant="secondary" className="font-mono">
                     {awarders.length} members
                   </Badge>
                 </div>
-                
+
                 <div className="space-y-3">
                   {awarders.map((awarder, index) => (
-                    <div 
-                      key={awarder.id} 
-                      className="flex items-center justify-between p-4 glass-card rounded-lg hover:shadow-md transition-all duration-200 animate-fade-in"
-                      style={{ animationDelay: `${0.5 + index * 0.1}s` }}
+                    <div
+                      key={awarder.id}
+                      className="flex items-center justify-between p-4 glass-card rounded-lg hover:shadow-md transition-all duration-200"
                     >
                       <div className="flex items-center gap-4">
                         <Avatar className="w-12 h-12">
                           <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary-glow/20 text-primary font-medium">
-                            {awarder.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                            {awarder.name.split(" ").map((n) => n[0]).join("").toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
-                        
+
                         <div>
                           <div className="flex items-center gap-2 mb-1">
                             <span className="font-medium text-foreground">{awarder.name}</span>
@@ -471,16 +464,14 @@ const ManageAwarders = () => {
                               <RoleIcon role={awarder.role} />
                               {awarder.role}
                             </Badge>
-                            <Badge 
-                              variant={awarder.status === 'active' ? 'default' : 'secondary'}
-                              className={awarder.status === 'active' ? 'bg-green-500/10 text-green-600' : ''}
+                            <Badge
+                              variant={awarder.status === "active" ? "default" : "secondary"}
+                              className={awarder.status === "active" ? "bg-green-500/10 text-green-600" : ""}
                             >
                               {awarder.status}
                             </Badge>
                           </div>
-                          <p className="text-sm text-muted-foreground font-mono">
-                            {awarder.principal.slice(0, 25)}...
-                          </p>
+                          <p className="text-sm text-muted-foreground font-mono">{awarder.principal.slice(0, 25)}...</p>
                           <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
                             <div className="flex items-center gap-1">
                               <Calendar className="w-3 h-3" />
@@ -493,7 +484,7 @@ const ManageAwarders = () => {
                           </div>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center gap-3">
                         <div className="text-right">
                           <div className="font-medium text-foreground">{awarder.reputation} REP</div>
@@ -501,7 +492,7 @@ const ManageAwarders = () => {
                             Active {formatDateForDisplay(awarder.lastActive)}
                           </div>
                         </div>
-                        
+
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -509,22 +500,20 @@ const ManageAwarders = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="glass-card">
-                            <DropdownMenuItem 
-                              onClick={() => handleRoleChange(awarder.id, awarder.role === 'admin' ? 'awarder' : 'admin')}
+                            <DropdownMenuItem
+                              onClick={() => handleRoleChange(awarder.id, awarder.role === "admin" ? "awarder" : "admin")}
                               className="flex items-center gap-2"
                             >
                               <Settings className="w-4 h-4" />
-                              Change to {awarder.role === 'admin' ? 'Awarder' : 'Admin'}
+                              Change to {awarder.role === "admin" ? "Awarder" : "Admin"}
                             </DropdownMenuItem>
-                            {awarder.id !== '1' && ( // Don't allow removing self
-                              <DropdownMenuItem 
-                                onClick={() => handleRemoveAwarder(awarder.id, awarder.name)}
-                                className="flex items-center gap-2 text-red-600"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                                Remove Awarder
-                              </DropdownMenuItem>
-                            )}
+                            <DropdownMenuItem
+                              onClick={() => handleRemoveAwarder(awarder.id, awarder.name)}
+                              className="flex items-center gap-2 text-red-600"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Remove Awarder
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>

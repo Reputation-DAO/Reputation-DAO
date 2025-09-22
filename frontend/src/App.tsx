@@ -41,13 +41,13 @@ const App = () => (
                 <Route path="/community" element={<Community />} />
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/org-selector" element={<OrgSelector />} />
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/award-rep" element={<AwardRep />} />
-                <Route path="/revoke-rep" element={<RevokeRep />} />
-                <Route path="/manage-awarders" element={<ManageAwarders />} />
-                <Route path="/view-balances" element={<ViewBalances />} />
-                <Route path="/transaction-log" element={<TransactionLog />} />
-                <Route path="/decay-system" element={<DecaySystem />} />
+                <Route path="/dashboard/home/:cid" element={<Dashboard />} />
+                <Route path="/dashboard/award-rep/:cid" element={<AwardRep />} />
+                <Route path="/dashboard/revoke-rep/:cid" element={<RevokeRep />} />
+                <Route path="/dashboard/manage-awarders/:cid" element={<ManageAwarders />} />
+                <Route path="/dashboard/view-balances/:cid" element={<ViewBalances />} />
+                <Route path="/dashboard/transaction-log/:cid" element={<TransactionLog />} />
+                <Route path="/dashboard/decay-system/:cid" element={<DecaySystem />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
                 </Routes>

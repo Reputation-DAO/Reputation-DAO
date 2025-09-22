@@ -20,7 +20,7 @@ import Nat32 "mo:base/Nat32";
 
 
 // Actor class so Factory can pass the admin/owner at deploy time
-persistent actor class ReputationChild(initOwner : Principal, initFactory : Principal) = this {
+actor class ReputationChild(initOwner : Principal, initFactory : Principal) = this {
   // ——— Types ———
   //Defining a type for TransactionType Enum
   stable var factory : Principal = initFactory;
@@ -652,7 +652,7 @@ persistent actor class ReputationChild(initOwner : Principal, initFactory : Prin
   };
 
   // ——— Internal hashing helpers ———
-   transient let FNV_PRIME : Nat64 = 0x0000000001000001;
+  let FNV_PRIME : Nat64 = 0x0000000001000001;
   func mix64_(h: Nat64, v: Nat64) : Nat64 { (h ^ v) *% FNV_PRIME };  // wrap multiply
 
 

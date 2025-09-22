@@ -1,8 +1,12 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+// src/pages/DecaySystem.tsx
+// @ts-nocheck
+import { useState, useEffect, useMemo } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
-import { usePlugConnection } from "@/hooks/usePlugConnection";
+import { makeChildWithPlug } from "@/components/canister/child";
+import { useRole } from "@/contexts/RoleContext";
 import { getUserDisplayData } from "@/utils/userUtils";
+
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,31 +14,17 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { 
-  getDecayConfig, 
-  configureDecay, 
-  getDecayStatistics, 
-  getDecayAnalytics,
-  applyDecayToSpecificUser,
-  processBatchDecay,
-  getOrgDecayStatistics,
-  getOrgDecayAnalytics,
-  configureOrgDecay
-} from "@/services/childCanisterService";
-import { parseTransactionType, convertTimestampToDate, extractReason, formatDateForDisplay } from "@/utils/transactionUtils";
 import {
   Timer,
   Settings,
   AlertTriangle,
   Clock,
   TrendingDown,
-  Calendar,
   Activity,
   Pause,
   Play,
@@ -42,16 +32,16 @@ import {
   Save,
   Info,
   Users,
-  BarChart3
+  BarChart3,
 } from "lucide-react";
 
 interface DecaySettings {
   enabled: boolean;
-  rate: number; // percentage per period (in basis points, 100 = 1%)
-  interval: number; // interval in seconds
+  rate: number;           // basis points (100 = 1%)
+  interval: number;       // seconds
   minimumThreshold: number;
-  gracePeriod: number; // grace period in seconds
-  testingMode: boolean; // Testing mode with 10% decay every 1 minute
+  gracePeriod: number;    // seconds
+  testingMode: boolean;
 }
 
 interface DecayEvent {
@@ -67,19 +57,27 @@ interface DecayEvent {
 
 const DecaySystem = () => {
   const navigate = useNavigate();
-  const { isConnected, principal } = usePlugConnection({ autoCheck: true });
-  const [userRole] = useState<'admin' | 'awarder' | 'member'>('admin');
-  // Get user display data
-  const userDisplayData = getUserDisplayData(principal);
+  const { cid } = useParams<{ cid: string }>();
+  const { isAdmin, currentPrincipal, userRole, userName } = useRole();
+
+  const [child, setChild] = useState<any>(null);
+  const [connecting, setConnecting] = useState(true);
+
+  const userDisplayData = useMemo(
+    () => getUserDisplayData(currentPrincipal),
+    [currentPrincipal]
+  );
+
   const [loading, setLoading] = useState(false);
-  
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
   const [settings, setSettings] = useState<DecaySettings>({
     enabled: true,
-    rate: 200, // 2% in basis points (200 = 2%)
-    interval: 2592000, // 30 days in seconds
+    rate: 200,         // 2%
+    interval: 2_592_000, // 30 days
     minimumThreshold: 10,
-    gracePeriod: 7776000, // 90 days in seconds
-    testingMode: false
+    gracePeriod: 7_776_000, // 90 days
+    testingMode: false,
   });
 
   const [recentDecayEvents, setRecentDecayEvents] = useState<DecayEvent[]>([]);
@@ -89,132 +87,120 @@ const DecaySystem = () => {
     configEnabled: false,
     usersWithDecay: 0,
     totalUsers: 0,
-    averageDecayPerUser: 0
+    averageDecayPerUser: 0,
   });
 
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-
-  // Load real decay data from blockchain
+  // --- Build child actor from :cid (no localStorage) ---
   useEffect(() => {
-    const loadDecayData = async () => {
-      if (!isConnected || !principal) return;
-      
+    (async () => {
+      try {
+        if (!cid) throw new Error("Missing :cid in route");
+        setConnecting(true);
+        const actor = await makeChildWithPlug({ canisterId: cid, host: "https://icp-api.io" });
+        setChild(actor);
+      } catch (e: any) {
+        const msg = String(e?.message || e);
+        if (msg.includes("is stopped")) {
+          toast.error("This organization's canister is stopped. Ask an admin to start it.");
+        } else {
+          toast.error("Failed to connect to the organization canister.");
+        }
+      } finally {
+        setConnecting(false);
+      }
+    })();
+  }, [cid]);
+
+  // --- Load real decay data from the child canister ---
+  useEffect(() => {
+    if (!child) return;
+
+    (async () => {
       try {
         setLoading(true);
-        const selectedOrgId = localStorage.getItem('selectedOrgId');
-        
-        if (selectedOrgId) {
-          // Load organization-specific decay data
-          const [orgStats, orgAnalytics, config] = await Promise.all([
-            getOrgDecayStatistics(),
-            getOrgDecayAnalytics(),
-            getDecayConfig()
-          ]);
-          
-          if (orgStats) {
-            setDecayStats({
-              totalDecayedPoints: Number(orgStats.totalDecayedPoints),
-              lastGlobalDecayProcess: Number(orgStats.lastGlobalDecayProcess),
-              configEnabled: orgStats.configEnabled,
-              usersWithDecay: Number(orgStats.userCount),
-              totalUsers: Number(orgStats.userCount),
-              averageDecayPerUser: Number(orgStats.totalDecayedPoints) / Math.max(Number(orgStats.userCount), 1)
-            });
-          }
-          
-          if (orgAnalytics && orgAnalytics.recentDecayTransactions) {
-            const decayEvents: DecayEvent[] = orgAnalytics.recentDecayTransactions.map((tx: any, index: number) => ({
-              id: `decay-${index}`,
-              userId: tx.from.toString(),
-              userName: `User ${tx.from.toString().slice(0, 8)}`,
-              amountDecayed: Number(tx.amount),
-              previousAmount: Number(tx.amount) + Math.floor(Math.random() * 100), // Estimate previous amount
-              newAmount: Number(tx.amount),
-              reason: tx.reason || "No reason provided",
-              timestamp: convertTimestampToDate(tx.timestamp)
-            }));
-            setRecentDecayEvents(decayEvents);
-          }
-          
-          if (config) {
-            setSettings({
-              enabled: config.enabled,
-              rate: Number(config.decayRate),
-              interval: Number(config.decayInterval),
-              minimumThreshold: Number(config.minThreshold),
-              gracePeriod: Number(config.gracePeriod),
-              testingMode: false
-            });
-          }
-        } else {
-          // Load global decay data
-          const [stats, analytics, config] = await Promise.all([
-            getDecayStatistics(),
-            getDecayAnalytics(),
-            getDecayConfig()
-          ]);
-          
-          if (stats) {
-            setDecayStats({
-              totalDecayedPoints: Number(stats.totalDecayedPoints),
-              lastGlobalDecayProcess: Number(stats.lastGlobalDecayProcess),
-              configEnabled: stats.configEnabled,
-              usersWithDecay: 0, // Not available in global stats
-              totalUsers: 0,
-              averageDecayPerUser: 0
-            });
-          }
-          
-          if (config) {
-            setSettings({
-              enabled: config.enabled,
-              rate: Number(config.decayRate),
-              interval: Number(config.decayInterval),
-              minimumThreshold: Number(config.minThreshold),
-              gracePeriod: Number(config.gracePeriod),
-              testingMode: false
-            });
-          }
+
+        // Pull config + stats
+        // Expecting child methods like:
+        //   getDecayConfig() -> { enabled, decayRate, decayInterval, minThreshold, gracePeriod }
+        //   getDecayStatistics() -> { totalDecayedPoints, lastGlobalDecayProcess, userCount? }
+        //   getTransactionHistory() -> list of tx { transactionType: {Decay?}, amount, from, timestamp, reason }
+        const [cfg, stats, txs] = await Promise.all([
+          child.getDecayConfig?.() ?? child.get_config?.(),
+          child.getDecayStatistics?.() ?? child.get_decay_stats?.(),
+          child.getTransactionHistory?.() ?? child.get_tx_history?.(),
+        ]);
+
+        if (cfg) {
+          setSettings((prev) => ({
+            ...prev,
+            enabled: !!cfg.enabled,
+            rate: Number(cfg.decayRate ?? prev.rate),
+            interval: Number(cfg.decayInterval ?? prev.interval),
+            minimumThreshold: Number(cfg.minThreshold ?? prev.minimumThreshold),
+            gracePeriod: Number(cfg.gracePeriod ?? prev.gracePeriod),
+            // testingMode stays user-controlled
+          }));
         }
-        
-      } catch (error) {
-        console.error('Error loading decay data:', error);
-        toast.error('Failed to load decay data');
+
+        if (stats) {
+          const totalDecayed = Number(stats.totalDecayedPoints ?? 0);
+          const userCount = Number(stats.userCount ?? 0);
+          const lastProc = Number(stats.lastGlobalDecayProcess ?? 0);
+          setDecayStats({
+            totalDecayedPoints: totalDecayed,
+            lastGlobalDecayProcess: lastProc,
+            configEnabled: !!(cfg?.enabled),
+            usersWithDecay: userCount,
+            totalUsers: userCount,
+            averageDecayPerUser: totalDecayed / Math.max(userCount, 1),
+          });
+        }
+
+        // Recent decay-only transactions (last 15)
+        const toNum = (v: number | bigint) => (typeof v === "bigint" ? Number(v) : v);
+        const decayTx = (txs ?? []).filter((tx: any) => "Decay" in (tx.transactionType || {}));
+        const recent = decayTx.slice(-15).reverse().map((tx: any, i: number) => ({
+          id: `decay-${i}`,
+          userId: tx.from?.toString?.() ?? "",
+          userName: `User ${(tx.from?.toString?.() ?? "").slice(0, 8)}`,
+          amountDecayed: toNum(tx.amount ?? 0),
+          previousAmount: toNum(tx.amount ?? 0) + Math.floor(Math.random() * 100), // placeholder
+          newAmount: toNum(tx.amount ?? 0),
+          reason: Array.isArray(tx.reason) ? tx.reason[0] ?? "No reason provided" : tx.reason ?? "No reason provided",
+          timestamp: new Date(toNum(tx.timestamp ?? 0) * 1000),
+        }));
+        setRecentDecayEvents(recent);
+      } catch (e) {
+        console.error("Error loading decay data:", e);
+        toast.error("Failed to load decay data");
       } finally {
         setLoading(false);
       }
-    };
+    })();
+  }, [child]);
 
-    loadDecayData();
-  }, [isConnected, principal]);
-
+  // --- Handlers ---
   const handleSettingChange = (key: keyof DecaySettings, value: any) => {
-    setSettings(prev => ({ ...prev, [key]: value }));
+    setSettings((prev) => ({ ...prev, [key]: value }));
     setHasUnsavedChanges(true);
   };
 
-  // Handle testing mode toggle
+  // Testing mode enforces fixed rate/interval
   const handleTestingModeToggle = (enabled: boolean) => {
-    console.log('🧪 Testing mode toggle:', enabled);
-    
     if (enabled) {
-      // Enable testing mode: 10% decay every 1 minute
-      console.log('🧪 Enabling testing mode: 10% decay every 1 minute');
-      setSettings(prev => ({
+      setSettings((prev) => ({
         ...prev,
         testingMode: true,
-        rate: 1000, // 10% in basis points
-        interval: 60, // 1 minute in seconds
-        enabled: true
+        rate: 1000,      // 10%
+        interval: 60,    // 1 minute
+        enabled: true,
       }));
     } else {
-      // Disable testing mode: restore normal settings
-      console.log('🧪 Disabling testing mode: restoring normal settings');
-      setSettings(prev => ({
+      setSettings((prev) => ({
         ...prev,
         testingMode: false,
-        rate: 200, // 2% in basis points
-        interval: 2592000, // 30 days in seconds
+        rate: 200,           // back to 2%
+        interval: 2_592_000, // back to 30 days
       }));
     }
     setHasUnsavedChanges(true);
@@ -222,76 +208,53 @@ const DecaySystem = () => {
 
   const handleSaveSettings = async () => {
     try {
+      if (!child) return;
       setLoading(true);
-      const selectedOrgId = localStorage.getItem('selectedOrgId');
-      
-      console.log('🔧 Saving decay settings:', {
-        selectedOrgId,
-        settings,
-        isOrgSpecific: !!selectedOrgId
-      });
-      
-      if (selectedOrgId) {
-        // Save organization-specific decay settings
-        console.log('🏢 Configuring org-specific decay for:', selectedOrgId);
-        const result = await configureOrgDecay(
-          settings.rate,
-          settings.interval,
-          settings.minimumThreshold,
-          settings.gracePeriod,
-          settings.enabled
-        );
-        console.log('✅ Org decay config result:', result);
-      } else {
-        // Save global decay settings
-        console.log('🌍 Configuring global decay settings');
-        const result = await configureDecay(
-          settings.rate,
-          settings.interval,
-          settings.minimumThreshold,
-          settings.gracePeriod,
-          settings.enabled
-        );
-        console.log('✅ Global decay config result:', result);
-      }
-      
+
+      // Expect a child method like configureDecay(rate, interval, minThreshold, gracePeriod, enabled)
+      await (child.configureDecay?.(
+        settings.rate,
+        settings.interval,
+        settings.minimumThreshold,
+        settings.gracePeriod,
+        settings.enabled
+      ) ?? child.configure_decay?.(
+        settings.rate,
+        settings.interval,
+        settings.minimumThreshold,
+        settings.gracePeriod,
+        settings.enabled
+      ));
+
       setHasUnsavedChanges(false);
-      toast.success("Decay settings saved successfully!");
-      
-      // Reload data to reflect changes
-      const loadDecayData = async () => {
-        if (selectedOrgId) {
-          const [orgStats, orgAnalytics] = await Promise.all([
-            getOrgDecayStatistics(),
-            getOrgDecayAnalytics()
-          ]);
-          
-          if (orgStats) {
-            setDecayStats(prev => ({
-              ...prev,
-              totalDecayedPoints: orgStats.totalDecayedPoints,
-              lastGlobalDecayProcess: orgStats.lastGlobalDecayProcess,
-              configEnabled: orgStats.configEnabled
-            }));
-          }
-        } else {
-          const stats = await getDecayStatistics();
-          if (stats) {
-            setDecayStats(prev => ({
-              ...prev,
-              totalDecayedPoints: stats.totalDecayedPoints,
-              lastGlobalDecayProcess: stats.lastGlobalDecayProcess,
-              configEnabled: stats.configEnabled
-            }));
-          }
-        }
-      };
-      
-      loadDecayData();
-      
-    } catch (error) {
-      console.error('Error saving decay settings:', error);
-      toast.error("Failed to save settings. Please try again.");
+      toast.success("Decay settings saved!");
+
+      // Reload fresh stats/config
+      const [cfg, stats] = await Promise.all([
+        child.getDecayConfig?.() ?? child.get_config?.(),
+        child.getDecayStatistics?.() ?? child.get_decay_stats?.(),
+      ]);
+      if (cfg) {
+        setSettings((prev) => ({
+          ...prev,
+          enabled: !!cfg.enabled,
+          rate: Number(cfg.decayRate ?? prev.rate),
+          interval: Number(cfg.decayInterval ?? prev.interval),
+          minimumThreshold: Number(cfg.minThreshold ?? prev.minimumThreshold),
+          gracePeriod: Number(cfg.gracePeriod ?? prev.gracePeriod),
+        }));
+      }
+      if (stats) {
+        setDecayStats((prev) => ({
+          ...prev,
+          totalDecayedPoints: Number(stats.totalDecayedPoints ?? prev.totalDecayedPoints),
+          lastGlobalDecayProcess: Number(stats.lastGlobalDecayProcess ?? prev.lastGlobalDecayProcess),
+          configEnabled: !!(cfg?.enabled),
+        }));
+      }
+    } catch (e) {
+      console.error("Error saving decay settings:", e);
+      toast.error("Failed to save settings");
     } finally {
       setLoading(false);
     }
@@ -299,60 +262,59 @@ const DecaySystem = () => {
 
   const handleRunManualDecay = async () => {
     try {
+      if (!child) return;
       setLoading(true);
-      
-      console.log('🔄 Running manual batch decay process...');
-      
-      // Run batch decay process
-      const result = await processBatchDecay();
-      
-      console.log('✅ Manual decay result:', result);
-      toast.success(`Manual decay process completed: ${result}`);
-      
-      // Reload data to show updated decay events
-      const selectedOrgId = localStorage.getItem('selectedOrgId');
-      if (selectedOrgId) {
-        const [orgStats, orgAnalytics] = await Promise.all([
-          getOrgDecayStatistics(),
-          getOrgDecayAnalytics()
-        ]);
-        
-        if (orgStats) {
-          setDecayStats(prev => ({
-            ...prev,
-            totalDecayedPoints: orgStats.totalDecayedPoints,
-            lastGlobalDecayProcess: orgStats.lastGlobalDecayProcess
-          }));
-        }
-        
-        if (orgAnalytics && orgAnalytics.recentDecayTransactions) {
-          const decayEvents: DecayEvent[] = orgAnalytics.recentDecayTransactions.map((tx: any, index: number) => ({
-            id: `decay-${index}`,
-            userId: tx.from.toString(),
-            userName: `User ${tx.from.toString().slice(0, 8)}`,
-            amountDecayed: Number(tx.amount),
-            previousAmount: Number(tx.amount) + Math.floor(Math.random() * 100),
-            newAmount: Number(tx.amount),
-            reason: tx.reason || "No reason provided",
-            timestamp: convertTimestampToDate(tx.timestamp)
-          }));
-          setRecentDecayEvents(decayEvents);
-        }
-      }
-      
-    } catch (error) {
-      console.error('Error running manual decay:', error);
-      toast.error("Failed to run manual decay. Please try again.");
+
+      // Expect child method processBatchDecay()
+      const res =
+        (await child.processBatchDecay?.()) ??
+        (await child.process_batch_decay?.());
+      toast.success(`Manual decay triggered${res ? `: ${String(res)}` : ""}`);
+
+      // Refresh recent activity quickly
+      const txs = (await (child.getTransactionHistory?.() ?? child.get_tx_history?.())) ?? [];
+      const toNum = (v: number | bigint) => (typeof v === "bigint" ? Number(v) : v);
+      const decayTx = txs.filter((tx: any) => "Decay" in (tx.transactionType || {}));
+      const recent = decayTx.slice(-15).reverse().map((tx: any, i: number) => ({
+        id: `decay-${i}`,
+        userId: tx.from?.toString?.() ?? "",
+        userName: `User ${(tx.from?.toString?.() ?? "").slice(0, 8)}`,
+        amountDecayed: toNum(tx.amount ?? 0),
+        previousAmount: toNum(tx.amount ?? 0) + Math.floor(Math.random() * 100),
+        newAmount: toNum(tx.amount ?? 0),
+        reason: Array.isArray(tx.reason) ? tx.reason[0] ?? "No reason provided" : tx.reason ?? "No reason provided",
+        timestamp: new Date(toNum(tx.timestamp ?? 0) * 1000),
+      }));
+      setRecentDecayEvents(recent);
+    } catch (e) {
+      console.error("Error running manual decay:", e);
+      toast.error("Failed to run manual decay");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDisconnect = () => {
-    navigate('/auth');
-  };
+  const handleDisconnect = () => navigate("/auth");
 
-  if (userRole !== 'admin') {
+  if (connecting) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <div className="text-sm text-muted-foreground">Connecting to organization…</div>
+      </div>
+    );
+  }
+
+  if (!cid) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <Alert>
+          <AlertDescription>No organization selected.</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-muted/20 flex items-center justify-center">
         <Card className="glass-card p-8 max-w-md mx-auto text-center">
@@ -361,7 +323,7 @@ const DecaySystem = () => {
           <p className="text-muted-foreground mb-4">
             Only administrators can manage the decay system.
           </p>
-          <Button onClick={() => navigate('/dashboard')}>
+          <Button onClick={() => navigate(`/dashboard/home/${cid}`)}>
             Return to Dashboard
           </Button>
         </Card>
@@ -369,23 +331,16 @@ const DecaySystem = () => {
     );
   }
 
-  const stats = {
-    usersAffected: recentDecayEvents.length,
-    totalDecayed: recentDecayEvents.reduce((sum, event) => sum + event.amountDecayed, 0),
-    lastRun: recentDecayEvents[0]?.timestamp || new Date(),
-    nextScheduled: new Date(Date.now() + (settings.interval * 1000))
-  };
-
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
-        <DashboardSidebar 
-          userRole={userRole}
+        <DashboardSidebar
+          userRole={"admin"}
           userName={userDisplayData.userName}
           userPrincipal={userDisplayData.userPrincipal}
           onDisconnect={handleDisconnect}
         />
-        
+
         <div className="flex-1">
           {/* Header */}
           <header className="h-16 border-b border-border/40 flex items-center px-6 glass-header">
@@ -397,14 +352,14 @@ const DecaySystem = () => {
                 </div>
                 <div>
                   <h1 className="text-lg font-semibold text-foreground">Decay System</h1>
-                  <p className="text-xs text-muted-foreground">Manage automatic reputation decay for inactive members</p>
+                  <p className="text-xs text-muted-foreground">Org: {cid}</p>
                 </div>
               </div>
-              
+
               <div className="flex items-center gap-2">
-                <Badge 
-                  variant={settings.enabled ? 'default' : 'secondary'}
-                  className={settings.enabled ? 'bg-green-500/10 text-green-600' : ''}
+                <Badge
+                  variant={settings.enabled ? "default" : "secondary"}
+                  className={settings.enabled ? "bg-green-500/10 text-green-600" : ""}
                 >
                   {settings.enabled ? (
                     <>
@@ -418,26 +373,24 @@ const DecaySystem = () => {
                     </>
                   )}
                 </Badge>
-                
+
                 {hasUnsavedChanges && (
-                  <Button variant="hero" onClick={handleSaveSettings} className="group">
+                  <Button variant="hero" onClick={handleSaveSettings} disabled={loading} className="group">
                     <Save className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
-                    Save Changes
+                    {loading ? "Saving…" : "Save Changes"}
                   </Button>
                 )}
+                <ThemeToggle />
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <ThemeToggle />
             </div>
           </header>
 
-          {/* Main Content */}
+          {/* Main */}
           <main className="p-6">
             <div className="max-w-7xl mx-auto space-y-6">
-              {/* Stats Cards */}
+              {/* Stats */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card className="glass-card p-4 animate-fade-in">
+                <Card className="glass-card p-4">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-muted-foreground">Users Affected</p>
@@ -446,8 +399,8 @@ const DecaySystem = () => {
                     <Users className="w-8 h-8 text-primary" />
                   </div>
                 </Card>
-                
-                <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: '0.1s' }}>
+
+                <Card className="glass-card p-4">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-muted-foreground">Total Decayed</p>
@@ -456,28 +409,27 @@ const DecaySystem = () => {
                     <TrendingDown className="w-8 h-8 text-orange-500" />
                   </div>
                 </Card>
-                
-                <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: '0.2s' }}>
+
+                <Card className="glass-card p-4">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-muted-foreground">Last Process</p>
                       <p className="text-sm font-bold text-foreground">
-                        {decayStats.lastGlobalDecayProcess > 0 
-                          ? new Date(decayStats.lastGlobalDecayProcess / 1000000).toLocaleDateString()
-                          : 'Never'
-                        }
+                        {decayStats.lastGlobalDecayProcess > 0
+                          ? new Date(decayStats.lastGlobalDecayProcess / 1_000_000).toLocaleString()
+                          : "Never"}
                       </p>
                     </div>
                     <Clock className="w-8 h-8 text-blue-500" />
                   </div>
                 </Card>
-                
-                <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: '0.3s' }}>
+
+                <Card className="glass-card p-4">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-muted-foreground">System Status</p>
                       <p className="text-sm font-bold text-foreground">
-                        {decayStats.configEnabled ? 'Enabled' : 'Disabled'}
+                        {decayStats.configEnabled ? "Enabled" : "Disabled"}
                       </p>
                     </div>
                     <Activity className="w-8 h-8 text-green-500" />
@@ -488,7 +440,7 @@ const DecaySystem = () => {
               <div className="grid lg:grid-cols-3 gap-6">
                 {/* Settings Panel */}
                 <div className="lg:col-span-2 space-y-6">
-                  <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: '0.4s' }}>
+                  <Card className="glass-card p-6">
                     <div className="flex items-center gap-3 mb-6">
                       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500/20 to-orange-600/20 flex items-center justify-center">
                         <Settings className="w-5 h-5 text-orange-600" />
@@ -508,7 +460,7 @@ const DecaySystem = () => {
                         </div>
                         <Switch
                           checked={settings.enabled}
-                          onCheckedChange={(checked) => handleSettingChange('enabled', checked)}
+                          onCheckedChange={(checked) => handleSettingChange("enabled", checked)}
                         />
                       </div>
 
@@ -518,10 +470,7 @@ const DecaySystem = () => {
                           <Label className="text-sm font-medium text-foreground">Testing Mode</Label>
                           <p className="text-xs text-muted-foreground">10% decay every 1 minute for quick testing</p>
                         </div>
-                        <Switch
-                          checked={settings.testingMode}
-                          onCheckedChange={handleTestingModeToggle}
-                        />
+                        <Switch checked={settings.testingMode} onCheckedChange={handleTestingModeToggle} />
                       </div>
 
                       {/* Decay Rate */}
@@ -529,43 +478,37 @@ const DecaySystem = () => {
                         <div className="flex items-center justify-between">
                           <Label className="text-sm font-medium text-foreground">Decay Rate</Label>
                           <Badge variant="secondary" className="font-mono">
-                            {(settings.rate / 100).toFixed(1)}% per {settings.testingMode ? 'minute' : 'period'}
+                            {(settings.rate / 100).toFixed(1)}% per {settings.testingMode ? "minute" : "period"}
                           </Badge>
                         </div>
                         <Slider
                           value={[settings.rate / 100]}
-                          onValueChange={(value) => handleSettingChange('rate', value[0] * 100)}
-                          max={settings.testingMode ? 10 : 10}
+                          onValueChange={(v) => handleSettingChange("rate", v[0] * 100)}
+                          max={10}
                           min={0.1}
                           step={0.1}
                           className="w-full"
                           disabled={settings.testingMode}
                         />
                         <p className="text-xs text-muted-foreground">
-                          {settings.testingMode 
-                            ? 'Testing mode: Fixed at 10% per minute' 
-                            : 'Percentage of reputation to decay each period'
-                          }
+                          {settings.testingMode ? "Testing mode: fixed at 10% per minute" : "Percentage of rep to decay each period"}
                         </p>
                       </div>
 
-                      {/* Decay Interval */}
+                      {/* Interval */}
                       <div className="space-y-2">
-                        <Label className="text-sm font-medium text-foreground">Decay Interval</Label>
+                        <Label className="text-sm font-medium text-foreground">Decay Interval (seconds)</Label>
                         <Input
                           type="number"
                           value={settings.testingMode ? 60 : settings.interval}
-                          onChange={(e) => !settings.testingMode && handleSettingChange('interval', parseInt(e.target.value))}
+                          onChange={(e) => !settings.testingMode && handleSettingChange("interval", parseInt(e.target.value))}
                           className="glass-input"
-                          min="60"
+                          min={60}
                           disabled={settings.testingMode}
                           placeholder="Seconds between decay cycles"
                         />
                         <p className="text-xs text-muted-foreground">
-                          {settings.testingMode 
-                            ? 'Testing mode: Fixed at 60 seconds (1 minute)' 
-                            : 'Seconds between decay cycles (86400 = 1 day, 2592000 = 30 days)'
-                          }
+                          {settings.testingMode ? "Testing mode: fixed at 60s" : "e.g., 86400 = 1 day, 2592000 = 30 days"}
                         </p>
                       </div>
 
@@ -575,61 +518,55 @@ const DecaySystem = () => {
                         <Input
                           type="number"
                           value={settings.minimumThreshold}
-                          onChange={(e) => handleSettingChange('minimumThreshold', parseInt(e.target.value))}
+                          onChange={(e) => handleSettingChange("minimumThreshold", parseInt(e.target.value))}
                           className="glass-input"
-                          min="0"
+                          min={0}
                         />
-                        <p className="text-xs text-muted-foreground">
-                          Users below this threshold won't experience decay
-                        </p>
+                        <p className="text-xs text-muted-foreground">Users below this threshold won't decay</p>
                       </div>
 
                       {/* Grace Period */}
                       <div className="space-y-2">
-                        <Label className="text-sm font-medium text-foreground">Grace Period (Seconds)</Label>
+                        <Label className="text-sm font-medium text-foreground">Grace Period (seconds)</Label>
                         <Input
                           type="number"
                           value={settings.gracePeriod}
-                          onChange={(e) => handleSettingChange('gracePeriod', parseInt(e.target.value))}
+                          onChange={(e) => handleSettingChange("gracePeriod", parseInt(e.target.value))}
                           className="glass-input"
-                          min="0"
-                          placeholder="Grace period for new users"
+                          min={0}
+                          placeholder="New user grace period"
                         />
-                        <p className="text-xs text-muted-foreground">
-                          New users won't experience decay for this many seconds (7776000 = 90 days)
-                        </p>
+                        <p className="text-xs text-muted-foreground">e.g., 7,776,000 = 90 days</p>
                       </div>
-
                     </div>
                   </Card>
                 </div>
 
-                {/* Manual Controls & Recent Events */}
+                {/* Manual + Recent */}
                 <div className="space-y-6">
-                  {/* Manual Controls */}
-                  <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: '0.5s' }}>
+                  <Card className="glass-card p-6">
                     <div className="flex items-center gap-3 mb-4">
                       <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-600/20 flex items-center justify-center">
                         <RotateCcw className="w-4 h-4 text-blue-600" />
                       </div>
                       <h3 className="font-semibold text-foreground">Manual Controls</h3>
                     </div>
-                    
+
                     <div className="space-y-3">
-                      <Button 
+                      <Button
                         onClick={handleRunManualDecay}
-                        variant="outline" 
+                        variant="outline"
                         className="w-full justify-start group"
-                        disabled={!settings.enabled}
+                        disabled={!settings.enabled || loading}
                       >
                         <Play className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
-                        Run Manual Decay
+                        {loading ? "Running…" : "Run Manual Decay"}
                       </Button>
-                      
-                      <Button 
-                        variant="ghost" 
+
+                      <Button
+                        variant="ghost"
                         className="w-full justify-start"
-                        onClick={() => navigate('/transaction-log')}
+                        onClick={() => navigate(`/dashboard/transaction-log/${cid}`)}
                       >
                         <BarChart3 className="w-4 h-4 mr-2" />
                         View Decay History
@@ -639,20 +576,20 @@ const DecaySystem = () => {
                     <Alert className="mt-4 border-orange-500/20 bg-orange-500/5">
                       <Info className="h-4 w-4 text-orange-600" />
                       <AlertDescription className="text-orange-800 dark:text-orange-200 text-xs">
-                        Manual decay will apply the current settings to all eligible users immediately.
+                        Manual decay applies the current settings immediately.
                       </AlertDescription>
                     </Alert>
                   </Card>
 
                   {/* Recent Decay Events */}
-                  <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: '0.6s' }}>
+                  <Card className="glass-card p-6">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="font-semibold text-foreground">Recent Decay Events</h3>
-                      <Button variant="ghost" size="sm" onClick={() => navigate('/transaction-log')}>
+                      <Button variant="ghost" size="sm" onClick={() => navigate(`/dashboard/transaction-log/${cid}`)}>
                         View all
                       </Button>
                     </div>
-                    
+
                     <div className="space-y-3">
                       {recentDecayEvents.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
@@ -663,22 +600,18 @@ const DecaySystem = () => {
                         recentDecayEvents.map((event) => (
                           <div key={event.id} className="p-3 glass-card rounded-lg hover:shadow-md transition-all duration-200">
                             <div className="flex items-center justify-between mb-2">
-                              <span className="font-medium text-foreground text-sm">
-                                {event.userName}
-                              </span>
+                              <span className="font-medium text-foreground text-sm">{event.userName}</span>
                               <Badge variant="destructive" className="text-xs">
                                 -{event.amountDecayed} REP
                               </Badge>
                             </div>
-                            <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
-                              {event.reason}
-                            </p>
+                            <p className="text-xs text-muted-foreground mb-2 line-clamp-2">{event.reason}</p>
                             <div className="flex items-center justify-between">
                               <span className="text-xs text-muted-foreground">
                                 {event.previousAmount} → {event.newAmount}
                               </span>
                               <span className="text-xs text-muted-foreground">
-                                {formatDateForDisplay(event.timestamp)}
+                                {event.timestamp.toLocaleString()}
                               </span>
                             </div>
                           </div>

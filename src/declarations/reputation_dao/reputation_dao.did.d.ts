@@ -95,7 +95,6 @@ export interface ReputationChild {
   'processBatchDecay' : ActorMethod<[], string>,
   'removeTrustedAwarder' : ActorMethod<[Principal], string>,
   'resetUser' : ActorMethod<[Principal, [] | [string]], string>,
-  'returnCyclesToFactory' : ActorMethod<[bigint], bigint>,
   'revokeRep' : ActorMethod<[Principal, bigint, [] | [string]], string>,
   'setDailyMintLimit' : ActorMethod<[bigint], string>,
   'setMinCyclesAlert' : ActorMethod<[bigint], string>,

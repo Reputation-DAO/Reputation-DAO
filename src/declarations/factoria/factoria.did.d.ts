@@ -12,7 +12,6 @@ export interface Child {
 export type Status = { 'Active' : null } |
   { 'Archived' : null };
 export interface _SERVICE {
-  'adminSetPool' : ActorMethod<[Array<Principal>], string>,
   'archiveChild' : ActorMethod<[Principal], string>,
   'childHealth' : ActorMethod<
     [Principal],
@@ -40,14 +39,13 @@ export interface _SERVICE {
     Principal
   >,
   'deleteChild' : ActorMethod<[Principal], string>,
-  'forceAddOwnerIndex' : ActorMethod<[Principal, Principal], string>,
   'getAdmin' : ActorMethod<[], Principal>,
   'getChild' : ActorMethod<[Principal], [] | [Child]>,
   'listByOwner' : ActorMethod<[Principal], Array<Principal>>,
   'listChildren' : ActorMethod<[], Array<Child>>,
   'poolSize' : ActorMethod<[], bigint>,
   'reassignOwner' : ActorMethod<[Principal, Principal], string>,
-  'reinstallChild' : ActorMethod<[Principal, Principal, Principal], undefined>,
+  'reinstallChild' : ActorMethod<[Principal, Uint8Array | number[]], undefined>,
   'setAdmin' : ActorMethod<[Principal], undefined>,
   'setDefaultChildWasm' : ActorMethod<[Uint8Array | number[]], undefined>,
   'startChild' : ActorMethod<[Principal], undefined>,
