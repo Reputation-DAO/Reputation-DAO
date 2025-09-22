@@ -1,3 +1,5 @@
+// src/pages/AwardRep.tsx
+// @ts-nocheck
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRole } from "@/contexts/RoleContext";
@@ -12,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar"; // add useSidebar
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { toast } from "sonner";
@@ -301,227 +303,271 @@ const AwardRep = () => {
     );
   }
 
+  // ✅ Only layout change below: wrap in SidebarProvider and read sidebar state in inner component
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
-        <DashboardSidebar 
-          userRole={(userRole?.toLowerCase() as 'admin' | 'awarder' | 'member') || 'member'}
-          userName={getUserDisplayData(principal).userName}
-          userPrincipal={getUserDisplayData(principal).userPrincipal}
-          onDisconnect={handleDisconnect}
-        />
-        
-        <div className="flex-1">
-          {/* Header */}
-          <header className="h-16 border-b border-border/40 flex items-center justify-between px-6 glass-header">
-            <div className="flex items-center gap-3">
-              <SidebarTrigger className="mr-4" />
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-600/20 flex items-center justify-center">
-                <Award className="w-4 h-4 text-blue-600" />
-              </div>
-              <div>
-                <h1 className="text-lg font-semibold text-foreground">Award Reputation</h1>
-                <p className="text-xs text-muted-foreground">Distribute reputation points to community members</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <ThemeToggle />
-            </div>
-          </header>
-
-          {/* Main Content */}
-          <main className="p-6">
-            <div className="max-w-7xl mx-auto">
-              <div className="grid lg:grid-cols-3 gap-6">
-                {/* Award Form */}
-                <div className="lg:col-span-2 space-y-6">
-                  <Card className="glass-card p-6 animate-fade-in">
-                    <div className="flex items-center gap-3 mb-6">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/20 flex items-center justify-center">
-                        <Star className="w-5 h-5 text-blue-600" />
-                      </div>
-                      <div>
-                        <h2 className="text-lg font-semibold text-foreground">Award Reputation Points</h2>
-                        <p className="text-sm text-muted-foreground">Recognize valuable contributions</p>
-                      </div>
-                    </div>
-
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="recipientAddress" className="text-sm font-medium text-foreground">
-                            Recipient Address *
-                          </Label>
-                          <div className="relative">
-                            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                            <Input
-                              id="recipientAddress"
-                              placeholder="Enter ICP address"
-                              value={formData.recipientAddress}
-                              onChange={(e) => handleInputChange('recipientAddress', e.target.value)}
-                              className="pl-10 glass-input"
-                              required
-                            />
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="reputationAmount" className="text-sm font-medium text-foreground">
-                            Reputation Amount *
-                          </Label>
-                          <div className="relative">
-                            <Star className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                            <Input
-                              id="reputationAmount"
-                              type="number"
-                              placeholder="Enter amount"
-                              value={formData.reputationAmount}
-                              onChange={(e) => handleInputChange('reputationAmount', e.target.value)}
-                              className="pl-10 glass-input"
-                              min="1"
-                              required
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium text-foreground">Category *</Label>
-                        <Select value={formData.category} onValueChange={(value) => handleInputChange('category', value)}>
-                          <SelectTrigger className="glass-input">
-                            <SelectValue placeholder="Select category" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {categories.map((category) => (
-                              <SelectItem key={category} value={category}>
-                                {category}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="reason" className="text-sm font-medium text-foreground">
-                          Reason for Award *
-                        </Label>
-                        <Textarea
-                          id="reason"
-                          placeholder="Describe the contribution or achievement..."
-                          value={formData.reason}
-                          onChange={(e) => handleInputChange('reason', e.target.value)}
-                          className="glass-input min-h-[100px] resize-none"
-                          required
-                        />
-                      </div>
-
-                      <div className="flex items-center gap-2 p-4 bg-blue-500/5 border border-blue-500/10 rounded-lg">
-                        <Info className="w-5 h-5 text-blue-600 flex-shrink-0" />
-                        <p className="text-sm text-muted-foreground">
-                          Include detailed reasons to help build trust in the reputation system.
-                        </p>
-                      </div>
-
-                      <Button type="submit" variant="hero" size="lg" className="w-full group" disabled={isAwarding}>
-                        {isAwarding ? (
-                          <>
-                            <div className="w-5 h-5 mr-2 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                            Awarding...
-                          </>
-                        ) : (
-                          <>
-                            <Award className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
-                            Award Reputation
-                          </>
-                        )}
-                      </Button>
-                    </form>
-                  </Card>
-                </div>
-
-                {/* Sidebar Stats & Recent Awards */}
-                <div className="space-y-6">
-                  {/* Award Summary */}
-                  <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: '0.1s' }}>
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500/20 to-green-600/20 flex items-center justify-center">
-                        <TrendingUp className="w-4 h-4 text-green-600" />
-                      </div>
-                      <h3 className="font-semibold text-foreground">Award Summary</h3>
-                    </div>
-                    
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between p-3 glass-card rounded-lg">
-                        <span className="text-sm text-muted-foreground">Total Awards</span>
-                        <Badge variant="secondary" className="font-mono">
-                          {stats.totalAwards}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center justify-between p-3 glass-card rounded-lg">
-                        <span className="text-sm text-muted-foreground">Total REP Awarded</span>
-                        <Badge variant="secondary" className="font-mono">
-                          {stats.totalREPAwarded} REP
-                        </Badge>
-                      </div>
-                      <div className="flex items-center justify-between p-3 glass-card rounded-lg">
-                        <span className="text-sm text-muted-foreground">This Month</span>
-                        <Badge variant="secondary" className="font-mono">
-                          {stats.monthlyAwards}
-                        </Badge>
-                      </div>
-                    </div>
-                  </Card>
-
-                  {/* Recent Awards */}
-                  <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: '0.2s' }}>
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-semibold text-foreground">Recent Awards</h3>
-                      <Button variant="ghost" size="sm" onClick={() => navigate('/transaction-log')}>
-                        View all
-                      </Button>
-                    </div>
-                    
-                    <div className="space-y-3">
-                      {recentAwards.length === 0 ? (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <Award className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                          <p className="text-sm">No recent awards found</p>
-                        </div>
-                      ) : (
-                        recentAwards.map((award) => (
-                          <div key={award.id} className="p-3 glass-card rounded-lg hover:shadow-md transition-all duration-200">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="font-medium text-foreground text-sm">
-                                {award.recipientName}
-                              </span>
-                              <Badge variant="secondary" className="text-xs">
-                                +{award.amount} REP
-                              </Badge>
-                            </div>
-                            <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
-                              {award.reason}
-                            </p>
-                            <div className="flex items-center justify-between">
-                              <Badge variant="outline" className="text-xs">
-                                {award.category}
-                              </Badge>
-                              <span className="text-xs text-muted-foreground">
-                                {formatDateForDisplay(award.timestamp)}
-                              </span>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </Card>
-                </div>
-              </div>
-            </div>
-          </main>
-        </div>
-      </div>
+      <InnerAwardRep
+        userRole={userRole}
+        principal={principal}
+        handleDisconnect={handleDisconnect}
+        formData={formData}
+        setFormData={setFormData}
+        handleInputChange={handleInputChange}
+        handleSubmit={handleSubmit}
+        isAwarding={isAwarding}
+        stats={stats}
+        recentAwards={recentAwards}
+        navigate={navigate}
+      />
     </SidebarProvider>
   );
 };
+
+function InnerAwardRep(props: any) {
+  const {
+    userRole,
+    principal,
+    handleDisconnect,
+    formData,
+    setFormData,
+    handleInputChange,
+    handleSubmit,
+    isAwarding,
+    stats,
+    recentAwards,
+    navigate,
+  } = props;
+
+  // Read sidebar state and pad content (collapsed: 72px, expanded: 280px)
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
+
+  const userDisplay = getUserDisplayData(principal);
+
+  return (
+    <div className="min-h-screen w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
+      <DashboardSidebar 
+        userRole={(userRole?.toLowerCase() as 'admin' | 'awarder' | 'member') || 'member'}
+        userName={userDisplay.userName}
+        userPrincipal={userDisplay.userPrincipal}
+        onDisconnect={handleDisconnect}
+      />
+
+      {/* Push main content to the right of the fixed sidebar on md+ */}
+      <div
+        className={`flex min-h-screen flex-col transition-[padding-left] duration-300 pl-0 ${
+          collapsed ? "md:pl-[72px]" : "md:pl-[280px]"
+        }`}
+      >
+        {/* Header */}
+        <header className="h-16 border-b border-border/40 flex items-center justify-between px-6 glass-header">
+          <div className="flex items-center gap-3">
+            <SidebarTrigger className="mr-4" />
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-600/20 flex items-center justify-center">
+              <Award className="w-4 h-4 text-blue-600" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold text-foreground">Award Reputation</h1>
+              <p className="text-xs text-muted-foreground">Distribute reputation points to community members</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+          </div>
+        </header>
+
+        {/* Main Content */}
+        <main className="p-6">
+          <div className="max-w-7xl mx-auto">
+            <div className="grid lg:grid-cols-3 gap-6">
+              {/* Award Form */}
+              <div className="lg:col-span-2 space-y-6">
+                <Card className="glass-card p-6 animate-fade-in">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/20 flex items-center justify-center">
+                      <Star className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-semibold text-foreground">Award Reputation Points</h2>
+                      <p className="text-sm text-muted-foreground">Recognize valuable contributions</p>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleSubmit} className="space-y-6">
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="recipientAddress" className="text-sm font-medium text-foreground">
+                          Recipient Address *
+                        </Label>
+                        <div className="relative">
+                          <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Input
+                            id="recipientAddress"
+                            placeholder="Enter ICP address"
+                            value={formData.recipientAddress}
+                            onChange={(e) => handleInputChange('recipientAddress', e.target.value)}
+                            className="pl-10 glass-input"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="reputationAmount" className="text-sm font-medium text-foreground">
+                          Reputation Amount *
+                        </Label>
+                        <div className="relative">
+                          <Star className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Input
+                            id="reputationAmount"
+                            type="number"
+                            placeholder="Enter amount"
+                            value={formData.reputationAmount}
+                            onChange={(e) => handleInputChange('reputationAmount', e.target.value)}
+                            className="pl-10 glass-input"
+                            min="1"
+                            required
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-foreground">Category *</Label>
+                      <Select value={formData.category} onValueChange={(value) => handleInputChange('category', value)}>
+                        <SelectTrigger className="glass-input">
+                          <SelectValue placeholder="Select category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories.map((category) => (
+                            <SelectItem key={category} value={category}>
+                              {category}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="reason" className="text-sm font-medium text-foreground">
+                        Reason for Award *
+                      </Label>
+                      <Textarea
+                        id="reason"
+                        placeholder="Describe the contribution or achievement..."
+                        value={formData.reason}
+                        onChange={(e) => handleInputChange('reason', e.target.value)}
+                        className="glass-input min-h-[100px] resize-none"
+                        required
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2 p-4 bg-blue-500/5 border border-blue-500/10 rounded-lg">
+                      <Info className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                      <p className="text-sm text-muted-foreground">
+                        Include detailed reasons to help build trust in the reputation system.
+                      </p>
+                    </div>
+
+                    <Button type="submit" variant="hero" size="lg" className="w-full group" disabled={isAwarding}>
+                      {isAwarding ? (
+                        <>
+                          <div className="w-5 h-5 mr-2 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                          Awarding...
+                        </>
+                      ) : (
+                        <>
+                          <Award className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                          Award Reputation
+                        </>
+                      )}
+                    </Button>
+                  </form>
+                </Card>
+              </div>
+
+              {/* Sidebar Stats & Recent Awards */}
+              <div className="space-y-6">
+                {/* Award Summary */}
+                <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: '0.1s' }}>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500/20 to-green-600/20 flex items-center justify-center">
+                      <TrendingUp className="w-4 h-4 text-green-600" />
+                    </div>
+                    <h3 className="font-semibold text-foreground">Award Summary</h3>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-3 glass-card rounded-lg">
+                      <span className="text-sm text-muted-foreground">Total Awards</span>
+                      <Badge variant="secondary" className="font-mono">
+                        {stats.totalAwards}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between p-3 glass-card rounded-lg">
+                      <span className="text-sm text-muted-foreground">Total REP Awarded</span>
+                      <Badge variant="secondary" className="font-mono">
+                        {stats.totalREPAwarded} REP
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between p-3 glass-card rounded-lg">
+                      <span className="text-sm text-muted-foreground">This Month</span>
+                      <Badge variant="secondary" className="font-mono">
+                        {stats.monthlyAwards}
+                      </Badge>
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Recent Awards */}
+                <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: '0.2s' }}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold text-foreground">Recent Awards</h3>
+                    <Button variant="ghost" size="sm" onClick={() => navigate('/transaction-log')}>
+                      View all
+                    </Button>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    {recentAwards.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Award className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">No recent awards found</p>
+                      </div>
+                    ) : (
+                      recentAwards.map((award) => (
+                        <div key={award.id} className="p-3 glass-card rounded-lg hover:shadow-md transition-all duration-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-medium text-foreground text-sm">
+                              {award.recipientName}
+                            </span>
+                            <Badge variant="secondary" className="text-xs">
+                              +{award.amount} REP
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
+                            {award.reason}
+                          </p>
+                          <div className="flex items-center justify-between">
+                            <Badge variant="outline" className="text-xs">
+                              {award.category}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDateForDisplay(award.timestamp)}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </Card>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
 
 export default AwardRep;

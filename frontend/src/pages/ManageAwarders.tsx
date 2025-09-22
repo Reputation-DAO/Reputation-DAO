@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
@@ -70,7 +70,7 @@ const ManageAwarders: React.FC = () => {
   const { cid } = useParams<{ cid: string }>();
 
   // Use your role context to gate access + show user in sidebar
-  const { isAdmin, currentPrincipal, userName } = useRole();
+  const { isAdmin, currentPrincipal } = useRole();
   const userDisplayData = getUserDisplayData(currentPrincipal || null);
 
   // Child actor state
@@ -145,8 +145,8 @@ const ManageAwarders: React.FC = () => {
             name: a.name ?? `User ${pStr.slice(0, 8)}`,
             principal: pStr,
             role: "awarder",
-            reputation: 0, // not available here; could be computed if you expose balances
-            joinDate: new Date(), // unknown from backend; placeholder
+            reputation: 0,
+            joinDate: new Date(),
             lastActive: lastActive.getTime() ? lastActive : new Date(),
             awardsGiven,
             status: "active",
@@ -182,7 +182,6 @@ const ManageAwarders: React.FC = () => {
     try {
       setLoading(true);
       const p = Principal.fromText(newAwarder.principal.trim());
-      // Expect string/variant; treat anything containing "Success" as success
       const res: string =
         (await child.addTrustedAwarder?.(p, newAwarder.name.trim())) ??
         (await child.add_trusted_awarder?.(p, newAwarder.name.trim()));
@@ -277,256 +276,303 @@ const ManageAwarders: React.FC = () => {
     admins: awarders.filter((a) => a.role === "admin").length,
   };
 
+  // ✅ Only sidebar alignment change: wrap content in SidebarProvider,
+  // and move useSidebar() into the inner component.
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
-        <DashboardSidebar
-          userRole={"admin"}
-          userName={userDisplayData.userName}
-          userPrincipal={userDisplayData.userPrincipal}
-          onDisconnect={handleDisconnect}
-        />
-
-        <div className="flex-1">
-          {/* Header */}
-          <header className="h-16 border-b border-border/40 flex items-center px-6 glass-header">
-            <SidebarTrigger className="mr-4" />
-            <div className="flex items-center justify-between w-full">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500/20 to-purple-600/20 flex items-center justify-center">
-                  <Users className="w-4 h-4 text-purple-600" />
-                </div>
-                <div>
-                  <h1 className="text-lg font-semibold text-foreground">Manage Awarders</h1>
-                  <p className="text-xs text-muted-foreground">Org: {cid}</p>
-                </div>
-              </div>
-
-              <Dialog open={isAddingAwarder} onOpenChange={setIsAddingAwarder}>
-                <DialogTrigger asChild>
-                  <Button variant="hero" className="group">
-                    <UserPlus className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
-                    Add Awarder
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-md bg-background border border-border shadow-lg">
-                  <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                      <UserPlus className="w-5 h-5 text-primary" />
-                      Add New Awarder
-                    </DialogTitle>
-                  </DialogHeader>
-
-                  <form onSubmit={handleAddAwarder} className="space-y-4 mt-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Name *</Label>
-                      <Input
-                        id="name"
-                        placeholder="Enter full name"
-                        value={newAwarder.name}
-                        onChange={(e) => setNewAwarder((p) => ({ ...p, name: e.target.value }))}
-                        className="glass-input"
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="principal">Principal ID *</Label>
-                      <Input
-                        id="principal"
-                        placeholder="Enter ICP Principal ID"
-                        value={newAwarder.principal}
-                        onChange={(e) => setNewAwarder((p) => ({ ...p, principal: e.target.value }))}
-                        className="glass-input"
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Role *</Label>
-                      <Select
-                        value={newAwarder.role}
-                        onValueChange={(value: "admin" | "awarder") => setNewAwarder((p) => ({ ...p, role: value }))}
-                      >
-                        <SelectTrigger className="glass-input">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="awarder">
-                            <div className="flex items-center gap-2">
-                              <Shield className="w-4 h-4 text-blue-500" />
-                              Awarder
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="admin">
-                            <div className="flex items-center gap-2">
-                              <Crown className="w-4 h-4 text-yellow-500" />
-                              Admin
-                            </div>
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="flex gap-2 pt-4">
-                      <Button type="submit" variant="hero" className="flex-1" disabled={loading}>
-                        {loading ? (
-                          <>
-                            <div className="w-4 h-4 mr-2 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                            Adding...
-                          </>
-                        ) : (
-                          "Add Awarder"
-                        )}
-                      </Button>
-                      <Button type="button" variant="outline" onClick={() => setIsAddingAwarder(false)} disabled={loading}>
-                        Cancel
-                      </Button>
-                    </div>
-                  </form>
-                </DialogContent>
-              </Dialog>
-            </div>
-          </header>
-
-          {/* Main Content */}
-          <main className="p-6">
-            <div className="max-w-7xl mx-auto space-y-6">
-              {/* Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card className="glass-card p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total Awarders</p>
-                      <p className="text-2xl font-bold text-foreground">{stats.totalAwarders}</p>
-                    </div>
-                    <Users className="w-8 h-8 text-primary" />
-                  </div>
-                </Card>
-
-                <Card className="glass-card p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Active Members</p>
-                      <p className="text-2xl font-bold text-foreground">{stats.activeAwarders}</p>
-                    </div>
-                    <CheckCircle className="w-8 h-8 text-green-500" />
-                  </div>
-                </Card>
-
-                <Card className="glass-card p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total Awards</p>
-                      <p className="text-2xl font-bold text-foreground">{stats.totalAwards}</p>
-                    </div>
-                    <Activity className="w-8 h-8 text-blue-500" />
-                  </div>
-                </Card>
-
-                <Card className="glass-card p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Administrators</p>
-                      <p className="text-2xl font-bold text-foreground">{stats.admins}</p>
-                    </div>
-                    <Crown className="w-8 h-8 text-yellow-500" />
-                  </div>
-                </Card>
-              </div>
-
-              {/* Awarders List */}
-              <Card className="glass-card p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-lg font-semibold text-foreground">Organization Members</h2>
-                  <Badge variant="secondary" className="font-mono">
-                    {awarders.length} members
-                  </Badge>
-                </div>
-
-                <div className="space-y-3">
-                  {awarders.map((awarder, index) => (
-                    <div
-                      key={awarder.id}
-                      className="flex items-center justify-between p-4 glass-card rounded-lg hover:shadow-md transition-all duration-200"
-                    >
-                      <div className="flex items-center gap-4">
-                        <Avatar className="w-12 h-12">
-                          <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary-glow/20 text-primary font-medium">
-                            {awarder.name.split(" ").map((n) => n[0]).join("").toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-medium text-foreground">{awarder.name}</span>
-                            <Badge variant="secondary" className="flex items-center gap-1">
-                              <RoleIcon role={awarder.role} />
-                              {awarder.role}
-                            </Badge>
-                            <Badge
-                              variant={awarder.status === "active" ? "default" : "secondary"}
-                              className={awarder.status === "active" ? "bg-green-500/10 text-green-600" : ""}
-                            >
-                              {awarder.status}
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground font-mono">{awarder.principal.slice(0, 25)}...</p>
-                          <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-                            <div className="flex items-center gap-1">
-                              <Calendar className="w-3 h-3" />
-                              Joined {formatDateForDisplay(awarder.joinDate)}
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Activity className="w-3 h-3" />
-                              {awarder.awardsGiven} awards given
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <div className="text-right">
-                          <div className="font-medium text-foreground">{awarder.reputation} REP</div>
-                          <div className="text-xs text-muted-foreground">
-                            Active {formatDateForDisplay(awarder.lastActive)}
-                          </div>
-                        </div>
-
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                              <MoreVertical className="w-4 h-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="glass-card">
-                            <DropdownMenuItem
-                              onClick={() => handleRoleChange(awarder.id, awarder.role === "admin" ? "awarder" : "admin")}
-                              className="flex items-center gap-2"
-                            >
-                              <Settings className="w-4 h-4" />
-                              Change to {awarder.role === "admin" ? "Awarder" : "Admin"}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleRemoveAwarder(awarder.id, awarder.name)}
-                              className="flex items-center gap-2 text-red-600"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                              Remove Awarder
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </div>
-          </main>
-        </div>
-      </div>
+      <InnerManageAwarders
+        cid={cid}
+        userDisplayData={userDisplayData}
+        handleDisconnect={handleDisconnect}
+        isAddingAwarder={isAddingAwarder}
+        setIsAddingAwarder={setIsAddingAwarder}
+        newAwarder={newAwarder}
+        setNewAwarder={setNewAwarder}
+        loading={loading}
+        stats={stats}
+        awarders={awarders}
+        handleAddAwarder={handleAddAwarder}
+        handleRemoveAwarder={handleRemoveAwarder}
+        handleRoleChange={handleRoleChange}
+      />
     </SidebarProvider>
   );
 };
+
+function InnerManageAwarders(props: any) {
+  const {
+    cid,
+    userDisplayData,
+    handleDisconnect,
+    isAddingAwarder,
+    setIsAddingAwarder,
+    newAwarder,
+    setNewAwarder,
+    loading,
+    stats,
+    awarders,
+    handleAddAwarder,
+    handleRemoveAwarder,
+    handleRoleChange,
+  } = props;
+
+  // Read sidebar state safely inside provider
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
+
+  return (
+    <div className="min-h-screen w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
+      <DashboardSidebar
+        userRole={"admin"}
+        userName={userDisplayData.userName}
+        userPrincipal={userDisplayData.userPrincipal}
+        onDisconnect={handleDisconnect}
+      />
+
+      {/* Push main content to the right of the fixed sidebar on md+ */}
+      <div
+        className={`flex min-h-screen flex-col transition-[padding-left] duration-300 pl-0 ${
+          collapsed ? "md:pl-[72px]" : "md:pl-[280px]"
+        }`}
+      >
+        {/* Header */}
+        <header className="h-16 border-b border-border/40 flex items-center px-6 glass-header">
+          <SidebarTrigger className="mr-4" />
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500/20 to-purple-600/20 flex items-center justify-center">
+                <Users className="w-4 h-4 text-purple-600" />
+              </div>
+              <div>
+                <h1 className="text-lg font-semibold text-foreground">Manage Awarders</h1>
+                <p className="text-xs text-muted-foreground">Org: {cid}</p>
+              </div>
+            </div>
+
+            <Dialog open={isAddingAwarder} onOpenChange={setIsAddingAwarder}>
+              <DialogTrigger asChild>
+                <Button variant="hero" className="group">
+                  <UserPlus className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
+                  Add Awarder
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md bg-background border border-border shadow-lg">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <UserPlus className="w-5 h-5 text-primary" />
+                    Add New Awarder
+                  </DialogTitle>
+                </DialogHeader>
+
+                <form onSubmit={handleAddAwarder} className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Name *</Label>
+                    <Input
+                      id="name"
+                      placeholder="Enter full name"
+                      value={newAwarder.name}
+                      onChange={(e) => setNewAwarder((p: any) => ({ ...p, name: e.target.value }))}
+                      className="glass-input"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="principal">Principal ID *</Label>
+                    <Input
+                      id="principal"
+                      placeholder="Enter ICP Principal ID"
+                      value={newAwarder.principal}
+                      onChange={(e) => setNewAwarder((p: any) => ({ ...p, principal: e.target.value }))}
+                      className="glass-input"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Role *</Label>
+                    <Select
+                      value={newAwarder.role}
+                      onValueChange={(value: "admin" | "awarder") => setNewAwarder((p: any) => ({ ...p, role: value }))}
+                    >
+                      <SelectTrigger className="glass-input">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="awarder">
+                          <div className="flex items-center gap-2">
+                            <Shield className="w-4 h-4 text-blue-500" />
+                            Awarder
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="admin">
+                          <div className="flex items-center gap-2">
+                            <Crown className="w-4 h-4 text-yellow-500" />
+                            Admin
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex gap-2 pt-4">
+                    <Button type="submit" variant="hero" className="flex-1" disabled={loading}>
+                      {loading ? (
+                        <>
+                          <div className="w-4 h-4 mr-2 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                          Adding...
+                        </>
+                      ) : (
+                        "Add Awarder"
+                      )}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => setIsAddingAwarder(false)} disabled={loading}>
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </header>
+
+        {/* Main Content */}
+        <main className="p-6">
+          <div className="max-w-7xl mx-auto space-y-6">
+            {/* Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Card className="glass-card p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Awarders</p>
+                    <p className="text-2xl font-bold text-foreground">{stats.totalAwarders}</p>
+                  </div>
+                  <Users className="w-8 h-8 text-primary" />
+                </div>
+              </Card>
+
+              <Card className="glass-card p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Active Members</p>
+                    <p className="text-2xl font-bold text-foreground">{stats.activeAwarders}</p>
+                  </div>
+                  <CheckCircle className="w-8 h-8 text-green-500" />
+                </div>
+              </Card>
+
+              <Card className="glass-card p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Awards</p>
+                    <p className="text-2xl font-bold text-foreground">{stats.totalAwards}</p>
+                  </div>
+                  <Activity className="w-8 h-8 text-blue-500" />
+                </div>
+              </Card>
+
+              <Card className="glass-card p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Administrators</p>
+                    <p className="text-2xl font-bold text-foreground">{stats.admins}</p>
+                  </div>
+                  <Crown className="w-8 h-8 text-yellow-500" />
+                </div>
+              </Card>
+            </div>
+
+            {/* Awarders List */}
+            <Card className="glass-card p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg font-semibold text-foreground">Organization Members</h2>
+                <Badge variant="secondary" className="font-mono">
+                  {awarders.length} members
+                </Badge>
+              </div>
+
+              <div className="space-y-3">
+                {awarders.map((awarder, index) => (
+                  <div
+                    key={awarder.id}
+                    className="flex items-center justify-between p-4 glass-card rounded-lg hover:shadow-md transition-all duration-200"
+                  >
+                    <div className="flex items-center gap-4">
+                      <Avatar className="w-12 h-12">
+                        <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary-glow/20 text-primary font-medium">
+                          {awarder.name.split(" ").map((n) => n[0]).join("").toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium text-foreground">{awarder.name}</span>
+                          <Badge variant="secondary" className="flex items-center gap-1">
+                            <RoleIcon role={awarder.role} />
+                            {awarder.role}
+                          </Badge>
+                          <Badge
+                            variant={awarder.status === "active" ? "default" : "secondary"}
+                            className={awarder.status === "active" ? "bg-green-500/10 text-green-600" : ""}
+                          >
+                            {awarder.status}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground font-mono">{awarder.principal.slice(0, 25)}...</p>
+                        <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            Joined {formatDateForDisplay(awarder.joinDate)}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Activity className="w-3 h-3" />
+                            {awarder.awardsGiven} awards given
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <div className="font-medium text-foreground">{awarder.reputation} REP</div>
+                        <div className="text-xs text-muted-foreground">
+                          Active {formatDateForDisplay(awarder.lastActive)}
+                        </div>
+                      </div>
+
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="glass-card">
+                          <DropdownMenuItem
+                            onClick={() => handleRoleChange(awarder.id, awarder.role === "admin" ? "awarder" : "admin")}
+                            className="flex items-center gap-2"
+                          >
+                            <Settings className="w-4 h-4" />
+                            Change to {awarder.role === "admin" ? "Awarder" : "Admin"}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleRemoveAwarder(awarder.id, awarder.name)}
+                            className="flex items-center gap-2 text-red-600"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Remove Awarder
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
 
 export default ManageAwarders;
