@@ -27,7 +27,7 @@ import {
   BarChart3,
   LayoutDashboard,
 } from "lucide-react";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 
@@ -356,190 +356,275 @@ const Dashboard = () => {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
-        <DashboardSidebar
-          userRole={(userRole?.toLowerCase() as "admin" | "awarder" | "member") || "member"}
-          userName={userDisplayData.userName}
-          userPrincipal={userDisplayData.userPrincipal}
-          onDisconnect={handleDisconnect}
-        />
-
-        <div className="flex-1">
-          <header className="h-16 border-b border-border/40 flex items-center justify-between px-6 glass-header">
-            <div className="flex items-center gap-3">
-              <SidebarTrigger className="mr-4" />
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/20 to-primary-glow/20 flex items-center justify-center">
-                <LayoutDashboard className="w-4 h-4 text-primary" />
-              </div>
-              <div>
-                <h1 className="text-lg font-semibold text-foreground">Dashboard</h1>
-                <p className="text-xs text-muted-foreground">Welcome to org {cid}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  if (!child) return toast.error("Not connected to organization canister.");
-                  toast.success("Canister connection looks good.");
-                }}
-              >
-                Test Connection
-              </Button>
-              <ThemeToggle />
-            </div>
-          </header>
-
-          <main className="p-6">
-            <div className="relative pt-20">
-              <div className="absolute inset-0 overflow-hidden">
-                <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/3 rounded-full blur-3xl animate-pulse-glow" />
-                <div
-                  className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-primary-glow/3 rounded-full blur-3xl animate-pulse-glow"
-                  style={{ animationDelay: "1s" }}
-                />
-              </div>
-
-              <div className="relative max-w-7xl mx-auto px-4 py-8">
-                <div className="flex items-center justify-between mb-8 animate-fade-in">
-                  <div>
-                    <h1 className="text-3xl font-bold text-foreground mb-2">Welcome back</h1>
-                    <p className="text-muted-foreground">Manage reputation, track activity, and grow your community</p>
-                  </div>
-
-                  <Badge variant="secondary" className="flex items-center gap-2 px-4 py-2">
-                    <RoleIcon role={userRole?.toLowerCase() || "member"} />
-                    <span className="capitalize">{userRole || "Member"}</span>
-                  </Badge>
-                </div>
-
-                {/* Stats */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                  <StatCard
-                    title="Total Members"
-                    value={orgStats.totalMembers}
-                    icon={Users}
-                    trend={orgStats.totalMembers > 0 ? `+${Math.floor(orgStats.totalMembers * 0.12)}%` : "0%"}
-                    description="Active community members"
-                  />
-                  <StatCard
-                    title="Total Reputation"
-                    value={orgStats.totalReputation.toLocaleString()}
-                    icon={Star}
-                    trend={orgStats.totalReputation > 0 ? `+${Math.floor(orgStats.totalReputation * 0.08)}%` : "0%"}
-                    description="Points distributed"
-                  />
-                  <StatCard
-                    title="Your Reputation"
-                    value={loading ? "Loading..." : userBalance}
-                    icon={Award}
-                    trend={userBalance > 0 ? `+${Math.floor(userBalance * 0.1)}%` : ""}
-                    description="Your current points"
-                  />
-                  <StatCard title="Growth Rate" value={orgStats.growthRate} icon={BarChart3} description="Member growth rate" />
-                </div>
-
-                {/* Quick Actions */}
-                <div className="mb-8 animate-fade-in">
-                  <h2 className="text-xl font-semibold text-foreground mb-4">Quick Actions</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {quickActions.map((action) => (
-                      <Button
-                        key={action.title}
-                        variant={action.variant}
-                        onClick={action.action}
-                        className="h-auto p-4 flex flex-col items-start gap-2 hover:scale-105 transition-all duration-300"
-                      >
-                        <action.icon className="w-5 h-5" />
-                        <div className="text-left">
-                          <div className="font-medium">{action.title}</div>
-                          <div className="text-xs opacity-70">{action.description}</div>
-                        </div>
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Tabs */}
-                <div className="animate-fade-in">
-                  <Tabs defaultValue="activity" className="space-y-6">
-                    <TabsList className="grid grid-cols-3 w-full max-w-md glass">
-                      <TabsTrigger value="activity">Recent Activity</TabsTrigger>
-                      <TabsTrigger value="members">Members</TabsTrigger>
-                      <TabsTrigger value="analytics">Analytics</TabsTrigger>
-                    </TabsList>
-
-                    <TabsContent value="activity" className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-semibold text-foreground">Recent Activity</h3>
-                        <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/transaction-log/${cid}`)}>
-                          View All
-                          <ArrowUpRight className="w-4 h-4 ml-1" />
-                        </Button>
-                      </div>
-
-                      <div className="space-y-3">
-                        {recentActivity.map((activity) => (
-                          <ActivityItem key={activity.id} activity={activity} />
-                        ))}
-                      </div>
-                    </TabsContent>
-
-                    <TabsContent value="members" className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-semibold text-foreground">Organization Members</h3>
-                        {userRole === "Admin" && (
-                          <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/manage-awarders/${cid}`)}>
-                            <Plus className="w-4 h-4 mr-1" />
-                            Manage
-                          </Button>
-                        )}
-                      </div>
-
-                      <div className="space-y-3">
-                        {members.map((member) => (
-                          <MemberItem key={member.id} member={member} />
-                        ))}
-                      </div>
-                    </TabsContent>
-
-                    <TabsContent value="analytics" className="space-y-4">
-                      <h3 className="text-lg font-semibold text-foreground">Analytics & Insights</h3>
-
-                      <Card className="glass-card p-6">
-                        <h4 className="font-medium text-foreground mb-4">Reputation Distribution</h4>
-                        <div className="space-y-3">
-                          {members.map((member, index) => {
-                            const max = Math.max(1, ...members.map((m) => m.reputation));
-                            const width = `${(member.reputation / max) * 100}%`;
-                            return (
-                              <div key={member.id} className="flex items-center justify-between">
-                                <span className="text-sm text-muted-foreground">{member.name}</span>
-                                <div className="flex items-center gap-2">
-                                  <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
-                                    <div
-                                      className="h-full bg-gradient-to-r from-primary to-primary-glow rounded-full transition-all duration-1000"
-                                      style={{ width, animationDelay: `${index * 0.1}s` }}
-                                    />
-                                  </div>
-                                  <span className="text-sm font-medium text-foreground">{member.reputation}</span>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </Card>
-                    </TabsContent>
-                  </Tabs>
-                </div>
-              </div>
-            </div>
-          </main>
-        </div>
-      </div>
+      {/* get sidebar state to pad content accordingly */}
+      <InnerDashboard
+        userRole={userRole}
+        userDisplayData={userDisplayData}
+        handleDisconnect={handleDisconnect}
+        child={child}
+        loading={loading}
+        orgStats={orgStats}
+        userBalance={userBalance}
+        recentActivity={recentActivity}
+        members={members}
+        cid={cid}
+      />
     </SidebarProvider>
   );
 };
+
+function InnerDashboard(props: any) {
+  const {
+    userRole,
+    userDisplayData,
+    handleDisconnect,
+    child,
+    loading,
+    orgStats,
+    userBalance,
+    recentActivity,
+    members,
+    cid,
+  } = props;
+
+  // Sidebar padding control (Step 2)
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
+
+  return (
+    <div className="min-h-screen w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
+      <DashboardSidebar
+        userRole={(userRole?.toLowerCase() as "admin" | "awarder" | "member") || "member"}
+        userName={userDisplayData.userName}
+        userPrincipal={userDisplayData.userPrincipal}
+        onDisconnect={handleDisconnect}
+      />
+
+      {/* Push main content to the right of the fixed sidebar on md+ screens */}
+      <div
+        className={`flex min-h-screen flex-col transition-[padding-left] duration-300 pl-0 ${
+          collapsed ? "md:pl-[72px]" : "md:pl-[280px]"
+        }`}
+      >
+        {/* Header */}
+        <header className="h-16 border-b border-border/40 flex items-center justify-between px-6 glass-header">
+          <div className="flex items-center gap-3">
+            <SidebarTrigger className="mr-4" />
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/20 to-primary-glow/20 flex items-center justify-center">
+              <LayoutDashboard className="w-4 h-4 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold text-foreground">Dashboard</h1>
+              <p className="text-xs text-muted-foreground">Welcome to org {cid}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (!child) return toast.error("Not connected to organization canister.");
+                toast.success("Canister connection looks good.");
+              }}
+            >
+              Test Connection
+            </Button>
+            <ThemeToggle />
+          </div>
+        </header>
+
+        {/* Main */}
+        <main className="p-6">
+          <div className="relative pt-20">
+            <div className="absolute inset-0 overflow-hidden">
+              <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/3 rounded-full blur-3xl animate-pulse-glow" />
+              <div
+                className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-primary-glow/3 rounded-full blur-3xl animate-pulse-glow"
+                style={{ animationDelay: "1s" }}
+              />
+            </div>
+
+            <div className="relative max-w-7xl mx-auto px-4 py-8">
+              <div className="flex items-center justify-between mb-8 animate-fade-in">
+                <div>
+                  <h1 className="text-3xl font-bold text-foreground mb-2">Welcome back</h1>
+                  <p className="text-muted-foreground">Manage reputation, track activity, and grow your community</p>
+                </div>
+
+                <Badge variant="secondary" className="flex items-center gap-2 px-4 py-2">
+                  <RoleIcon role={userRole?.toLowerCase() || "member"} />
+                  <span className="capitalize">{userRole || "Member"}</span>
+                </Badge>
+              </div>
+
+              {/* Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <StatCard
+                  title="Total Members"
+                  value={orgStats.totalMembers}
+                  icon={Users}
+                  trend={orgStats.totalMembers > 0 ? `+${Math.floor(orgStats.totalMembers * 0.12)}%` : "0%"}
+                  description="Active community members"
+                />
+                <StatCard
+                  title="Total Reputation"
+                  value={orgStats.totalReputation.toLocaleString()}
+                  icon={Star}
+                  trend={orgStats.totalReputation > 0 ? `+${Math.floor(orgStats.totalReputation * 0.08)}%` : "0%"}
+                  description="Points distributed"
+                />
+                <StatCard
+                  title="Your Reputation"
+                  value={loading ? "Loading..." : userBalance}
+                  icon={Award}
+                  trend={userBalance > 0 ? `+${Math.floor(userBalance * 0.1)}%` : ""}
+                  description="Your current points"
+                />
+                <StatCard title="Growth Rate" value={orgStats.growthRate} icon={BarChart3} description="Member growth rate" />
+              </div>
+
+              {/* Quick Actions */}
+              <QuickActionsSection cid={cid} userRole={userRole} />
+
+              {/* Tabs */}
+              <div className="animate-fade-in">
+                <Tabs defaultValue="activity" className="space-y-6">
+                  <TabsList className="grid grid-cols-3 w-full max-w-md glass">
+                    <TabsTrigger value="activity">Recent Activity</TabsTrigger>
+                    <TabsTrigger value="members">Members</TabsTrigger>
+                    <TabsTrigger value="analytics">Analytics</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="activity" className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold text-foreground">Recent Activity</h3>
+                      <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/transaction-log/${cid}`)}>
+                        View All
+                        <ArrowUpRight className="w-4 h-4 ml-1" />
+                      </Button>
+                    </div>
+
+                    <div className="space-y-3">
+                      {recentActivity.map((activity) => (
+                        <ActivityItem key={activity.id} activity={activity} />
+                      ))}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="members" className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold text-foreground">Organization Members</h3>
+                      {userRole === "Admin" && (
+                        <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/manage-awarders/${cid}`)}>
+                          <Plus className="w-4 h-4 mr-1" />
+                          Manage
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="space-y-3">
+                      {members.map((member) => (
+                        <MemberItem key={member.id} member={member} />
+                      ))}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="analytics" className="space-y-4">
+                    <h3 className="text-lg font-semibold text-foreground">Analytics & Insights</h3>
+
+                    <Card className="glass-card p-6">
+                      <h4 className="font-medium text-foreground mb-4">Reputation Distribution</h4>
+                      <div className="space-y-3">
+                        {members.map((member, index) => {
+                          const max = Math.max(1, ...members.map((m) => m.reputation));
+                          const width = `${(member.reputation / max) * 100}%`;
+                          return (
+                            <div key={member.id} className="flex items-center justify-between">
+                              <span className="text-sm text-muted-foreground">{member.name}</span>
+                              <div className="flex items-center gap-2">
+                                <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-gradient-to-r from-primary to-primary-glow rounded-full transition-all duration-1000"
+                                    style={{ width, animationDelay: `${index * 0.1}s` }}
+                                  />
+                                </div>
+                                <span className="text-sm font-medium text-foreground">{member.reputation}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </Card>
+                  </TabsContent>
+                </Tabs>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function QuickActionsSection({ cid, userRole }: { cid: string; userRole: string }) {
+  const navigate = useNavigate();
+
+  const actions = [
+    {
+      title: "Award Reputation",
+      description: "Give reputation points to members",
+      icon: Award,
+      action: () => navigate(`/dashboard/award-rep/${cid}`),
+      variant: "hero" as const,
+      show: ["Admin", "Awarder"].includes(userRole || ""),
+    },
+    {
+      title: "Manage Members",
+      description: "Add or manage organization members",
+      icon: Users,
+      action: () => navigate(`/dashboard/manage-awarders/${cid}`),
+      variant: "outline" as const,
+      show: userRole === "Admin",
+    },
+    {
+      title: "View Activity",
+      description: "See all reputation transactions",
+      icon: Activity,
+      action: () => navigate(`/dashboard/transaction-log/${cid}`),
+      variant: "outline" as const,
+      show: true,
+    },
+    {
+      title: "Settings",
+      description: "Configure organization settings",
+      icon: Settings,
+      action: () => navigate(`/dashboard/decay-system/${cid}`),
+      variant: "ghost" as const,
+      show: userRole === "Admin",
+    },
+  ].filter((a) => a.show);
+
+  return (
+    <div className="mb-8 animate-fade-in">
+      <h2 className="text-xl font-semibold text-foreground mb-4">Quick Actions</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {actions.map((action) => (
+          <Button
+            key={action.title}
+            variant={action.variant}
+            onClick={action.action}
+            className="h-auto p-4 flex flex-col items-start gap-2 hover:scale-105 transition-all duration-300"
+          >
+            <action.icon className="w-5 h-5" />
+            <div className="text-left">
+              <div className="font-medium">{action.title}</div>
+              <div className="text-xs opacity-70">{action.description}</div>
+            </div>
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default Dashboard;
