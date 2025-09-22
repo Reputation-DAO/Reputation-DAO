@@ -1,11 +1,14 @@
 // src/pages/AwardRep.tsx
 // @ts-nocheck
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
+import { Principal } from "@dfinity/principal";
+import { makeChildWithPlug } from "@/components/canister/child";
+
 import { useRole } from "@/contexts/RoleContext";
-import { usePlugConnection } from "@/hooks/usePlugConnection";
 import { getUserDisplayData } from "@/utils/userUtils";
-import { awardRep, getOrgTransactionHistory, getOrgStats } from "@/services/childCanisterService";
+import { formatDateForDisplay } from "@/utils/transactionUtils";
+
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,20 +16,18 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar"; // add useSidebar
+import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { toast } from "sonner";
-import { parseTransactionType, convertTimestampToDate, extractReason, formatDateForDisplay } from "@/utils/transactionUtils";
-import { 
-  Award, 
-  Star, 
-  TrendingUp, 
+
+import {
+  Award,
+  Star,
+  TrendingUp,
   User,
   AlertTriangle,
-  CheckCircle,
-  Info
+  Info,
 } from "lucide-react";
 
 interface AwardFormData {
@@ -49,7 +50,7 @@ interface RecentAward {
 
 const categories = [
   "Development",
-  "Community Building", 
+  "Community Building",
   "Innovation",
   "Leadership",
   "Mentorship",
@@ -57,171 +58,163 @@ const categories = [
   "Testing",
   "Design",
   "Marketing",
-  "Other"
+  "Other",
 ];
 
 const AwardRep = () => {
   const navigate = useNavigate();
-  const { userRole } = useRole();
-  const { isConnected, principal } = usePlugConnection({ autoCheck: true });
+  const { cid } = useParams<{ cid: string }>();
+  const { userRole, currentPrincipal } = useRole();
+
+  // child canister actor (built from :cid like your MUI example)
+  const [child, setChild] = useState<any>(null);
+  const [connecting, setConnecting] = useState(true);
+  const [connectError, setConnectError] = useState<string | null>(null);
+
+  // form + ui
   const [isAwarding, setIsAwarding] = useState(false);
-  
   const [formData, setFormData] = useState<AwardFormData>({
-    recipientAddress: '',
-    reputationAmount: '',
-    category: '',
-    reason: ''
+    recipientAddress: "",
+    reputationAmount: "",
+    category: "",
+    reason: "",
   });
 
+  // stats + recent awards (computed from child.getTransactionHistory)
   const [recentAwards, setRecentAwards] = useState<RecentAward[]>([]);
-
   const [stats, setStats] = useState({
     totalAwards: 0,
     totalREPAwarded: 0,
-    monthlyAwards: 0
+    monthlyAwards: 0,
   });
 
-  // Load award statistics and recent awards
+  const handleDisconnect = () => navigate("/auth");
+
+  // ---- Build child actor from :cid (no localStorage / no plug hook) ----
   useEffect(() => {
-    const loadAwardData = async () => {
-      const selectedOrgId = localStorage.getItem('selectedOrgId');
-      console.log('🔍 AwardRep: selectedOrgId from localStorage:', selectedOrgId);
-      console.log('🔍 AwardRep: isConnected:', isConnected);
-      console.log('🔍 AwardRep: principal:', principal?.toString());
-      
-      if (!selectedOrgId || !isConnected) {
-        console.log('❌ AwardRep: Missing orgId or not connected, skipping data load');
-        // Let's also check if there's a default org we can use
-        if (isConnected && principal) {
-          try {
-            console.log('🔍 AwardRep: Trying to use default org "sample"');
-            const defaultOrgId = "sample";
-            localStorage.setItem('selectedOrgId', defaultOrgId);
-            
-            const orgStats = await getOrgStats();
-            console.log('📊 AwardRep: Default org stats:', orgStats);
-            
-            if (orgStats) {
-              setStats({
-                totalAwards: Number(orgStats.totalTransactions),
-                totalREPAwarded: orgStats.totalPoints,
-                monthlyAwards: 0
-              });
-            }
-          } catch (error) {
-            console.error('❌ AwardRep: Error with default org:', error);
-          }
-        }
-        return;
-      }
-
+    (async () => {
       try {
-        console.log('📊 AwardRep: Loading award statistics for:', selectedOrgId);
-        
-        // Get organization stats for total awarded points
-        console.log('📊 AwardRep: Calling getOrgStats...');
-        const orgStats = await getOrgStats();
-        console.log('📊 AwardRep: orgStats result:', orgStats);
-        
-        const totalREPAwarded = orgStats?.totalPoints || 0;
-        const totalTransactions = orgStats?.totalTransactions || 0;
-        
-        // Get transaction history to analyze awards
-        console.log('📊 AwardRep: Calling getOrgTransactionHistory...');
-        const transactions = await getOrgTransactionHistory();
-        console.log('📊 AwardRep: transactions result:', transactions);
-        
-
-        // Filter only Award transactions
-        const awardTransactions = transactions.filter(tx => {
-          const transactionType = parseTransactionType(tx.transactionType);
-          const isAward = transactionType === 'award';
-          console.log('🔍 AwardRep: Transaction type check:', {
-            original: tx.transactionType,
-            parsed: transactionType,
-            isAward: isAward,
-            amount: tx.amount,
-            from: tx.from.toString(),
-            to: tx.to.toString()
-          });
-          return isAward;
-        });
-        
-        console.log('📊 AwardRep: Found award transactions:', awardTransactions.length);
-        
-        const totalAwards = awardTransactions.length;
-        
-        // Calculate monthly awards (transactions from current month)
-        const currentMonth = new Date().getMonth();
-        const currentYear = new Date().getFullYear();
-        const monthlyAwards = awardTransactions.filter(tx => {
-          const txDate = convertTimestampToDate(tx.timestamp);
-          return txDate.getMonth() === currentMonth && txDate.getFullYear() === currentYear;
-        }).length;
-        
-        console.log('📊 AwardRep: Calculated stats:', {
-          totalAwards,
-          totalREPAwarded,
-          monthlyAwards
-        });
-        
-        setStats({
-          totalAwards,
-          totalREPAwarded,
-          monthlyAwards
-        });
-        
-        // Convert recent award transactions to RecentAward format (last 5 awards)
-        const recentAwardData: RecentAward[] = awardTransactions
-          .slice(-5) // Get last 5 awards
-          .reverse() // Show most recent first
-          .map((tx, index) => ({
-            id: `award-${index}`,
-            recipientName: `User ${tx.to.toString().slice(0, 8)}`,
-            recipientAddress: tx.to.toString(),
-            amount: Number(tx.amount),
-            category: "General", // Backend doesn't store category, so default
-            reason: tx.reason || "No reason provided",
-            timestamp: convertTimestampToDate(tx.timestamp),
-            awardedBy: `User ${tx.from.toString().slice(0, 8)}`
-          }));
-          
-        console.log('📊 AwardRep: Recent award data:', recentAwardData);
-        setRecentAwards(recentAwardData);
-        
-        console.log('✅ AwardRep: Award data loaded successfully');
-        
-      } catch (error) {
-        console.error('❌ AwardRep: Error loading award data:', error);
+        if (!cid) throw new Error("No organization selected.");
+        const actor = await makeChildWithPlug({ canisterId: cid, host: "https://icp-api.io" });
+        setChild(actor);
+      } catch (e: any) {
+        setConnectError(e?.message || "Failed to connect to org canister");
+      } finally {
+        setConnecting(false);
       }
-    };
+    })();
+  }, [cid]);
 
-    loadAwardData();
-  }, [isConnected, principal]); // Added principal as dependency
+  // ---- Load recent awards + summary directly from child (logic mirrors your MUI example) ----
+  const loadAwards = async () => {
+    if (!child) return;
+    try {
+      const txs =
+        (await child.getTransactionHistory?.()) ??
+        (await child.get_transaction_history?.());
+      const arr: any[] = Array.isArray(txs) ? txs : [];
 
-  const handleInputChange = (field: keyof AwardFormData, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+      const toNum = (v: number | bigint) => (typeof v === "bigint" ? Number(v) : v);
+
+      // filter Award transactions
+      const awards = arr.filter((tx) => tx?.transactionType && "Award" in tx.transactionType);
+
+      const totalREPAwarded = awards.reduce((sum, tx) => sum + toNum(tx.amount || 0), 0);
+      const totalAwards = awards.length;
+
+      const now = new Date();
+      const monthlyAwards = awards.filter((tx) => {
+        const ts = toNum(tx.timestamp || 0);
+        if (!ts) return false;
+        const d = new Date(ts * 1000);
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      }).length;
+
+      setStats({ totalAwards, totalREPAwarded, monthlyAwards });
+
+      // newest-first assumed; take first 5
+      const lastFive = awards.slice(0, 5).map((tx: any, index: number) => {
+        const ts = toNum(tx.timestamp || 0);
+        const reason =
+          (Array.isArray(tx.reason) && tx.reason.length ? tx.reason[0] : tx.reason) ||
+          "No reason provided";
+        const toStr = tx.to?.toString?.() ?? "";
+        const fromStr = tx.from?.toString?.() ?? "";
+        return {
+          id: tx.id?.toString?.() ?? `award-${index}`,
+          recipientName: `User ${toStr.slice(0, 8)}`,
+          recipientAddress: toStr,
+          amount: toNum(tx.amount || 0),
+          category: "General",
+          reason,
+          timestamp: ts ? new Date(ts * 1000) : new Date(),
+          awardedBy: `User ${fromStr.slice(0, 8)}`,
+        } as RecentAward;
+      });
+
+      setRecentAwards(lastFive);
+    } catch (error) {
+      console.error("Failed to load recent awards:", error);
+      setRecentAwards([]);
+      setStats({ totalAwards: 0, totalREPAwarded: 0, monthlyAwards: 0 });
+      toast.warning("Failed to load recent awards from the canister.");
+    }
   };
 
+  useEffect(() => {
+    if (child) loadAwards();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [child]);
+
+  // ---- Form helpers ----
+  const handleInputChange = (field: keyof AwardFormData, value: string) => {
+    setFormData((p) => ({ ...p, [field]: value }));
+  };
+
+  // ---- Submit award (principal validation, self-award prevention, BigInt amount, optional reason) ----
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.recipientAddress || !formData.reputationAmount || !formData.category || !formData.reason) {
+
+    const { recipientAddress, reputationAmount, reason } = formData;
+
+    if (!recipientAddress || !reputationAmount || !reason) {
       toast.error("Please fill in all required fields");
       return;
     }
 
-    // Basic Principal ID validation (should contain hyphens and be reasonable length)
-    if (!formData.recipientAddress.includes('-') || formData.recipientAddress.length < 20) {
-      toast.error("Please enter a valid Principal ID");
+    // Principal validation
+    let toPrincipal: Principal;
+    try {
+      toPrincipal = Principal.fromText(recipientAddress.trim());
+    } catch {
+      toast.error("Invalid recipient address. Please check the principal format.");
       return;
     }
 
-    if (!isConnected || !principal) {
-      toast.error("Please connect your wallet first");
+    // Prevent self-award (UI-side)
+    try {
+      if (currentPrincipal && toPrincipal?.toString() === currentPrincipal.toString()) {
+        toast.error("You cannot award reputation to yourself.");
+        return;
+      }
+    } catch {
+      // ignore
+    }
+
+    // Amount as bigint
+    let amt: bigint;
+    try {
+      amt = BigInt(reputationAmount);
+    } catch {
+      toast.error("Amount must be a valid integer.");
+      return;
+    }
+    if (amt <= 0n) {
+      toast.error("Amount must be greater than 0.");
       return;
     }
 
+    // Role gate (mirrors your previous check)
     if (userRole !== "Admin" && userRole !== "Awarder") {
       toast.error("Only Admins and Awarders can award reputation");
       return;
@@ -229,95 +222,95 @@ const AwardRep = () => {
 
     setIsAwarding(true);
     try {
-      console.log('🎯 Awarding reputation:', {
-        recipient: formData.recipientAddress,
-        amount: parseInt(formData.reputationAmount),
-        reason: formData.reason
-      });
-      
-      const result = await awardRep(
-        formData.recipientAddress, 
-        parseInt(formData.reputationAmount), 
-        formData.reason
-      );
-      
-      console.log('✅ Award result:', result);
-      
-      // Simple string result from canister
-      toast.success(`Successfully awarded ${formData.reputationAmount} REP points!`);
-      
-      // Reset form
-      setFormData({
-        recipientAddress: '',
-        reputationAmount: '',
-        category: '',
-        reason: ''
-      });
-    } catch (error) {
-      console.error("Error awarding reputation:", error);
-      
-      if (error instanceof Error) {
-        if (error.message.includes("Not a trusted awarder")) {
-          toast.error("You are not authorized to award reputation. Only trusted awarders can award points.");
-        } else if (error.message.includes("Paused")) {
-          toast.error("The reputation system is currently paused.");
-        } else if (error.message.includes("Amount must be > 0")) {
-          toast.error("Amount must be greater than 0.");
-        } else if (error.message.includes("Cannot self-award")) {
-          toast.error("You cannot award reputation to yourself.");
-        } else if (error.message.includes("Blacklisted principal")) {
-          toast.error("This principal is blacklisted and cannot receive reputation.");
-        } else if (error.message.includes("Invalid principal")) {
-          toast.error("Invalid recipient address. Please check the principal format.");
-        } else if (error.message.includes("Organization does not exist")) {
-          toast.error("Organization not found. Please check your organization selection.");
-        } else {
-          toast.error(`Failed to award reputation: ${error.message}`);
-        }
-      } else {
-        toast.error("Failed to award reputation. Please try again.");
+      const optReason = reason.trim() ? [reason.trim()] : [];
+      const res: string =
+        (await child.awardRep?.(toPrincipal, amt, optReason)) ??
+        (await child.award_rep?.(toPrincipal, amt, optReason));
+
+      if (typeof res === "string" && res.toLowerCase().startsWith("error")) {
+        // surface canister error string
+        toast.error(res);
+        return;
       }
+
+      toast.success(`Successfully awarded ${reputationAmount} REP to ${recipientAddress}.`);
+
+      // reset form
+      setFormData({
+        recipientAddress: "",
+        reputationAmount: "",
+        category: "",
+        reason: "",
+      });
+
+      // refresh recent/summary
+      await loadAwards();
+    } catch (error: any) {
+      console.error("Award error:", error);
+      const msg = error?.message || "";
+
+      if (/Not a trusted awarder/i.test(msg)) toast.error("You are not authorized to award reputation.");
+      else if (/Daily mint cap exceeded/i.test(msg)) toast.error("Daily mint limit exceeded. Try again tomorrow.");
+      else if (/Cannot self-award/i.test(msg)) toast.error("You cannot award reputation to yourself.");
+      else if (/Paused/i.test(msg)) toast.error("The reputation system is currently paused.");
+      else if (/Invalid principal/i.test(msg)) toast.error("Invalid recipient address. Please check the principal format.");
+      else if (/Organization does not exist/i.test(msg)) toast.error("Organization not found. Please check your organization selection.");
+      else toast.error(msg || "Failed to award reputation. Please try again.");
     } finally {
       setIsAwarding(false);
     }
   };
 
-  const handleDisconnect = () => {
-    navigate('/auth');
-  };
-
-  if (!isConnected || (userRole !== "Admin" && userRole !== "Awarder")) {
+  // --- connection gates similar to your revoke page ---
+  if (connecting) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-muted/20 flex items-center justify-center">
-        <Card className="glass-card p-8 max-w-md mx-auto text-center">
-          <AlertTriangle className="w-12 h-12 text-orange-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-foreground mb-2">Access Denied</h2>
-          <p className="text-muted-foreground mb-4">
-            {!isConnected ? "Please connect your wallet to award reputation points." : "You don't have permission to award reputation points."}
+      <div className="min-h-screen grid place-items-center">
+        <div className="text-sm text-muted-foreground">Connecting to organization…</div>
+      </div>
+    );
+  }
+  if (!cid || connectError) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <Card className="glass-card p-6">
+          <AlertTriangle className="w-6 h-6 text-orange-500 mb-2" />
+          <p className="text-sm text-muted-foreground">
+            {connectError || "No organization selected."}
           </p>
-          <Button onClick={() => navigate(!isConnected ? '/auth' : '/dashboard')}>
-            {!isConnected ? 'Connect Wallet' : 'Return to Dashboard'}
-          </Button>
+          <div className="mt-3">
+            <Button onClick={() => navigate("/org-selector")} variant="outline">
+              Choose Org
+            </Button>
+          </div>
         </Card>
       </div>
     );
   }
 
-  // ✅ Only layout change below: wrap in SidebarProvider and read sidebar state in inner component
+  if (userRole !== "Admin" && userRole !== "Awarder") {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-muted/20 flex items-center justify-center">
+        <Card className="glass-card p-8 max-w-md mx-auto text-center">
+          <AlertTriangle className="w-12 h-12 text-orange-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-foreground mb-2">Access Denied</h2>
+        </Card>
+      </div>
+    );
+  }
+
+  // === Fixed-sidebar alignment pattern (same as RevokeRep) ===
   return (
     <SidebarProvider>
       <InnerAwardRep
         userRole={userRole}
-        principal={principal}
+        principal={currentPrincipal}
         handleDisconnect={handleDisconnect}
         formData={formData}
-        setFormData={setFormData}
         handleInputChange={handleInputChange}
         handleSubmit={handleSubmit}
         isAwarding={isAwarding}
         stats={stats}
         recentAwards={recentAwards}
-        navigate={navigate}
       />
     </SidebarProvider>
   );
@@ -329,31 +322,26 @@ function InnerAwardRep(props: any) {
     principal,
     handleDisconnect,
     formData,
-    setFormData,
     handleInputChange,
     handleSubmit,
     isAwarding,
     stats,
     recentAwards,
-    navigate,
   } = props;
 
-  // Read sidebar state and pad content (collapsed: 72px, expanded: 280px)
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
-
-  const userDisplay = getUserDisplayData(principal);
+  const userDisplay = getUserDisplayData(principal || null);
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
-      <DashboardSidebar 
-        userRole={(userRole?.toLowerCase() as 'admin' | 'awarder' | 'member') || 'member'}
+      <DashboardSidebar
+        userRole={(userRole?.toLowerCase() as "admin" | "awarder" | "member") || "member"}
         userName={userDisplay.userName}
         userPrincipal={userDisplay.userPrincipal}
         onDisconnect={handleDisconnect}
       />
 
-      {/* Push main content to the right of the fixed sidebar on md+ */}
       <div
         className={`flex min-h-screen flex-col transition-[padding-left] duration-300 pl-0 ${
           collapsed ? "md:pl-[72px]" : "md:pl-[280px]"
@@ -403,9 +391,9 @@ function InnerAwardRep(props: any) {
                           <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                           <Input
                             id="recipientAddress"
-                            placeholder="Enter ICP address"
+                            placeholder="Enter Principal ID (e.g. rdmx6-jaaaa-aaaah-qcaiq-cai)"
                             value={formData.recipientAddress}
-                            onChange={(e) => handleInputChange('recipientAddress', e.target.value)}
+                            onChange={(e) => handleInputChange("recipientAddress", e.target.value)}
                             className="pl-10 glass-input"
                             required
                           />
@@ -423,7 +411,7 @@ function InnerAwardRep(props: any) {
                             type="number"
                             placeholder="Enter amount"
                             value={formData.reputationAmount}
-                            onChange={(e) => handleInputChange('reputationAmount', e.target.value)}
+                            onChange={(e) => handleInputChange("reputationAmount", e.target.value)}
                             className="pl-10 glass-input"
                             min="1"
                             required
@@ -434,7 +422,10 @@ function InnerAwardRep(props: any) {
 
                     <div className="space-y-2">
                       <Label className="text-sm font-medium text-foreground">Category *</Label>
-                      <Select value={formData.category} onValueChange={(value) => handleInputChange('category', value)}>
+                      <Select
+                        value={formData.category}
+                        onValueChange={(value) => handleInputChange("category", value)}
+                      >
                         <SelectTrigger className="glass-input">
                           <SelectValue placeholder="Select category" />
                         </SelectTrigger>
@@ -456,7 +447,7 @@ function InnerAwardRep(props: any) {
                         id="reason"
                         placeholder="Describe the contribution or achievement..."
                         value={formData.reason}
-                        onChange={(e) => handleInputChange('reason', e.target.value)}
+                        onChange={(e) => handleInputChange("reason", e.target.value)}
                         className="glass-input min-h-[100px] resize-none"
                         required
                       />
@@ -489,14 +480,14 @@ function InnerAwardRep(props: any) {
               {/* Sidebar Stats & Recent Awards */}
               <div className="space-y-6">
                 {/* Award Summary */}
-                <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: '0.1s' }}>
+                <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: "0.1s" }}>
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500/20 to-green-600/20 flex items-center justify-center">
                       <TrendingUp className="w-4 h-4 text-green-600" />
                     </div>
                     <h3 className="font-semibold text-foreground">Award Summary</h3>
                   </div>
-                  
+
                   <div className="space-y-4">
                     <div className="flex items-center justify-between p-3 glass-card rounded-lg">
                       <span className="text-sm text-muted-foreground">Total Awards</span>
@@ -520,14 +511,14 @@ function InnerAwardRep(props: any) {
                 </Card>
 
                 {/* Recent Awards */}
-                <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: '0.2s' }}>
+                <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: "0.2s" }}>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold text-foreground">Recent Awards</h3>
-                    <Button variant="ghost" size="sm" onClick={() => navigate('/transaction-log')}>
+                    <Button variant="ghost" size="sm" onClick={() => navigate(`/transaction-log/${cid}`)}>
                       View all
                     </Button>
                   </div>
-                  
+
                   <div className="space-y-3">
                     {recentAwards.length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
