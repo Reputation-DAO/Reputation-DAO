@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
@@ -287,333 +287,251 @@ const ViewBalances: React.FC = () => {
     );
   }
 
+  // === Same fixed-sidebar alignment pattern as before ===
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
-        <DashboardSidebar
-          userRole={userRole ? (userRole.toLowerCase() as "admin" | "awarder" | "member") : "member"}
-          userName={userDisplay.userName}
-          userPrincipal={userDisplay.userPrincipal}
-          onDisconnect={handleDisconnect}
-        />
+      <InnerViewBalances
+        cid={cid}
+        userRole={userRole}
+        userDisplay={userDisplay}
+        handleDisconnect={handleDisconnect}
+        stats={stats}
+        filteredBalances={filteredBalances}
+        loading={loading}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        sortBy={sortBy}
+        setSortBy={setSortBy}
+        balanceSearchQuery={balanceSearchQuery}
+        setBalanceSearchQuery={setBalanceSearchQuery}
+        handleBalanceSearch={handleBalanceSearch}
+        balanceSearchLoading={balanceSearchLoading}
+        searchedBalance={searchedBalance}
+        topPerformers={topPerformers}
+        recentChanges={recentChanges}
+      />
+    </SidebarProvider>
+  );
+};
 
-        <div className="flex-1">
-          {/* Header */}
-          <header className="h-16 border-b border-border/40 flex items-center px-6 glass-header">
-            <SidebarTrigger className="mr-4" />
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500/20 to-green-600/20 flex items-center justify-center">
-                <Wallet className="w-4 h-4 text-green-600" />
-              </div>
-              <div>
-                <h1 className="text-lg font-semibold text-foreground">View Balances</h1>
-                <p className="text-xs text-muted-foreground">Org: {cid}</p>
-              </div>
+function InnerViewBalances(props: any) {
+  const {
+    cid,
+    userRole,
+    userDisplay,
+    handleDisconnect,
+    stats,
+    filteredBalances,
+    loading,
+    searchQuery,
+    setSearchQuery,
+    sortBy,
+    setSortBy,
+    balanceSearchQuery,
+    setBalanceSearchQuery,
+    handleBalanceSearch,
+    balanceSearchLoading,
+    searchedBalance,
+    topPerformers,
+    recentChanges,
+  } = props;
+
+  // Read sidebar state and shift content (collapsed: 72px, expanded: 280px)
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
+
+  return (
+    <div className="min-h-screen w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
+      <DashboardSidebar
+        userRole={userRole ? (userRole.toLowerCase() as "admin" | "awarder" | "member") : "member"}
+        userName={userDisplay.userName}
+        userPrincipal={userDisplay.userPrincipal}
+        onDisconnect={handleDisconnect}
+      />
+
+      {/* Push main content to the right of the fixed sidebar on md+ */}
+      <div
+        className={`flex min-h-screen flex-col transition-[padding-left] duration-300 pl-0 ${
+          collapsed ? "md:pl-[72px]" : "md:pl-[280px]"
+        }`}
+      >
+        {/* Header */}
+        <header className="h-16 border-b border-border/40 flex items-center px-6 glass-header">
+          <SidebarTrigger className="mr-4" />
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500/20 to-green-600/20 flex items-center justify-center">
+              <Wallet className="w-4 h-4 text-green-600" />
             </div>
-          </header>
+            <div>
+              <h1 className="text-lg font-semibold text-foreground">View Balances</h1>
+              <p className="text-xs text-muted-foreground">Org: {cid}</p>
+            </div>
+          </div>
+        </header>
 
-          {/* Main Content */}
-          <main className="p-6">
-            <div className="max-w-7xl mx-auto space-y-6">
-              {/* Stats Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card className="glass-card p-4 animate-fade-in">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total Users</p>
-                      <p className="text-2xl font-bold text-foreground">{stats.totalUsers}</p>
-                    </div>
-                    <Users className="w-8 h-8 text-primary" />
+        {/* Main Content */}
+        <main className="p-6">
+          <div className="max-w-7xl mx-auto space-y-6">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Card className="glass-card p-4 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Users</p>
+                    <p className="text-2xl font-bold text-foreground">{stats.totalUsers}</p>
                   </div>
-                </Card>
+                  <Users className="w-8 h-8 text-primary" />
+                </div>
+              </Card>
 
-                <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.1s" }}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total Reputation</p>
-                      <p className="text-2xl font-bold text-foreground">{stats.totalReputation.toLocaleString()}</p>
-                    </div>
-                    <Star className="w-8 h-8 text-yellow-500" />
+              <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.1s" }}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Reputation</p>
+                    <p className="text-2xl font-bold text-foreground">{stats.totalReputation.toLocaleString()}</p>
                   </div>
-                </Card>
+                  <Star className="w-8 h-8 text-yellow-500" />
+                </div>
+              </Card>
 
-                <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.2s" }}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Average Balance</p>
-                      <p className="text-2xl font-bold text-foreground">{stats.averageReputation}</p>
-                    </div>
-                    <BarChart3 className="w-8 h-8 text-blue-500" />
+              <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.2s" }}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Average Balance</p>
+                    <p className="text-2xl font-bold text-foreground">{stats.averageReputation}</p>
                   </div>
-                </Card>
+                  <BarChart3 className="w-8 h-8 text-blue-500" />
+                </div>
+              </Card>
 
-                <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.3s" }}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Top Holder</p>
-                      <p className="text-lg font-bold text-foreground">{stats.topHolder?.name || "No data"}</p>
-                      <p className="text-sm text-muted-foreground">{stats.topHolder?.reputation || 0} REP</p>
-                    </div>
-                    <Crown className="w-8 h-8 text-yellow-500" />
+              <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.3s" }}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Top Holder</p>
+                    <p className="text-lg font-bold text-foreground">{stats.topHolder?.name || "No data"}</p>
+                    <p className="text-sm text-muted-foreground">{stats.topHolder?.reputation || 0} REP</p>
                   </div>
-                </Card>
-              </div>
+                  <Crown className="w-8 h-8 text-yellow-500" />
+                </div>
+              </Card>
+            </div>
 
-              <Tabs defaultValue="all-balances" className="space-y-6">
-                <TabsList className="grid grid-cols-3 w-full max-w-md glass">
-                  <TabsTrigger value="all-balances">All Balances</TabsTrigger>
-                  <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
-                  <TabsTrigger value="recent-changes">Recent Changes</TabsTrigger>
-                </TabsList>
+            <Tabs defaultValue="all-balances" className="space-y-6">
+              <TabsList className="grid grid-cols-3 w-full max-w-md glass">
+                <TabsTrigger value="all-balances">All Balances</TabsTrigger>
+                <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
+                <TabsTrigger value="recent-changes">Recent Changes</TabsTrigger>
+              </TabsList>
 
-                {/* All balances */}
-                <TabsContent value="all-balances" className="space-y-6">
-                  {/* Balance Search */}
-                  <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: "0.3s" }}>
-                    <h3 className="text-lg font-semibold text-foreground mb-4">Check Specific Balance</h3>
-                    <div className="flex flex-col md:flex-row gap-4">
-                      <div className="relative flex-1">
-                        <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input
-                          placeholder="Enter principal ID to check balance..."
-                          value={balanceSearchQuery}
-                          onChange={(e) => setBalanceSearchQuery(e.target.value)}
-                          className="pl-10 glass-input"
-                          onKeyDown={(e) => e.key === "Enter" && handleBalanceSearch()}
-                        />
+              {/* All balances */}
+              <TabsContent value="all-balances" className="space-y-6">
+                {/* Balance Search */}
+                <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: "0.3s" }}>
+                  <h3 className="text-lg font-semibold text-foreground mb-4">Check Specific Balance</h3>
+                  <div className="flex flex-col md:flex-row gap-4">
+                    <div className="relative flex-1">
+                      <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Enter principal ID to check balance..."
+                        value={balanceSearchQuery}
+                        onChange={(e) => setBalanceSearchQuery(e.target.value)}
+                        className="pl-10 glass-input"
+                        onKeyDown={(e) => e.key === "Enter" && handleBalanceSearch()}
+                      />
+                    </div>
+                    <Button
+                      onClick={handleBalanceSearch}
+                      disabled={balanceSearchLoading || !balanceSearchQuery.trim()}
+                      className="min-w-32"
+                    >
+                      {balanceSearchLoading ? (
+                        <>
+                          <div className="w-4 h-4 mr-2 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                          Searching...
+                        </>
+                      ) : (
+                        <>
+                          <Search className="w-4 h-4 mr-2" />
+                          Search
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  {searchedBalance && (
+                    <div className="mt-4 p-4 bg-primary/10 rounded-lg border border-primary/20">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Principal ID</p>
+                          <p className="font-mono text-sm break-all">{searchedBalance.principal}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-muted-foreground">Balance</p>
+                          <p className="text-2xl font-bold text-primary">{searchedBalance.balance} REP</p>
+                        </div>
                       </div>
+                    </div>
+                  )}
+                </Card>
+
+                {/* Search and Sort */}
+                <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.4s" }}>
+                  <div className="flex flex-col md:flex-row gap-4">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search by name or principal ID..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-10 glass-input"
+                      />
+                    </div>
+                    <div className="flex gap-2">
                       <Button
-                        onClick={handleBalanceSearch}
-                        disabled={balanceSearchLoading || !balanceSearchQuery.trim()}
-                        className="min-w-32"
+                        variant={sortBy === "reputation" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSortBy("reputation")}
                       >
-                        {balanceSearchLoading ? (
-                          <>
-                            <div className="w-4 h-4 mr-2 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                            Searching...
-                          </>
-                        ) : (
-                          <>
-                            <Search className="w-4 h-4 mr-2" />
-                            Search
-                          </>
-                        )}
+                        <Star className="w-4 h-4 mr-1" />
+                        Reputation
+                      </Button>
+                      <Button
+                        variant={sortBy === "name" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSortBy("name")}
+                      >
+                        <Filter className="w-4 h-4 mr-1" />
+                        Name
+                      </Button>
+                      <Button
+                        variant={sortBy === "recent" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSortBy("recent")}
+                      >
+                        <Calendar className="w-4 h-4 mr-1" />
+                        Recent
                       </Button>
                     </div>
+                  </div>
+                </Card>
 
-                    {searchedBalance && (
-                      <div className="mt-4 p-4 bg-primary/10 rounded-lg border border-primary/20">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm text-muted-foreground">Principal ID</p>
-                            <p className="font-mono text-sm break-all">{searchedBalance.principal}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm text-muted-foreground">Balance</p>
-                            <p className="text-2xl font-bold text-primary">{searchedBalance.balance} REP</p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </Card>
-
-                  {/* Search and Sort */}
-                  <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.4s" }}>
-                    <div className="flex flex-col md:flex-row gap-4">
-                      <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input
-                          placeholder="Search by name or principal ID..."
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          className="pl-10 glass-input"
-                        />
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant={sortBy === "reputation" ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => setSortBy("reputation")}
-                        >
-                          <Star className="w-4 h-4 mr-1" />
-                          Reputation
-                        </Button>
-                        <Button
-                          variant={sortBy === "name" ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => setSortBy("name")}
-                        >
-                          <Filter className="w-4 h-4 mr-1" />
-                          Name
-                        </Button>
-                        <Button
-                          variant={sortBy === "recent" ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => setSortBy("recent")}
-                        >
-                          <Calendar className="w-4 h-4 mr-1" />
-                          Recent
-                        </Button>
-                      </div>
-                    </div>
-                  </Card>
-
-                  {/* Balances List */}
-                  <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: "0.5s" }}>
-                    {loading ? (
-                      <div className="text-center py-12 text-muted-foreground">Loading…</div>
-                    ) : filteredBalances.length === 0 ? (
-                      <div className="text-center py-12 text-muted-foreground">No users found.</div>
-                    ) : (
-                      <div className="space-y-3">
-                        {filteredBalances.map((user, index) => (
-                          <div
-                            key={user.id}
-                            className="flex items-center justify-between p-4 glass-card rounded-lg hover:shadow-md transition-all duration-200 animate-fade-in"
-                            style={{ animationDelay: `${0.6 + index * 0.05}s` }}
-                          >
-                            <div className="flex items-center gap-4">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-mono text-muted-foreground w-8">#{user.rank}</span>
-                                <Avatar className="w-10 h-10">
-                                  <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary-glow/20 text-primary">
-                                    {user.name
-                                      .split(" ")
-                                      .map((n) => n[0])
-                                      .join("")
-                                      .toUpperCase()}
-                                  </AvatarFallback>
-                                </Avatar>
-                              </div>
-
-                              <div>
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="font-medium text-foreground">{user.name}</span>
-                                  <Badge variant="secondary" className="flex items-center gap-1">
-                                    <RoleIcon role={user.role} />
-                                    {user.role}
-                                  </Badge>
-                                </div>
-                                <p className="text-sm text-muted-foreground font-mono break-all">
-                                  {user.principal.slice(0, 25)}...
-                                </p>
-                                <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-                                  <span>Last active: {user.lastActivity.toLocaleDateString()}</span>
-                                  <span>Joined: {user.joinDate.toLocaleDateString()}</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="text-right">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-lg font-bold text-foreground">
-                                  {user.reputation.toLocaleString()} REP
-                                </span>
-                                {user.reputationChange !== 0 && (
-                                  <Badge
-                                    variant={user.reputationChange > 0 ? "default" : "destructive"}
-                                    className="flex items-center gap-1"
-                                  >
-                                    {user.reputationChange > 0 ? (
-                                      <ArrowUpRight className="w-3 h-3" />
-                                    ) : (
-                                      <ArrowDownRight className="w-3 h-3" />
-                                    )}
-                                    {Math.abs(user.reputationChange)}
-                                  </Badge>
-                                )}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                <div>Awarded: {user.totalAwarded}</div>
-                                {user.totalRevoked > 0 && <div>Revoked: {user.totalRevoked}</div>}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </Card>
-                </TabsContent>
-
-                {/* Leaderboard */}
-                <TabsContent value="leaderboard" className="space-y-6">
-                  <Card className="glass-card p-6 animate-fade-in">
-                    <h3 className="text-lg font-semibold text-foreground mb-4">Top Performers</h3>
-                    <div className="space-y-4">
-                      {topPerformers.length === 0 && <div className="text-sm text-muted-foreground">No data.</div>}
-                      {topPerformers.map((user, index) => (
+                {/* Balances List */}
+                <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: "0.5s" }}>
+                  {loading ? (
+                    <div className="text-center py-12 text-muted-foreground">Loading…</div>
+                  ) : filteredBalances.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground">No users found.</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {filteredBalances.map((user, index) => (
                         <div
                           key={user.id}
-                          className={`flex items-center gap-4 p-4 rounded-lg transition-all duration-200 ${
-                            index === 0
-                              ? "bg-gradient-to-r from-yellow-500/10 to-yellow-600/10 border border-yellow-500/20"
-                              : index === 1
-                              ? "bg-gradient-to-r from-gray-400/10 to-gray-500/10 border border-gray-400/20"
-                              : "bg-gradient-to-r from-orange-500/10 to-orange-600/10 border border-orange-500/20"
-                          }`}
+                          className="flex items-center justify-between p-4 glass-card rounded-lg hover:shadow-md transition-all duration-200 animate-fade-in"
+                          style={{ animationDelay: `${0.6 + index * 0.05}s` }}
                         >
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${
-                                index === 0
-                                  ? "bg-gradient-to-br from-yellow-500 to-yellow-600"
-                                  : index === 1
-                                  ? "bg-gradient-to-br from-gray-400 to-gray-500"
-                                  : "bg-gradient-to-br from-orange-500 to-orange-600"
-                              }`}
-                            >
-                              {index + 1}
-                            </div>
-                            <Avatar className="w-12 h-12">
-                              <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary-glow/20 text-primary">
-                                {user.name
-                                  .split(" ")
-                                  .map((n) => n[0])
-                                  .join("")
-                                  .toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                          </div>
-
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-semibold text-foreground">{user.name}</span>
-                              <Badge variant="secondary" className="flex items-center gap-1">
-                                <RoleIcon role={user.role} />
-                                {user.role}
-                              </Badge>
-                            </div>
-                            <p className="text-sm text-muted-foreground">{user.reputation.toLocaleString()} REP</p>
-                          </div>
-
-                          <div className="text-right">
-                            {user.reputationChange > 0 && (
-                              <Badge variant="default" className="flex items-center gap-1">
-                                <TrendingUp className="w-3 h-3" />
-                                +{user.reputationChange}
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </Card>
-                </TabsContent>
-
-                {/* Recent changes */}
-                <TabsContent value="recent-changes" className="space-y-6">
-                  <Card className="glass-card p-6 animate-fade-in">
-                    <h3 className="text-lg font-semibold text-foreground mb-4">Recent Reputation Changes</h3>
-                    {recentChanges.length === 0 ? (
-                      <div className="text-sm text-muted-foreground">No recent changes.</div>
-                    ) : (
-                      <div className="space-y-3">
-                        {recentChanges.map((user) => (
-                          <div
-                            key={user.id}
-                            className="flex items-center justify-between p-4 glass-card rounded-lg hover:shadow-md transition-all duration-200"
-                          >
-                            <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-mono text-muted-foreground w-8">#{user.rank}</span>
                               <Avatar className="w-10 h-10">
                                 <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary-glow/20 text-primary">
                                   {user.name
@@ -623,43 +541,181 @@ const ViewBalances: React.FC = () => {
                                     .toUpperCase()}
                                 </AvatarFallback>
                               </Avatar>
-                              <div>
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="font-medium text-foreground">{user.name}</span>
-                                  <Badge variant="secondary" className="flex items-center gap-1">
-                                    <RoleIcon role={user.role} />
-                                    {user.role}
-                                  </Badge>
-                                </div>
-                                <p className="text-sm text-muted-foreground">Current: {user.reputation} REP</p>
-                              </div>
                             </div>
 
-                            <Badge
-                              variant={user.reputationChange > 0 ? "default" : "destructive"}
-                              className="flex items-center gap-1"
-                            >
-                              {user.reputationChange > 0 ? (
-                                <TrendingUp className="w-4 h-4" />
-                              ) : (
-                                <TrendingDown className="w-4 h-4" />
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-medium text-foreground">{user.name}</span>
+                                <Badge variant="secondary" className="flex items-center gap-1">
+                                  <RoleIcon role={user.role} />
+                                  {user.role}
+                                </Badge>
+                              </div>
+                              <p className="text-sm text-muted-foreground font-mono break-all">
+                                {user.principal.slice(0, 25)}...
+                              </p>
+                              <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
+                                <span>Last active: {user.lastActivity.toLocaleDateString()}</span>
+                                <span>Joined: {user.joinDate.toLocaleDateString()}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-right">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-lg font-bold text-foreground">
+                                {user.reputation.toLocaleString()} REP
+                              </span>
+                              {user.reputationChange !== 0 && (
+                                <Badge
+                                  variant={user.reputationChange > 0 ? "default" : "destructive"}
+                                  className="flex items-center gap-1"
+                                >
+                                  {user.reputationChange > 0 ? (
+                                    <ArrowUpRight className="w-3 h-3" />
+                                  ) : (
+                                    <ArrowDownRight className="w-3 h-3" />
+                                  )}
+                                  {Math.abs(user.reputationChange)}
+                                </Badge>
                               )}
-                              {user.reputationChange > 0 ? "+" : ""}
-                              {user.reputationChange} REP
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              <div>Awarded: {user.totalAwarded}</div>
+                              {user.totalRevoked > 0 && <div>Revoked: {user.totalRevoked}</div>}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+              </TabsContent>
+
+              {/* Leaderboard */}
+              <TabsContent value="leaderboard" className="space-y-6">
+                <Card className="glass-card p-6 animate-fade-in">
+                  <h3 className="text-lg font-semibold text-foreground mb-4">Top Performers</h3>
+                  <div className="space-y-4">
+                    {topPerformers.length === 0 && <div className="text-sm text-muted-foreground">No data.</div>}
+                    {topPerformers.map((user, index) => (
+                      <div
+                        key={user.id}
+                        className={`flex items-center gap-4 p-4 rounded-lg transition-all duration-200 ${
+                          index === 0
+                            ? "bg-gradient-to-r from-yellow-500/10 to-yellow-600/10 border border-yellow-500/20"
+                            : index === 1
+                            ? "bg-gradient-to-r from-gray-400/10 to-gray-500/10 border border-gray-400/20"
+                            : "bg-gradient-to-r from-orange-500/10 to-orange-600/10 border border-orange-500/20"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${
+                              index === 0
+                                ? "bg-gradient-to-br from-yellow-500 to-yellow-600"
+                                : index === 1
+                                ? "bg-gradient-to-br from-gray-400 to-gray-500"
+                                : "bg-gradient-to-br from-orange-500 to-orange-600"
+                            }`}
+                          >
+                            {index + 1}
+                          </div>
+                          <Avatar className="w-12 h-12">
+                            <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary-glow/20 text-primary">
+                              {user.name
+                                .split(" ")
+                                .map((n) => n[0])
+                                .join("")
+                                .toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                        </div>
+
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-semibold text-foreground">{user.name}</span>
+                            <Badge variant="secondary" className="flex items-center gap-1">
+                              <RoleIcon role={user.role} />
+                              {user.role}
                             </Badge>
                           </div>
-                        ))}
+                          <p className="text-sm text-muted-foreground">{user.reputation.toLocaleString()} REP</p>
+                        </div>
+
+                        <div className="text-right">
+                          {user.reputationChange > 0 && (
+                            <Badge variant="default" className="flex items-center gap-1">
+                              <TrendingUp className="w-3 h-3" />
+                              +{user.reputationChange}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
-                    )}
-                  </Card>
-                </TabsContent>
-              </Tabs>
-            </div>
-          </main>
-        </div>
+                    ))}
+                  </div>
+                </Card>
+              </TabsContent>
+
+              {/* Recent changes */}
+              <TabsContent value="recent-changes" className="space-y-6">
+                <Card className="glass-card p-6 animate-fade-in">
+                  <h3 className="text-lg font-semibold text-foreground mb-4">Recent Reputation Changes</h3>
+                  {recentChanges.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No recent changes.</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {recentChanges.map((user) => (
+                        <div
+                          key={user.id}
+                          className="flex items-center justify-between p-4 glass-card rounded-lg hover:shadow-md transition-all duration-200"
+                        >
+                          <div className="flex items-center gap-3">
+                            <Avatar className="w-10 h-10">
+                              <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary-glow/20 text-primary">
+                                {user.name
+                                  .split(" ")
+                                  .map((n) => n[0])
+                                  .join("")
+                                  .toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-medium text-foreground">{user.name}</span>
+                                <Badge variant="secondary" className="flex items-center gap-1">
+                                  <RoleIcon role={user.role} />
+                                  {user.role}
+                                </Badge>
+                              </div>
+                              <p className="text-sm text-muted-foreground">Current: {user.reputation} REP</p>
+                            </div>
+                          </div>
+
+                          <Badge
+                            variant={user.reputationChange > 0 ? "default" : "destructive"}
+                            className="flex items-center gap-1"
+                          >
+                            {user.reputationChange > 0 ? (
+                              <TrendingUp className="w-4 h-4" />
+                            ) : (
+                              <TrendingDown className="w-4 h-4" />
+                            )}
+                            {user.reputationChange > 0 ? "+" : ""}
+                            {user.reputationChange} REP
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </main>
       </div>
-    </SidebarProvider>
+    </div>
   );
-};
+}
 
 export default ViewBalances;

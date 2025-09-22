@@ -9,7 +9,7 @@ import { useRole } from "@/contexts/RoleContext";
 import { getUserDisplayData } from "@/utils/userUtils";
 import { formatDateForDisplay } from "@/utils/transactionUtils";
 
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Card } from "@/components/ui/card";
@@ -269,289 +269,337 @@ const RevokeRep: React.FC = () => {
     );
   }
 
+  // === Same fixed-sidebar alignment pattern as other pages ===
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
-        <DashboardSidebar
-          userRole={userRole?.toLowerCase() as "admin" | "awarder" | "member"}
-          userName={userDisplayData.userName}
-          userPrincipal={userDisplayData.userPrincipal}
-          onDisconnect={handleDisconnect}
-        />
+      <InnerRevokeRep
+        cid={cid}
+        userRole={userRole}
+        userDisplayData={userDisplayData}
+        handleDisconnect={handleDisconnect}
+        stats={stats}
+        recentRevocations={recentRevocations}
+        formData={formData}
+        setFormData={setFormData}
+        handleInputChange={handleInputChange}
+        handleSubmit={handleSubmit}
+        showConfirmation={showConfirmation}
+        setShowConfirmation={setShowConfirmation}
+        loading={loading}
+      />
+    </SidebarProvider>
+  );
+};
 
-        <div className="flex-1">
-          {/* Header */}
-          <header className="h-16 border-b border-border/40 flex items-center justify-between px-6 glass-header">
-            <div className="flex items-center gap-3">
-              <SidebarTrigger className="mr-4" />
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500/20 to-red-600/20 flex items-center justify-center">
-                <UserMinus className="w-4 h-4 text-red-600" />
-              </div>
-              <div>
-                <h1 className="text-lg font-semibold text-foreground">Revoke Reputation</h1>
-                <p className="text-xs text-muted-foreground">Org: {cid}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <ThemeToggle />
-            </div>
-          </header>
+function InnerRevokeRep(props: any) {
+  const {
+    cid,
+    userRole,
+    userDisplayData,
+    handleDisconnect,
+    stats,
+    recentRevocations,
+    formData,
+    setFormData,
+    handleInputChange,
+    handleSubmit,
+    showConfirmation,
+    setShowConfirmation,
+    loading,
+  } = props;
 
-          {/* Main Content */}
-          <main className="p-6">
-            <div className="max-w-7xl mx-auto">
-              <div className="grid lg:grid-cols-3 gap-6">
-                {/* Form */}
-                <div className="lg:col-span-2 space-y-6">
-                  <Card className="glass-card p-6 animate-fade-in">
-                    <div className="flex items-center gap-3 mb-6">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500/20 to-red-600/20 flex items-center justify-center">
-                        <UserMinus className="w-5 h-5 text-red-600" />
+  const navigate = useNavigate();
+
+  // Read sidebar state and shift content (collapsed: 72px, expanded: 280px)
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
+
+  return (
+    <div className="min-h-screen w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
+      <DashboardSidebar
+        userRole={userRole?.toLowerCase() as "admin" | "awarder" | "member"}
+        userName={userDisplayData.userName}
+        userPrincipal={userDisplayData.userPrincipal}
+        onDisconnect={handleDisconnect}
+      />
+
+      {/* Push main content to the right of the fixed sidebar on md+ */}
+      <div
+        className={`flex min-h-screen flex-col transition-[padding-left] duration-300 pl-0 ${
+          collapsed ? "md:pl-[72px]" : "md:pl-[280px]"
+        }`}
+      >
+        {/* Header */}
+        <header className="h-16 border-b border-border/40 flex items-center justify-between px-6 glass-header">
+          <div className="flex items-center gap-3">
+            <SidebarTrigger className="mr-4" />
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500/20 to-red-600/20 flex items-center justify-center">
+              <UserMinus className="w-4 h-4 text-red-600" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold text-foreground">Revoke Reputation</h1>
+              <p className="text-xs text-muted-foreground">Org: {cid}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+          </div>
+        </header>
+
+        {/* Main Content */}
+        <main className="p-6">
+          <div className="max-w-7xl mx-auto">
+            <div className="grid lg:grid-cols-3 gap-6">
+              {/* Form */}
+              <div className="lg:col-span-2 space-y-6">
+                <Card className="glass-card p-6 animate-fade-in">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500/20 to-red-600/20 flex items-center justify-center">
+                      <UserMinus className="w-5 h-5 text-red-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-semibold text-foreground">Revoke Reputation Points</h2>
+                      <p className="text-sm text-muted-foreground">Remove reputation for policy violations</p>
+                    </div>
+                  </div>
+
+                  <Alert className="mb-6 border-orange-500/20 bg-orange-500/5">
+                    <AlertTriangle className="h-4 w-4 text-orange-600" />
+                    <AlertDescription className="text-orange-800 dark:text-orange-200">
+                      <strong>Warning:</strong> Revoking reputation points is a serious action that cannot be easily undone.
+                      Please ensure you have valid reasons and proper authorization.
+                    </AlertDescription>
+                  </Alert>
+
+                  <form onSubmit={handleSubmit} className="space-y-6">
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="recipientAddress" className="text-sm font-medium text-foreground">
+                          Recipient Address *
+                        </Label>
+                        <div className="relative">
+                          <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Input
+                            id="recipientAddress"
+                            placeholder="Enter Principal ID (e.g. rdmx6-jaaaa-aaaah-qcaiq-cai)"
+                            value={formData.recipientAddress}
+                            onChange={(e) => handleInputChange("recipientAddress", e.target.value)}
+                            className="pl-10 glass-input"
+                            required
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <h2 className="text-lg font-semibold text-foreground">Revoke Reputation Points</h2>
-                        <p className="text-sm text-muted-foreground">Remove reputation for policy violations</p>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="reputationAmount" className="text-sm font-medium text-foreground">
+                          Reputation Amount *
+                        </Label>
+                        <div className="relative">
+                          <UserMinus className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Input
+                            id="reputationAmount"
+                            type="number"
+                            placeholder="Enter amount to revoke"
+                            value={formData.reputationAmount}
+                            onChange={(e) => handleInputChange("reputationAmount", e.target.value)}
+                            className="pl-10 glass-input"
+                            min="1"
+                            required
+                          />
+                        </div>
                       </div>
                     </div>
 
-                    <Alert className="mb-6 border-orange-500/20 bg-orange-500/5">
-                      <AlertTriangle className="h-4 w-4 text-orange-600" />
-                      <AlertDescription className="text-orange-800 dark:text-orange-200">
-                        <strong>Warning:</strong> Revoking reputation points is a serious action that cannot be easily undone.
-                        Please ensure you have valid reasons and proper authorization.
-                      </AlertDescription>
-                    </Alert>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-foreground">Revocation Category *</Label>
+                      <Select
+                        value={formData.category}
+                        onValueChange={(value) => handleInputChange("category", value)}
+                      >
+                        <SelectTrigger className="glass-input">
+                          <SelectValue placeholder="Select revocation category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {revocationCategories.map((category) => (
+                            <SelectItem key={category} value={category}>
+                              {category}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="recipientAddress" className="text-sm font-medium text-foreground">
-                            Recipient Address *
-                          </Label>
-                          <div className="relative">
-                            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                            <Input
-                              id="recipientAddress"
-                              placeholder="Enter Principal ID (e.g. rdmx6-jaaaa-aaaah-qcaiq-cai)"
-                              value={formData.recipientAddress}
-                              onChange={(e) => handleInputChange("recipientAddress", e.target.value)}
-                              className="pl-10 glass-input"
-                              required
-                            />
-                          </div>
-                        </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="reason" className="text-sm font-medium text-foreground">
+                        Reason for Revocation *
+                      </Label>
+                      <Textarea
+                        id="reason"
+                        placeholder="Provide detailed explanation for the revocation..."
+                        value={formData.reason}
+                        onChange={(e) => handleInputChange("reason", e.target.value)}
+                        className="glass-input min-h-[120px] resize-none"
+                        required
+                      />
+                    </div>
 
-                        <div className="space-y-2">
-                          <Label htmlFor="reputationAmount" className="text-sm font-medium text-foreground">
-                            Reputation Amount *
-                          </Label>
-                          <div className="relative">
-                            <UserMinus className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                            <Input
-                              id="reputationAmount"
-                              type="number"
-                              placeholder="Enter amount to revoke"
-                              value={formData.reputationAmount}
-                              onChange={(e) => handleInputChange("reputationAmount", e.target.value)}
-                              className="pl-10 glass-input"
-                              min="1"
-                              required
-                            />
-                          </div>
-                        </div>
-                      </div>
+                    <div className="flex items-center gap-2 p-4 bg-red-500/5 border border-red-500/10 rounded-lg">
+                      <Shield className="w-5 h-5 text-red-600 flex-shrink-0" />
+                      <p className="text-sm text-muted-foreground">
+                        All revocations are logged and require administrative approval.
+                      </p>
+                    </div>
 
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium text-foreground">Revocation Category *</Label>
-                        <Select
-                          value={formData.category}
-                          onValueChange={(value) => handleInputChange("category", value)}
-                        >
-                          <SelectTrigger className="glass-input">
-                            <SelectValue placeholder="Select revocation category" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {revocationCategories.map((category) => (
-                              <SelectItem key={category} value={category}>
-                                {category}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                    {showConfirmation && (
+                      <Alert className="border-red-500/20 bg-red-500/5">
+                        <AlertTriangle className="h-4 w-4 text-red-600" />
+                        <AlertDescription className="text-red-800 dark:text-red-200">
+                          Are you sure you want to revoke <strong>{formData.reputationAmount} REP</strong> from this address?
+                          This action will be permanently recorded.
+                        </AlertDescription>
+                      </Alert>
+                    )}
 
-                      <div className="space-y-2">
-                        <Label htmlFor="reason" className="text-sm font-medium text-foreground">
-                          Reason for Revocation *
-                        </Label>
-                        <Textarea
-                          id="reason"
-                          placeholder="Provide detailed explanation for the revocation..."
-                          value={formData.reason}
-                          onChange={(e) => handleInputChange("reason", e.target.value)}
-                          className="glass-input min-h-[120px] resize-none"
-                          required
-                        />
-                      </div>
-
-                      <div className="flex items-center gap-2 p-4 bg-red-500/5 border border-red-500/10 rounded-lg">
-                        <Shield className="w-5 h-5 text-red-600 flex-shrink-0" />
-                        <p className="text-sm text-muted-foreground">
-                          All revocations are logged and require administrative approval.
-                        </p>
-                      </div>
-
-                      {showConfirmation && (
-                        <Alert className="border-red-500/20 bg-red-500/5">
-                          <AlertTriangle className="h-4 w-4 text-red-600" />
-                          <AlertDescription className="text-red-800 dark:text-red-200">
-                            Are you sure you want to revoke <strong>{formData.reputationAmount} REP</strong> from this address?
-                            This action will be permanently recorded.
-                          </AlertDescription>
-                        </Alert>
-                      )}
-
-                      <div className="flex gap-3">
-                        {showConfirmation ? (
-                          <>
-                            <Button
-                              type="submit"
-                              variant="destructive"
-                              size="lg"
-                              className="flex-1 group"
-                              disabled={loading}
-                            >
-                              {loading ? (
-                                <>
-                                  <div className="w-4 h-4 border-2 border-white border-r-transparent rounded-full animate-spin mr-2" />
-                                  Revoking...
-                                </>
-                              ) : (
-                                <>
-                                  <UserMinus className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
-                                  Confirm Revocation
-                                </>
-                              )}
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="lg"
-                              onClick={() => setShowConfirmation(false)}
-                              disabled={loading}
-                            >
-                              Cancel
-                            </Button>
-                          </>
-                        ) : (
+                    <div className="flex gap-3">
+                      {showConfirmation ? (
+                        <>
                           <Button
                             type="submit"
                             variant="destructive"
                             size="lg"
-                            className="w-full group"
+                            className="flex-1 group"
                             disabled={loading}
                           >
-                            <UserMinus className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
-                            Revoke Reputation
+                            {loading ? (
+                              <>
+                                <div className="w-4 h-4 border-2 border-white border-r-transparent rounded-full animate-spin mr-2" />
+                                Revoking...
+                              </>
+                            ) : (
+                              <>
+                                <UserMinus className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                                Confirm Revocation
+                              </>
+                            )}
                           </Button>
-                        )}
-                      </div>
-                    </form>
-                  </Card>
-                </div>
-
-                {/* Sidebar Stats & Recent Revocations */}
-                <div className="space-y-6">
-                  {/* Summary */}
-                  <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: "0.1s" }}>
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500/20 to-red-600/20 flex items-center justify-center">
-                        <TrendingDown className="w-4 h-4 text-red-600" />
-                      </div>
-                      <h3 className="font-semibold text-foreground">Revocation Summary</h3>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between p-3 glass-card rounded-lg">
-                        <span className="text-sm text-muted-foreground">Total Revocations</span>
-                        <Badge variant="destructive" className="font-mono">
-                          {stats.totalRevocations}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center justify-between p-3 glass-card rounded-lg">
-                        <span className="text-sm text-muted-foreground">Total REP Revoked</span>
-                        <Badge variant="destructive" className="font-mono">
-                          {stats.totalREPRevoked} REP
-                        </Badge>
-                      </div>
-                      <div className="flex items-center justify-between p-3 glass-card rounded-lg">
-                        <span className="text-sm text-muted-foreground">This Month</span>
-                        <Badge variant="secondary" className="font-mono">
-                          {stats.monthlyRevocations}
-                        </Badge>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 p-3 bg-orange-500/5 border border-orange-500/10 rounded-lg">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Info className="w-4 h-4 text-orange-600" />
-                        <span className="text-sm font-medium text-orange-800 dark:text-orange-200">Notice</span>
-                      </div>
-                      <p className="text-xs text-orange-700 dark:text-orange-300">
-                        All revocations are logged and require administrative approval.
-                      </p>
-                    </div>
-                  </Card>
-
-                  {/* Recent Revocations */}
-                  <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: "0.2s" }}>
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-semibold text-foreground">Recent Revocations</h3>
-                      <Button variant="ghost" size="sm" onClick={() => navigate(`/transaction-log/${cid}`)}>
-                        View all
-                      </Button>
-                    </div>
-
-                    <div className="space-y-3">
-                      {recentRevocations.length === 0 ? (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <History className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                          <p className="text-sm">No revocations yet</p>
-                        </div>
-                      ) : (
-                        recentRevocations.map((revocation) => (
-                          <div
-                            key={revocation.id}
-                            className="p-3 glass-card rounded-lg hover:shadow-md transition-all duration-200 border-l-2 border-red-500/30"
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="lg"
+                            onClick={() => setShowConfirmation(false)}
+                            disabled={loading}
                           >
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="font-medium text-foreground text-sm">{revocation.recipientName}</span>
-                              <Badge variant="destructive" className="text-xs">
-                                -{revocation.amount} REP
-                              </Badge>
-                            </div>
-                            <p className="text-xs text-muted-foreground mb-2 line-clamp-2">{revocation.reason}</p>
-                            <div className="flex items-center justify-between">
-                              <Badge variant="outline" className="text-xs border-red-500/20 text-red-600">
-                                {revocation.category}
-                              </Badge>
-                              <span className="text-xs text-muted-foreground">
-                                {formatDateForDisplay(revocation.timestamp)}
-                              </span>
-                            </div>
-                          </div>
-                        ))
+                            Cancel
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          type="submit"
+                          variant="destructive"
+                          size="lg"
+                          className="w-full group"
+                          disabled={loading}
+                        >
+                          <UserMinus className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                          Revoke Reputation
+                        </Button>
                       )}
                     </div>
-                  </Card>
-                </div>
+                  </form>
+                </Card>
+              </div>
+
+              {/* Sidebar Stats & Recent Revocations */}
+              <div className="space-y-6">
+                {/* Summary */}
+                <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: "0.1s" }}>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500/20 to-red-600/20 flex items-center justify-center">
+                      <TrendingDown className="w-4 h-4 text-red-600" />
+                    </div>
+                    <h3 className="font-semibold text-foreground">Revocation Summary</h3>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-3 glass-card rounded-lg">
+                      <span className="text-sm text-muted-foreground">Total Revocations</span>
+                      <Badge variant="destructive" className="font-mono">
+                        {stats.totalRevocations}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between p-3 glass-card rounded-lg">
+                      <span className="text-sm text-muted-foreground">Total REP Revoked</span>
+                      <Badge variant="destructive" className="font-mono">
+                        {stats.totalREPRevoked} REP
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between p-3 glass-card rounded-lg">
+                      <span className="text-sm text-muted-foreground">This Month</span>
+                      <Badge variant="secondary" className="font-mono">
+                        {stats.monthlyRevocations}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 p-3 bg-orange-500/5 border border-orange-500/10 rounded-lg">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Info className="w-4 h-4 text-orange-600" />
+                      <span className="text-sm font-medium text-orange-800 dark:text-orange-200">Notice</span>
+                    </div>
+                    <p className="text-xs text-orange-700 dark:text-orange-300">
+                      All revocations are logged and require administrative approval.
+                    </p>
+                  </div>
+                </Card>
+
+                {/* Recent Revocations */}
+                <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: "0.2s" }}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold text-foreground">Recent Revocations</h3>
+                    <Button variant="ghost" size="sm" onClick={() => navigate(`/transaction-log/${cid}`)}>
+                      View all
+                    </Button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {recentRevocations.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <History className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">No revocations yet</p>
+                      </div>
+                    ) : (
+                      recentRevocations.map((revocation) => (
+                        <div
+                          key={revocation.id}
+                          className="p-3 glass-card rounded-lg hover:shadow-md transition-all duration-200 border-l-2 border-red-500/30"
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-medium text-foreground text-sm">{revocation.recipientName}</span>
+                            <Badge variant="destructive" className="text-xs">
+                              -{revocation.amount} REP
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground mb-2 line-clamp-2">{revocation.reason}</p>
+                          <div className="flex items-center justify-between">
+                            <Badge variant="outline" className="text-xs border-red-500/20 text-red-600">
+                              {revocation.category}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDateForDisplay(revocation.timestamp)}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </Card>
               </div>
             </div>
-          </main>
-        </div>
+          </div>
+        </main>
       </div>
-    </SidebarProvider>
+    </div>
   );
-};
+}
 
 export default RevokeRep;

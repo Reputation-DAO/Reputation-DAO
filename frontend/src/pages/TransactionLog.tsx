@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { toast } from "sonner";
@@ -260,246 +260,296 @@ const TransactionLog: React.FC = () => {
     );
   }
 
+  // === Same fixed-sidebar alignment as Step 2 ===
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
-        <DashboardSidebar
-          userRole={userRole?.toLowerCase() as "admin" | "awarder" | "member"}
-          userName={userDisplay.userName}
-          userPrincipal={userDisplay.userPrincipal}
-          onDisconnect={handleDisconnect}
-        />
-
-        <div className="flex-1">
-          {/* Header */}
-          <header className="h-16 border-b border-border/40 flex items-center justify-between px-6 glass-header">
-            <div className="flex items-center gap-3">
-              <SidebarTrigger className="mr-4" />
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-600/20 flex items-center justify-center">
-                <FileText className="w-4 h-4 text-blue-600" />
-              </div>
-              <div>
-                <h1 className="text-lg font-semibold text-foreground">Transaction Log</h1>
-                <p className="text-xs text-muted-foreground">Org: {cid}</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                className="group"
-                onClick={() => toast.info("CSV export not wired to backend in this view")}
-              >
-                <Download className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
-                Export CSV
-              </Button>
-              <ThemeToggle />
-            </div>
-          </header>
-
-          {/* Main */}
-          <main className="p-6">
-            <div className="max-w-7xl mx-auto space-y-6">
-              {/* Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card className="glass-card p-4 animate-fade-in">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total Transactions</p>
-                      <p className="text-2xl font-bold text-foreground">{stats.totalTransactions}</p>
-                    </div>
-                    <Activity className="w-8 h-8 text-primary" />
-                  </div>
-                </Card>
-
-                <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.1s" }}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">REP Awarded</p>
-                      <p className="text-2xl font-bold text-foreground">{stats.totalRepAwarded}</p>
-                    </div>
-                    <TrendingUp className="w-8 h-8 text-green-500" />
-                  </div>
-                </Card>
-
-                <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.2s" }}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">REP Revoked</p>
-                      <p className="text-2xl font-bold text-foreground">{stats.totalRepRevoked}</p>
-                    </div>
-                    <TrendingDown className="w-8 h-8 text-red-500" />
-                  </div>
-                </Card>
-
-                <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.3s" }}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Today's Activity</p>
-                      <p className="text-2xl font-bold text-foreground">{stats.pendingTransactions}</p>
-                    </div>
-                    <Clock className="w-8 h-8 text-orange-500" />
-                  </div>
-                </Card>
-              </div>
-
-              {/* Filters */}
-              <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.4s" }}>
-                <div className="flex flex-col lg:flex-row gap-4">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search transactions..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10 glass-input"
-                    />
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Select value={filterType} onValueChange={(v: any) => setFilterType(v)}>
-                      <SelectTrigger className="w-32 glass-input">
-                        <SelectValue placeholder="Type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Types</SelectItem>
-                        <SelectItem value="award">Awards</SelectItem>
-                        <SelectItem value="revoke">Revocations</SelectItem>
-                        <SelectItem value="decay">Decay</SelectItem>
-                      </SelectContent>
-                    </Select>
-
-                    <Select value={filterStatus} onValueChange={(v: any) => setFilterStatus(v)}>
-                      <SelectTrigger className="w-32 glass-input">
-                        <SelectValue placeholder="Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Status</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="failed">Failed</SelectItem>
-                      </SelectContent>
-                    </Select>
-
-                    <Select value={dateFilter} onValueChange={(v: any) => setDateFilter(v)}>
-                      <SelectTrigger className="w-32 glass-input">
-                        <SelectValue placeholder="Date" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Time</SelectItem>
-                        <SelectItem value="today">Today</SelectItem>
-                        <SelectItem value="week">This Week</SelectItem>
-                        <SelectItem value="month">This Month</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </Card>
-
-              {/* Transactions */}
-              <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: "0.5s" }}>
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-lg font-semibold text-foreground">Transaction History</h2>
-                  <Badge variant="secondary" className="font-mono">
-                    {filteredTransactions.length} transactions
-                  </Badge>
-                </div>
-
-                <div className="space-y-3">
-                  {loading ? (
-                    <div className="text-center py-12 text-muted-foreground">Loading…</div>
-                  ) : filteredTransactions.length === 0 ? (
-                    <div className="text-center py-12 text-muted-foreground">
-                      <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                      <p className="text-lg font-medium mb-2">No transactions found</p>
-                      <p className="text-sm">Try adjusting your search or filters</p>
-                    </div>
-                  ) : (
-                    filteredTransactions.map((tx, idx) => (
-                      <div
-                        key={tx.id}
-                        className="flex items-center justify-between p-4 glass-card rounded-lg hover:shadow-md transition-all duration-200 animate-fade-in"
-                        style={{ animationDelay: `${0.6 + idx * 0.05}s` }}
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${getTransactionTypeBgClass(tx.type)}`}>
-                            {getTransactionIcon(tx.type)}
-                          </div>
-
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="font-medium text-foreground text-lg">
-                                {formatTransactionAmount(tx.type, tx.amount)} REP
-                              </span>
-                              <Badge variant="outline" className="text-xs capitalize">
-                                {getTransactionTypeDescription(tx.type)}
-                              </Badge>
-                              <Badge
-                                variant={
-                                  tx.status === "completed"
-                                    ? "default"
-                                    : tx.status === "pending"
-                                    ? "secondary"
-                                    : "destructive"
-                                }
-                                className="text-xs"
-                              >
-                                {tx.status}
-                              </Badge>
-                            </div>
-
-                            <div className="mb-2">
-                              <p className="text-sm text-muted-foreground mb-1">
-                                <span className="font-medium">{tx.fromUser}</span>
-                                {" → "}
-                                <span className="font-medium">{tx.toUser}</span>
-                              </p>
-
-                              <div className="bg-muted/30 rounded-lg p-3 mb-2">
-                                <p className="text-sm font-medium text-foreground mb-1">Reason:</p>
-                                <p className="text-sm text-muted-foreground break-words">{tx.reason}</p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                              <div className="flex items-center gap-1">
-                                <Calendar className="w-3 h-3" />
-                                {formatDateTimeForDisplay(tx.timestamp)}
-                              </div>
-                              {tx.category && (
-                                <Badge variant="outline" className="text-xs">
-                                  {tx.category}
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          {tx.blockHeight && (
-                            <Button variant="ghost" size="sm" className="text-xs">
-                              <Eye className="w-3 h-3 mr-1" />
-                              Block {tx.blockHeight}
-                            </Button>
-                          )}
-                          {tx.transactionHash && (
-                            <Button variant="ghost" size="sm" className="text-xs">
-                              <ExternalLink className="w-3 h-3 mr-1" />
-                              View Hash
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </Card>
-            </div>
-          </main>
-        </div>
-      </div>
+      <InnerTransactionLog
+        cid={cid}
+        userRole={userRole}
+        userDisplay={userDisplay}
+        handleDisconnect={handleDisconnect}
+        stats={stats}
+        filteredTransactions={filteredTransactions}
+        loading={loading}
+        setSearchQuery={setSearchQuery}
+        searchQuery={searchQuery}
+        filterType={filterType}
+        setFilterType={setFilterType}
+        filterStatus={filterStatus}
+        setFilterStatus={setFilterStatus}
+        dateFilter={dateFilter}
+        setDateFilter={setDateFilter}
+      />
     </SidebarProvider>
   );
 };
+
+function InnerTransactionLog(props: any) {
+  const {
+    cid,
+    userRole,
+    userDisplay,
+    handleDisconnect,
+    stats,
+    filteredTransactions,
+    loading,
+    setSearchQuery,
+    searchQuery,
+    filterType,
+    setFilterType,
+    filterStatus,
+    setFilterStatus,
+    dateFilter,
+    setDateFilter,
+  } = props;
+
+  // Read sidebar state and shift content (collapsed: 72px, expanded: 280px)
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
+
+  return (
+    <div className="min-h-screen w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
+      <DashboardSidebar
+        userRole={userRole?.toLowerCase() as "admin" | "awarder" | "member"}
+        userName={userDisplay.userName}
+        userPrincipal={userDisplay.userPrincipal}
+        onDisconnect={handleDisconnect}
+      />
+
+      {/* Push main content to the right of the fixed sidebar on md+ */}
+      <div
+        className={`flex min-h-screen flex-col transition-[padding-left] duration-300 pl-0 ${
+          collapsed ? "md:pl-[72px]" : "md:pl-[280px]"
+        }`}
+      >
+        {/* Header */}
+        <header className="h-16 border-b border-border/40 flex items-center justify-between px-6 glass-header">
+          <div className="flex items-center gap-3">
+            <SidebarTrigger className="mr-4" />
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-600/20 flex items-center justify-center">
+              <FileText className="w-4 h-4 text-blue-600" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold text-foreground">Transaction Log</h1>
+              <p className="text-xs text-muted-foreground">Org: {cid}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              className="group"
+              onClick={() => toast.info("CSV export not wired to backend in this view")}
+            >
+              <Download className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
+              Export CSV
+            </Button>
+            <ThemeToggle />
+          </div>
+        </header>
+
+        {/* Main */}
+        <main className="p-6">
+          <div className="max-w-7xl mx-auto space-y-6">
+            {/* Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Card className="glass-card p-4 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Transactions</p>
+                    <p className="text-2xl font-bold text-foreground">{stats.totalTransactions}</p>
+                  </div>
+                  <Activity className="w-8 h-8 text-primary" />
+                </div>
+              </Card>
+
+              <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.1s" }}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">REP Awarded</p>
+                    <p className="text-2xl font-bold text-foreground">{stats.totalRepAwarded}</p>
+                  </div>
+                  <TrendingUp className="w-8 h-8 text-green-500" />
+                </div>
+              </Card>
+
+              <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.2s" }}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">REP Revoked</p>
+                    <p className="text-2xl font-bold text-foreground">{stats.totalRepRevoked}</p>
+                  </div>
+                  <TrendingDown className="w-8 h-8 text-red-500" />
+                </div>
+              </Card>
+
+              <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.3s" }}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Today's Activity</p>
+                    <p className="text-2xl font-bold text-foreground">{stats.pendingTransactions}</p>
+                  </div>
+                  <Clock className="w-8 h-8 text-orange-500" />
+                </div>
+              </Card>
+            </div>
+
+            {/* Filters */}
+            <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.4s" }}>
+              <div className="flex flex-col lg:flex-row gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search transactions..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 glass-input"
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <Select value={filterType} onValueChange={(v: any) => setFilterType(v)}>
+                    <SelectTrigger className="w-32 glass-input">
+                      <SelectValue placeholder="Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Types</SelectItem>
+                      <SelectItem value="award">Awards</SelectItem>
+                      <SelectItem value="revoke">Revocations</SelectItem>
+                      <SelectItem value="decay">Decay</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={filterStatus} onValueChange={(v: any) => setFilterStatus(v)}>
+                    <SelectTrigger className="w-32 glass-input">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="failed">Failed</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={dateFilter} onValueChange={(v: any) => setDateFilter(v)}>
+                    <SelectTrigger className="w-32 glass-input">
+                      <SelectValue placeholder="Date" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Time</SelectItem>
+                      <SelectItem value="today">Today</SelectItem>
+                      <SelectItem value="week">This Week</SelectItem>
+                      <SelectItem value="month">This Month</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </Card>
+
+            {/* Transactions */}
+            <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: "0.5s" }}>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg font-semibold text-foreground">Transaction History</h2>
+                <Badge variant="secondary" className="font-mono">
+                  {filteredTransactions.length} transactions
+                </Badge>
+              </div>
+
+              <div className="space-y-3">
+                {loading ? (
+                  <div className="text-center py-12 text-muted-foreground">Loading…</div>
+                ) : filteredTransactions.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p className="text-lg font-medium mb-2">No transactions found</p>
+                    <p className="text-sm">Try adjusting your search or filters</p>
+                  </div>
+                ) : (
+                  filteredTransactions.map((tx, idx) => (
+                    <div
+                      key={tx.id}
+                      className="flex items-center justify-between p-4 glass-card rounded-lg hover:shadow-md transition-all duration-200 animate-fade-in"
+                      style={{ animationDelay: `${0.6 + idx * 0.05}s` }}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${getTransactionTypeBgClass(tx.type)}`}>
+                          {getTransactionIcon(tx.type)}
+                        </div>
+
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="font-medium text-foreground text-lg">
+                              {formatTransactionAmount(tx.type, tx.amount)} REP
+                            </span>
+                            <Badge variant="outline" className="text-xs capitalize">
+                              {getTransactionTypeDescription(tx.type)}
+                            </Badge>
+                            <Badge
+                              variant={
+                                tx.status === "completed"
+                                  ? "default"
+                                  : tx.status === "pending"
+                                  ? "secondary"
+                                  : "destructive"
+                              }
+                              className="text-xs"
+                            >
+                              {tx.status}
+                            </Badge>
+                          </div>
+
+                          <div className="mb-2">
+                            <p className="text-sm text-muted-foreground mb-1">
+                              <span className="font-medium">{tx.fromUser}</span>
+                              {" → "}
+                              <span className="font-medium">{tx.toUser}</span>
+                            </p>
+
+                            <div className="bg-muted/30 rounded-lg p-3 mb-2">
+                              <p className="text-sm font-medium text-foreground mb-1">Reason:</p>
+                              <p className="text-sm text-muted-foreground break-words">{tx.reason}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              {formatDateTimeForDisplay(tx.timestamp)}
+                            </div>
+                            {tx.category && (
+                              <Badge variant="outline" className="text-xs">
+                                {tx.category}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {tx.blockHeight && (
+                          <Button variant="ghost" size="sm" className="text-xs">
+                            <Eye className="w-3 h-3 mr-1" />
+                            Block {tx.blockHeight}
+                          </Button>
+                        )}
+                        {tx.transactionHash && (
+                          <Button variant="ghost" size="sm" className="text-xs">
+                            <ExternalLink className="w-3 h-3 mr-1" />
+                            View Hash
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </Card>
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
 
 export default TransactionLog;
