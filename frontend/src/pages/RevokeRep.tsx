@@ -1,10 +1,17 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+// src/pages/RevokeRep.tsx
+// @ts-nocheck
+import React, { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
+import { makeChildWithPlug } from "@/components/canister/child";
+
 import { useRole } from "@/contexts/RoleContext";
-import { usePlugConnection } from "@/hooks/usePlugConnection";
 import { getUserDisplayData } from "@/utils/userUtils";
-import { getPlugActor, revokeRep, getTransactionsByUser, getOrgTransactionHistory, getOrgStats } from "@/services/childCanisterService";
+import { formatDateForDisplay } from "@/utils/transactionUtils";
+
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,11 +20,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { toast } from "sonner";
-import { parseTransactionType, convertTimestampToDate, extractReason, formatDateForDisplay } from "@/utils/transactionUtils";
+
 import {
   UserMinus,
   AlertTriangle,
@@ -57,119 +61,134 @@ const revocationCategories = [
   "Other"
 ];
 
-const RevokeRep = () => {
+const RevokeRep: React.FC = () => {
   const navigate = useNavigate();
-  const { userRole, isAdmin, isAwarder } = useRole();
-  const { isConnected, principal } = usePlugConnection({ autoCheck: true });
+  const { cid } = useParams<{ cid: string }>();
+
+  // permissions
+  const { userRole, isAdmin, currentPrincipal } = useRole();
+  const userDisplayData = getUserDisplayData(currentPrincipal || null);
+
+  // child canister actor
+  const [child, setChild] = useState<any>(null);
+  const [connecting, setConnecting] = useState(true);
+  const [connectError, setConnectError] = useState<string | null>(null);
+
+  // ui state
   const [formData, setFormData] = useState<RevokeFormData>({
-    recipientAddress: '',
-    reputationAmount: '',
-    category: '',
-    reason: ''
+    recipientAddress: "",
+    reputationAmount: "",
+    category: "",
+    reason: ""
   });
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [recentRevocations, setRecentRevocations] = useState<RecentRevocation[]>([]);
   const [loading, setLoading] = useState(false);
-  
+
   const [stats, setStats] = useState({
     totalRevocations: 0,
     totalREPRevoked: 0,
     monthlyRevocations: 0
   });
 
-  // Load recent revocations and stats
+  // ---- Build child actor from :cid (no localStorage / no plug hook) ----
   useEffect(() => {
-    const loadRevocationData = async () => {
-      const selectedOrgId = localStorage.getItem('selectedOrgId');
-      if (!selectedOrgId || !isConnected) return;
-      
+    (async () => {
       try {
-        console.log('📊 RevokeRep: Loading revocation data for:', selectedOrgId);
-
-        // Get all organization transactions
-        const transactions = await getOrgTransactionHistory();
-
-        // Filter only Revoke transactions
-        const revokeTransactions = transactions.filter(tx => {
-          const transactionType = parseTransactionType(tx.transactionType);
-          const isRevoke = transactionType === 'revoke';
-          console.log('🔍 RevokeRep: Transaction type check:', {
-            original: tx.transactionType,
-            parsed: transactionType,
-            isRevoke: isRevoke,
-            amount: tx.amount,
-            from: tx.from.toString(),
-            to: tx.to.toString()
-          });
-          return isRevoke;
-        });
-        
-        const totalRevocations = revokeTransactions.length;
-        const totalREPRevoked = revokeTransactions.reduce((sum, tx) => sum + Number(tx.amount), 0);
-        
-        // Calculate monthly revocations
-        const currentMonth = new Date().getMonth();
-        const currentYear = new Date().getFullYear();
-        const monthlyRevocations = revokeTransactions.filter(tx => {
-          const txDate = convertTimestampToDate(tx.timestamp);
-          return txDate.getMonth() === currentMonth && txDate.getFullYear() === currentYear;
-        }).length;
-        
-        setStats({
-          totalRevocations,
-          totalREPRevoked,
-          monthlyRevocations
-        });
-        
-        // Convert recent revoke transactions to UI format (last 5)
-        const recentRevocationData: RecentRevocation[] = revokeTransactions
-          .slice(-5)
-          .reverse()
-          .map((tx, index) => ({
-            id: `rev-${index}`,
-            recipientName: `User ${tx.to.toString().slice(0, 8)}`,
-            recipientAddress: tx.to.toString(),
-            amount: Number(tx.amount),
-            category: "General",
-            reason: tx.reason || "No reason provided",
-            timestamp: convertTimestampToDate(tx.timestamp),
-            revokedBy: `User ${tx.from.toString().slice(0, 8)}`
-          }));
-          
-        setRecentRevocations(recentRevocationData);
-        
-        console.log('✅ RevokeRep: Data loaded:', {
-          totalRevocations,
-          totalREPRevoked,
-          monthlyRevocations,
-          recentRevocations: recentRevocationData.length
-        });
-        
-      } catch (error) {
-        console.error("❌ RevokeRep: Error loading revocation data:", error);
+        if (!cid) throw new Error("No organization selected.");
+        const actor = await makeChildWithPlug({ canisterId: cid, host: "https://icp-api.io" });
+        setChild(actor);
+      } catch (e: any) {
+        setConnectError(e?.message || "Failed to connect to org canister");
+      } finally {
+        setConnecting(false);
       }
-    };
+    })();
+  }, [cid]);
 
-    loadRevocationData();
-  }, [isConnected, principal]);
+  // ---- Load recent revocations + stats directly from child ----
+  const loadRevocations = async () => {
+    if (!child) return;
+    try {
+      // Get all org transactions from child
+      const txs = await (child.getTransactionHistory?.() ?? child.get_transaction_history?.());
+      const arr = Array.isArray(txs) ? txs : [];
+
+      const toNum = (v: number | bigint) => (typeof v === "bigint" ? Number(v) : v);
+
+      const revokeTx = arr.filter((tx) => tx?.transactionType && "Revoke" in tx.transactionType);
+
+      const totalRevocations = revokeTx.length;
+      const totalREPRevoked = revokeTx.reduce((sum, tx) => sum + toNum(tx.amount || 0), 0);
+
+      const now = new Date();
+      const monthlyRevocations = revokeTx.filter((tx) => {
+        const ts = toNum(tx.timestamp || 0);
+        if (!ts) return false;
+        const d = new Date(ts * 1000);
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      }).length;
+
+      setStats({ totalRevocations, totalREPRevoked, monthlyRevocations });
+
+      // Recent list (latest 5)
+      const recent = revokeTx
+        .slice(0, 5)
+        .map((tx: any, i: number) => {
+          const ts = toNum(tx.timestamp || 0);
+          return {
+            id: tx.id?.toString?.() ?? `rev-${i}`,
+            recipientName: `User ${tx.to?.toString?.().slice(0, 8)}`,
+            recipientAddress: tx.to?.toString?.() ?? "",
+            amount: toNum(tx.amount || 0),
+            category: "General",
+            reason: (Array.isArray(tx.reason) ? tx.reason[0] : tx.reason) || "No reason provided",
+            timestamp: ts ? new Date(ts * 1000) : new Date(),
+            revokedBy: `User ${tx.from?.toString?.().slice(0, 8)}`
+          } as RecentRevocation;
+        });
+
+      setRecentRevocations(recent);
+    } catch (error) {
+      console.error("Failed to load revocation data:", error);
+      setRecentRevocations([]);
+      setStats({ totalRevocations: 0, totalREPRevoked: 0, monthlyRevocations: 0 });
+      toast.error("Failed to load revocation data from blockchain.");
+    }
+  };
+
+  useEffect(() => {
+    if (child) loadRevocations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [child]);
 
   const handleInputChange = (field: keyof RevokeFormData, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((p) => ({ ...p, [field]: value }));
+  };
+
+  const validateForm = () => {
+    const { recipientAddress, reputationAmount, category, reason } = formData;
+    if (!recipientAddress || !reputationAmount || !category || !reason) {
+      toast.error("Please fill in all required fields");
+      return false;
+    }
+    try {
+      Principal.fromText(recipientAddress);
+    } catch {
+      toast.error("Invalid recipient address. Please check the principal format.");
+      return false;
+    }
+    const amt = Number(reputationAmount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      toast.error("Amount must be greater than 0.");
+      return false;
+    }
+    return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.recipientAddress || !formData.reputationAmount || !formData.category || !formData.reason) {
-      toast.error("Please fill in all required fields");
-      return;
-    }
-
-    if (!isConnected || !principal) {
-      toast.error("Please connect your wallet first");
-      return;
-    }
-
+    if (!validateForm()) return;
     if (!showConfirmation) {
       setShowConfirmation(true);
       return;
@@ -177,90 +196,63 @@ const RevokeRep = () => {
 
     try {
       setLoading(true);
-      
-      // Get organization ID from localStorage
-      const selectedOrgId = localStorage.getItem('selectedOrgId');
-      if (!selectedOrgId) {
-        toast.error("No organization selected. Please select an organization first.");
-        return;
+      if (!child) throw new Error("Not connected to the organization canister");
+
+      const recipientPrincipal = Principal.fromText(formData.recipientAddress.trim());
+      const amountBig = BigInt(Number(formData.reputationAmount));
+
+      // Backend expects: revokeRep(principal, amount, [reason])
+      const res: string =
+        (await child.revokeRep?.(recipientPrincipal, amountBig, [formData.reason.trim()])) ??
+        (await child.revoke_rep?.(recipientPrincipal, amountBig, [formData.reason.trim()]));
+
+      if (typeof res === "string" && res.toLowerCase().startsWith("error")) {
+        throw new Error(res);
       }
 
-      // Parse recipient principal
-      const recipientPrincipal = Principal.fromText(formData.recipientAddress);
-      const amount = parseInt(formData.reputationAmount);
-      
-      console.log('🔄 Revoking reputation:', {
-        orgId: selectedOrgId,
-        recipient: recipientPrincipal.toString(),
-        amount,
-        reason: formData.reason
-      });
+      toast.success(`Successfully revoked ${formData.reputationAmount} REP from ${formData.recipientAddress}`);
 
-      // Call backend revokeRep function
-      const result = await revokeRep( recipientPrincipal, amount, formData.reason);
-      
-      console.log('✅ Reputation revoked successfully:', result);
-      toast.success(`Successfully revoked ${amount} REP points from ${formData.recipientAddress}`);
-      
-      // Reset form
-      setFormData({
-        recipientAddress: '',
-        reputationAmount: '',
-        category: '',
-        reason: ''
-      });
+      // Reset form + UI
+      setFormData({ recipientAddress: "", reputationAmount: "", category: "", reason: "" });
       setShowConfirmation(false);
-      
-      // Reload recent revocations to show the new one
-      const principalObj = Principal.fromText(principal);
-      const transactions = await getTransactionsByUser(principalObj);
-      const revocations = transactions
-        .filter(tx => {
-          const transactionType = parseTransactionType(tx.transactionType);
-          return transactionType === 'revoke';
-        })
-        .slice(0, 5)
-        .map((tx, index) => ({
-          id: `rev-${index}`,
-          recipientName: `User ${tx.to.toString().slice(0, 8)}`,
-          recipientAddress: tx.to.toString(),
-          amount: Number(tx.amount),
-          category: "General",
-          reason: tx.reason || "No reason provided",
-          timestamp: convertTimestampToDate(tx.timestamp),
-          revokedBy: tx.from.toString()
-        }));
-      setRecentRevocations(revocations);
-      
-    } catch (error) {
-      console.error("❌ Error revoking reputation:", error);
-      if (error instanceof Error) {
-        if (error.message.includes("Only owner can revoke")) {
-          toast.error("Only the organization owner can revoke reputation.");
-        } else if (error.message.includes("Paused")) {
-          toast.error("The reputation system is currently paused.");
-        } else if (error.message.includes("Amount must be > 0")) {
-          toast.error("Amount must be greater than 0.");
-        } else if (error.message.includes("Blacklisted principal")) {
-          toast.error("This principal is blacklisted.");
-        } else if (error.message.includes("Invalid principal")) {
-          toast.error("Invalid recipient address. Please check the principal format.");
-        } else if (error.message.includes("Organization does not exist")) {
-          toast.error("Organization not found. Please check your organization selection.");
-        } else {
-          toast.error(`Failed to revoke reputation: ${error.message}`);
-        }
-      } else {
-        toast.error("Failed to revoke reputation. Please try again.");
-      }
+
+      // Reload list
+      await loadRevocations();
+    } catch (error: any) {
+      console.error("Revoke error:", error);
+      const msg = error?.message || "Failed to revoke reputation. Please try again.";
+      if (msg.includes("Only owner")) toast.error("Only the organization admin can revoke reputation.");
+      else toast.error(msg);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDisconnect = () => {
-    navigate('/auth');
-  };
+  const handleDisconnect = () => navigate("/auth");
+
+  // --- connection gate ---
+  if (connecting) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <div className="text-sm text-muted-foreground">Connecting to organization…</div>
+      </div>
+    );
+  }
+  if (!cid || connectError) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <Card className="glass-card p-6">
+          <AlertTriangle className="w-6 h-6 text-orange-500 mb-2" />
+          <p className="text-sm text-muted-foreground">{connectError || "No organization selected."}</p>
+          <div className="mt-3">
+            <Button onClick={() => navigate("/org-selector")} variant="outline">
+              Choose Org
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   if (!isAdmin) {
     return (
@@ -271,9 +263,7 @@ const RevokeRep = () => {
           <p className="text-muted-foreground mb-4">
             You don't have permission to revoke reputation points. Only admins can revoke reputation.
           </p>
-          <Button onClick={() => navigate('/dashboard')}>
-            Return to Dashboard
-          </Button>
+          <Button onClick={() => navigate(`/dashboard/home/${cid}`)}>Return to Dashboard</Button>
         </Card>
       </div>
     );
@@ -282,13 +272,13 @@ const RevokeRep = () => {
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
-        <DashboardSidebar 
-          userRole={userRole.toLowerCase() as 'admin' | 'awarder' | 'member'}
-          userName={getUserDisplayData(principal).userName}
-          userPrincipal={getUserDisplayData(principal).userPrincipal}
+        <DashboardSidebar
+          userRole={userRole?.toLowerCase() as "admin" | "awarder" | "member"}
+          userName={userDisplayData.userName}
+          userPrincipal={userDisplayData.userPrincipal}
           onDisconnect={handleDisconnect}
         />
-        
+
         <div className="flex-1">
           {/* Header */}
           <header className="h-16 border-b border-border/40 flex items-center justify-between px-6 glass-header">
@@ -299,7 +289,7 @@ const RevokeRep = () => {
               </div>
               <div>
                 <h1 className="text-lg font-semibold text-foreground">Revoke Reputation</h1>
-                <p className="text-xs text-muted-foreground">Remove reputation points for violations</p>
+                <p className="text-xs text-muted-foreground">Org: {cid}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -311,7 +301,7 @@ const RevokeRep = () => {
           <main className="p-6">
             <div className="max-w-7xl mx-auto">
               <div className="grid lg:grid-cols-3 gap-6">
-                {/* Revoke Form */}
+                {/* Form */}
                 <div className="lg:col-span-2 space-y-6">
                   <Card className="glass-card p-6 animate-fade-in">
                     <div className="flex items-center gap-3 mb-6">
@@ -327,7 +317,7 @@ const RevokeRep = () => {
                     <Alert className="mb-6 border-orange-500/20 bg-orange-500/5">
                       <AlertTriangle className="h-4 w-4 text-orange-600" />
                       <AlertDescription className="text-orange-800 dark:text-orange-200">
-                        <strong>Warning:</strong> Revoking reputation points is a serious action that cannot be easily undone. 
+                        <strong>Warning:</strong> Revoking reputation points is a serious action that cannot be easily undone.
                         Please ensure you have valid reasons and proper authorization.
                       </AlertDescription>
                     </Alert>
@@ -344,7 +334,7 @@ const RevokeRep = () => {
                               id="recipientAddress"
                               placeholder="Enter Principal ID (e.g. rdmx6-jaaaa-aaaah-qcaiq-cai)"
                               value={formData.recipientAddress}
-                              onChange={(e) => handleInputChange('recipientAddress', e.target.value)}
+                              onChange={(e) => handleInputChange("recipientAddress", e.target.value)}
                               className="pl-10 glass-input"
                               required
                             />
@@ -362,7 +352,7 @@ const RevokeRep = () => {
                               type="number"
                               placeholder="Enter amount to revoke"
                               value={formData.reputationAmount}
-                              onChange={(e) => handleInputChange('reputationAmount', e.target.value)}
+                              onChange={(e) => handleInputChange("reputationAmount", e.target.value)}
                               className="pl-10 glass-input"
                               min="1"
                               required
@@ -373,7 +363,10 @@ const RevokeRep = () => {
 
                       <div className="space-y-2">
                         <Label className="text-sm font-medium text-foreground">Revocation Category *</Label>
-                        <Select value={formData.category} onValueChange={(value) => handleInputChange('category', value)}>
+                        <Select
+                          value={formData.category}
+                          onValueChange={(value) => handleInputChange("category", value)}
+                        >
                           <SelectTrigger className="glass-input">
                             <SelectValue placeholder="Select revocation category" />
                           </SelectTrigger>
@@ -395,7 +388,7 @@ const RevokeRep = () => {
                           id="reason"
                           placeholder="Provide detailed explanation for the revocation..."
                           value={formData.reason}
-                          onChange={(e) => handleInputChange('reason', e.target.value)}
+                          onChange={(e) => handleInputChange("reason", e.target.value)}
                           className="glass-input min-h-[120px] resize-none"
                           required
                         />
@@ -412,7 +405,7 @@ const RevokeRep = () => {
                         <Alert className="border-red-500/20 bg-red-500/5">
                           <AlertTriangle className="h-4 w-4 text-red-600" />
                           <AlertDescription className="text-red-800 dark:text-red-200">
-                            Are you sure you want to revoke <strong>{formData.reputationAmount} REP</strong> from this address? 
+                            Are you sure you want to revoke <strong>{formData.reputationAmount} REP</strong> from this address?
                             This action will be permanently recorded.
                           </AlertDescription>
                         </Alert>
@@ -421,10 +414,10 @@ const RevokeRep = () => {
                       <div className="flex gap-3">
                         {showConfirmation ? (
                           <>
-                            <Button 
-                              type="submit" 
-                              variant="destructive" 
-                              size="lg" 
+                            <Button
+                              type="submit"
+                              variant="destructive"
+                              size="lg"
                               className="flex-1 group"
                               disabled={loading}
                             >
@@ -440,10 +433,10 @@ const RevokeRep = () => {
                                 </>
                               )}
                             </Button>
-                            <Button 
-                              type="button" 
-                              variant="outline" 
-                              size="lg" 
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="lg"
                               onClick={() => setShowConfirmation(false)}
                               disabled={loading}
                             >
@@ -451,10 +444,10 @@ const RevokeRep = () => {
                             </Button>
                           </>
                         ) : (
-                          <Button 
-                            type="submit" 
-                            variant="destructive" 
-                            size="lg" 
+                          <Button
+                            type="submit"
+                            variant="destructive"
+                            size="lg"
                             className="w-full group"
                             disabled={loading}
                           >
@@ -469,15 +462,15 @@ const RevokeRep = () => {
 
                 {/* Sidebar Stats & Recent Revocations */}
                 <div className="space-y-6">
-                  {/* Revocation Summary */}
-                  <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: '0.1s' }}>
+                  {/* Summary */}
+                  <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: "0.1s" }}>
                     <div className="flex items-center gap-3 mb-4">
                       <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500/20 to-red-600/20 flex items-center justify-center">
                         <TrendingDown className="w-4 h-4 text-red-600" />
                       </div>
                       <h3 className="font-semibold text-foreground">Revocation Summary</h3>
                     </div>
-                    
+
                     <div className="space-y-4">
                       <div className="flex items-center justify-between p-3 glass-card rounded-lg">
                         <span className="text-sm text-muted-foreground">Total Revocations</span>
@@ -511,14 +504,14 @@ const RevokeRep = () => {
                   </Card>
 
                   {/* Recent Revocations */}
-                  <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: '0.2s' }}>
+                  <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: "0.2s" }}>
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="font-semibold text-foreground">Recent Revocations</h3>
-                      <Button variant="ghost" size="sm" onClick={() => navigate('/transaction-log')}>
+                      <Button variant="ghost" size="sm" onClick={() => navigate(`/transaction-log/${cid}`)}>
                         View all
                       </Button>
                     </div>
-                    
+
                     <div className="space-y-3">
                       {recentRevocations.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
@@ -527,18 +520,17 @@ const RevokeRep = () => {
                         </div>
                       ) : (
                         recentRevocations.map((revocation) => (
-                          <div key={revocation.id} className="p-3 glass-card rounded-lg hover:shadow-md transition-all duration-200 border-l-2 border-red-500/30">
+                          <div
+                            key={revocation.id}
+                            className="p-3 glass-card rounded-lg hover:shadow-md transition-all duration-200 border-l-2 border-red-500/30"
+                          >
                             <div className="flex items-center justify-between mb-2">
-                              <span className="font-medium text-foreground text-sm">
-                                {revocation.recipientName}
-                              </span>
+                              <span className="font-medium text-foreground text-sm">{revocation.recipientName}</span>
                               <Badge variant="destructive" className="text-xs">
                                 -{revocation.amount} REP
                               </Badge>
                             </div>
-                            <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
-                              {revocation.reason}
-                            </p>
+                            <p className="text-xs text-muted-foreground mb-2 line-clamp-2">{revocation.reason}</p>
                             <div className="flex items-center justify-between">
                               <Badge variant="outline" className="text-xs border-red-500/20 text-red-600">
                                 {revocation.category}

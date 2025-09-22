@@ -1,11 +1,13 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+// src/pages/TransactionLog.tsx
+// @ts-nocheck
+import React, { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
+import { makeChildWithPlug } from "@/components/canister/child";
+
 import { useRole } from "@/contexts/RoleContext";
-import { usePlugConnection } from "@/hooks/usePlugConnection";
 import { getUserDisplayData } from "@/utils/userUtils";
-import { getOrgTransactionHistory } from "@/services/childCanisterService";
-import type { Transaction as BackendTransaction } from "@/declarations/reputation_dao/reputation_dao.did.d.ts";
+
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,29 +16,36 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { parseTransactionType, parseTransactionTypeAlternative, getTransactionTypeIcon, getTransactionTypeBgClass, convertTimestampToDate, getTransactionTypeDescription, formatTransactionAmount, extractReason, formatDateTimeForDisplay } from "@/utils/transactionUtils";
+
+import {
+  parseTransactionType, // optional if you want to keep using your helper; we compute directly below
+  convertTimestampToDate,
+  getTransactionTypeDescription,
+  formatTransactionAmount,
+  formatDateTimeForDisplay,
+} from "@/utils/transactionUtils";
+
 import {
   FileText,
   Search,
-  Filter,
   Calendar,
   Award,
   UserMinus,
-  User,
   Clock,
   Download,
   Eye,
   ExternalLink,
   TrendingUp,
   TrendingDown,
-  Activity
+  Activity,
+  AlertTriangle,
 } from "lucide-react";
 
-interface Transaction {
+type TxKind = "award" | "revoke" | "decay";
+interface TransactionUI {
   id: string;
-  type: 'award' | 'revoke' | 'decay';
+  type: TxKind;
   amount: number;
   fromUser: string;
   fromPrincipal: string;
@@ -47,185 +56,175 @@ interface Transaction {
   timestamp: Date;
   blockHeight?: number;
   transactionHash?: string;
-  status: 'completed' | 'pending' | 'failed';
+  status: "completed" | "pending" | "failed";
 }
 
-const TransactionLog = () => {
+const getTransactionIcon = (type: TxKind) => {
+  switch (type) {
+    case "award":
+      return <Award className="w-4 h-4 text-green-600" />;
+    case "revoke":
+      return <UserMinus className="w-4 h-4 text-red-600" />;
+    case "decay":
+      return <Clock className="w-4 h-4 text-orange-600" />;
+    default:
+      return <Activity className="w-4 h-4 text-blue-600" />;
+  }
+};
+
+const getTransactionTypeBgClass = (type: TxKind) => {
+  switch (type) {
+    case "award":
+      return "text-green-600 bg-green-500/10";
+    case "revoke":
+      return "text-red-600 bg-red-500/10";
+    case "decay":
+      return "text-orange-600 bg-orange-500/10";
+    default:
+      return "text-blue-600 bg-blue-500/10";
+  }
+};
+
+const TransactionLog: React.FC = () => {
   const navigate = useNavigate();
-  const { userRole, isAdmin, isAwarder } = useRole();
-  const { isConnected, principal } = usePlugConnection({ autoCheck: true });
-  
+  const { cid } = useParams<{ cid: string }>();
+  const { userRole, currentPrincipal } = useRole();
+  const userDisplay = getUserDisplayData(currentPrincipal || null);
+
+  const [child, setChild] = useState<any>(null);
+  const [connecting, setConnecting] = useState(true);
+  const [connectError, setConnectError] = useState<string | null>(null);
+
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterType, setFilterType] = useState<'all' | 'award' | 'revoke' | 'decay'>('all');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'completed' | 'pending' | 'failed'>('all');
-  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [filterType, setFilterType] = useState<"all" | TxKind>("all");
+  const [filterStatus, setFilterStatus] = useState<"all" | "completed" | "pending" | "failed">("all");
+  const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month">("all");
+  const [transactions, setTransactions] = useState<TransactionUI[]>([]);
   const [loading, setLoading] = useState(false);
 
-
-  // Load transactions from backend
+  // --- Build child actor from :cid (no plug hook / no services) ---
   useEffect(() => {
-    const loadTransactions = async () => {
-      if (!isConnected || !principal) return;
-      
+    (async () => {
+      try {
+        if (!cid) throw new Error("No organization selected.");
+        const actor = await makeChildWithPlug({ canisterId: cid, host: "https://icp-api.io" });
+        setChild(actor);
+      } catch (e: any) {
+        setConnectError(e?.message || "Failed to connect to org canister");
+      } finally {
+        setConnecting(false);
+      }
+    })();
+  }, [cid]);
+
+  // --- Load transactions from child canister ---
+  useEffect(() => {
+    const load = async () => {
+      if (!child) return;
       try {
         setLoading(true);
-        console.log('📋 Loading transactions...');
-        
-        const principalObj = Principal.fromText(principal);
-        
-        // Get all transactions for the organization
-        const userTransactions = await getOrgTransactionHistory();
-        console.log('📦 Received organization transactions:', userTransactions);
-        
-        // Debug: Log transaction type summary
-        const typeSummary = userTransactions.reduce((acc, tx) => {
-          const type = parseTransactionType(tx.transactionType);
-          acc[type] = (acc[type] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>);
-        console.log('📊 Transaction type summary:', typeSummary);
-        
-        // Debug: Log ALL transaction types in detail
-        console.log('🔍 DETAILED TRANSACTION TYPE ANALYSIS:');
-        userTransactions.forEach((tx, index) => {
-          console.log(`Transaction ${index}:`, {
-            id: tx.id,
-            transactionType: tx.transactionType,
-            transactionTypeType: typeof tx.transactionType,
-            transactionTypeKeys: tx.transactionType ? Object.keys(tx.transactionType) : 'no keys',
-            transactionTypeString: JSON.stringify(tx.transactionType),
-            parsedType: parseTransactionType(tx.transactionType),
-            amount: tx.amount,
-            from: tx.from.toString(),
-            to: tx.to.toString(),
-            reason: tx.reason
-          });
-        });
-        
-        // Debug: Log the first few transactions in detail
-        userTransactions.slice(0, 3).forEach((tx, index) => {
-          console.log(`🔍 DEBUG Transaction ${index}:`, {
-            transactionType: tx.transactionType,
-            transactionTypeType: typeof tx.transactionType,
-            transactionTypeKeys: tx.transactionType ? Object.keys(tx.transactionType) : 'no keys',
-            transactionTypeString: JSON.stringify(tx.transactionType),
-            amount: tx.amount,
-            from: tx.from.toString(),
-            to: tx.to.toString(),
-            reason: tx.reason
-          });
-        });
-        
 
-        // Convert backend transactions to UI format
-        const uiTransactions: Transaction[] = userTransactions.map((tx, index) => {
-          // Parse transaction type using enhanced parsing
-          let transactionType = parseTransactionType(tx.transactionType);
-          
-          // If primary parsing fails, try alternative method
-          if (transactionType === 'award' && tx.transactionType) {
-            const altType = parseTransactionTypeAlternative(tx.transactionType);
-            if (altType !== 'award') {
-              console.log(`🔄 Transaction ${index}: Using alternative parsing, result: ${altType}`);
-              transactionType = altType;
-            }
+        // Backend returns newest-first; be defensive anyway
+        const raw = await child.getTransactionHistory();
+        const arr = Array.isArray(raw) ? raw : [];
+
+        const toNum = (v: number | bigint) => (typeof v === "bigint" ? Number(v) : v);
+
+        const ui: TransactionUI[] = arr.map((tx: any, i: number) => {
+          let type: TxKind = "award";
+          if (tx?.transactionType) {
+            if ("Revoke" in tx.transactionType) type = "revoke";
+            else if ("Decay" in tx.transactionType) type = "decay";
+            else if ("Award" in tx.transactionType) type = "award";
           }
-          
-          console.log(`🔍 Transaction ${index}: Final type = ${transactionType}`, {
-            original: tx.transactionType,
-            parsed: transactionType,
-            keys: tx.transactionType ? Object.keys(tx.transactionType) : 'no keys',
-            reason: tx.reason,
-            reasonType: typeof tx.reason,
-            reasonLength: tx.reason.length
-          });
-          
+
+          const amount = toNum(tx.amount || 0);
+          const tsSec = toNum(tx.timestamp || 0);
+          const ts = tsSec ? new Date(tsSec * 1000) : new Date();
+
+          const fromStr = tx?.from?.toString?.() ?? "";
+          const toStr = tx?.to?.toString?.() ?? "";
+          const reason = Array.isArray(tx?.reason) ? tx.reason[0] ?? "" : tx?.reason ?? "";
+
           return {
-            id: `tx-${index}`,
-            type: transactionType,
-            amount: Number(tx.amount),
-            fromUser: `User ${tx.from.toString().slice(0, 8)}`,
-            fromPrincipal: tx.from.toString(),
-            toUser: `User ${tx.to.toString().slice(0, 8)}`,
-            toPrincipal: tx.to.toString(),
-            reason: tx.reason || "No reason provided",
-            category: "General", // Default category since backend doesn't have this
-            timestamp: convertTimestampToDate(tx.timestamp),
-            blockHeight: Math.floor(Math.random() * 1000000), // Placeholder
-            transactionHash: `0x${index.toString(16).padStart(16, '0')}...`, // Placeholder
-            status: 'completed' as const
+            id: tx?.id?.toString?.() ?? `tx-${i}`,
+            type,
+            amount,
+            fromUser: `User ${fromStr.slice(0, 8)}`,
+            fromPrincipal: fromStr,
+            toUser: `User ${toStr.slice(0, 8)}`,
+            toPrincipal: toStr,
+            reason: reason || "No reason provided",
+            category: "General",
+            timestamp: ts,
+            blockHeight: undefined, // unknown on-chain field here; keep placeholders off unless you have real data
+            transactionHash: undefined,
+            status: "completed",
           };
         });
-        
-        setTransactions(uiTransactions);
-        console.log('✅ Transactions loaded successfully');
-        
-      } catch (error) {
-        console.error('Error loading transactions:', error);
-        toast.error('Failed to load transaction history');
+
+        // Ensure newest-first
+        ui.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+        setTransactions(ui);
+      } catch (err) {
+        console.error(err);
+        setTransactions([]);
+        toast.error("Failed to load transaction history");
       } finally {
         setLoading(false);
       }
     };
+    load();
+  }, [child]);
 
-    loadTransactions();
-  }, [isConnected, principal]);
-
-  // Transaction stats derived from loaded data
+  // --- Derived stats ---
   const stats = {
     totalTransactions: transactions.length,
-    totalRepAwarded: transactions
-      .filter(tx => tx.type === 'award')
-      .reduce((sum, tx) => sum + tx.amount, 0),
-    totalRepRevoked: transactions
-      .filter(tx => tx.type === 'revoke')
-      .reduce((sum, tx) => sum + tx.amount, 0),
-    pendingTransactions: transactions.filter(tx => tx.status === 'pending').length
+    totalRepAwarded: transactions.filter((t) => t.type === "award").reduce((s, t) => s + t.amount, 0),
+    totalRepRevoked: transactions.filter((t) => t.type === "revoke").reduce((s, t) => s + t.amount, 0),
+    pendingTransactions: transactions.filter((t) => t.status === "pending").length, // placeholder: all completed in mapping
   };
 
-  const handleDisconnect = () => {
-    navigate('/auth');
-  };
+  const handleDisconnect = () => navigate("/auth");
 
-  const filterTransactions = () => {
-    let filtered = transactions;
+  // --- Filtering ---
+  const filteredTransactions = React.useMemo(() => {
+    let filtered = [...transactions];
 
-    // Filter by search query
     if (searchQuery) {
-      filtered = filtered.filter(tx => 
-        tx.toUser.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        tx.fromUser.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        tx.reason.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        tx.toPrincipal.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        tx.fromPrincipal.toLowerCase().includes(searchQuery.toLowerCase())
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (tx) =>
+          tx.toUser.toLowerCase().includes(q) ||
+          tx.fromUser.toLowerCase().includes(q) ||
+          tx.reason.toLowerCase().includes(q) ||
+          tx.toPrincipal.toLowerCase().includes(q) ||
+          tx.fromPrincipal.toLowerCase().includes(q) ||
+          tx.id.toLowerCase().includes(q)
       );
     }
 
-    // Filter by type
-    if (filterType !== 'all') {
-      filtered = filtered.filter(tx => tx.type === filterType);
+    if (filterType !== "all") {
+      filtered = filtered.filter((tx) => tx.type === filterType);
     }
 
-    // Filter by stats
-    if (filterStatus !== 'all') {
-      filtered = filtered.filter(tx => tx.status === filterStatus);
+    if (filterStatus !== "all") {
+      filtered = filtered.filter((tx) => tx.status === filterStatus);
     }
 
-    // Filter by date
-    if (dateFilter !== 'all') {
+    if (dateFilter !== "all") {
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
       const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-      filtered = filtered.filter(tx => {
+      filtered = filtered.filter((tx) => {
         switch (dateFilter) {
-          case 'today':
+          case "today":
             return tx.timestamp >= today;
-          case 'week':
+          case "week":
             return tx.timestamp >= weekAgo;
-          case 'month':
+          case "month":
             return tx.timestamp >= monthAgo;
           default:
             return true;
@@ -234,46 +233,43 @@ const TransactionLog = () => {
     }
 
     return filtered.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-  };
+  }, [transactions, searchQuery, filterType, filterStatus, dateFilter]);
 
-  const getTransactionIcon = (type: string) => {
-    switch (type) {
-      case 'award':
-        return <Award className="w-4 h-4 text-green-600" />;
-      case 'revoke':
-        return <UserMinus className="w-4 h-4 text-red-600" />;
-      case 'decay':
-        return <Clock className="w-4 h-4 text-orange-600" />;
-      default:
-        return <Activity className="w-4 h-4 text-blue-600" />;
-    }
-  };
+  // --- Connect-state UI ---
+  if (connecting) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <div className="text-sm text-muted-foreground">Connecting to organization…</div>
+      </div>
+    );
+  }
 
-  const getTransactionColor = (type: string) => {
-    switch (type) {
-      case 'award':
-        return 'text-green-600 bg-green-500/10';
-      case 'revoke':
-        return 'text-red-600 bg-red-500/10';
-      case 'decay':
-        return 'text-orange-600 bg-orange-500/10';
-      default:
-        return 'text-blue-600 bg-blue-500/10';
-    }
-  };
-
-  const filteredTransactions = filterTransactions();
+  if (!cid || connectError) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <Card className="glass-card p-6">
+          <AlertTriangle className="w-6 h-6 text-orange-500 mb-2" />
+          <p className="text-sm text-muted-foreground">{connectError || "No organization selected."}</p>
+          <div className="mt-3">
+            <Button onClick={() => navigate("/org-selector")} variant="outline">
+              Choose Org
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
-        <DashboardSidebar 
-          userRole={userRole.toLowerCase() as 'admin' | 'awarder' | 'member'}
-          userName={getUserDisplayData(principal).userName}
-          userPrincipal={getUserDisplayData(principal).userPrincipal}
+        <DashboardSidebar
+          userRole={userRole?.toLowerCase() as "admin" | "awarder" | "member"}
+          userName={userDisplay.userName}
+          userPrincipal={userDisplay.userPrincipal}
           onDisconnect={handleDisconnect}
         />
-        
+
         <div className="flex-1">
           {/* Header */}
           <header className="h-16 border-b border-border/40 flex items-center justify-between px-6 glass-header">
@@ -284,12 +280,16 @@ const TransactionLog = () => {
               </div>
               <div>
                 <h1 className="text-lg font-semibold text-foreground">Transaction Log</h1>
-                <p className="text-xs text-muted-foreground">View all reputation transactions and activity</p>
+                <p className="text-xs text-muted-foreground">Org: {cid}</p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-2">
-              <Button variant="outline" className="group">
+              <Button
+                variant="outline"
+                className="group"
+                onClick={() => toast.info("CSV export not wired to backend in this view")}
+              >
                 <Download className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
                 Export CSV
               </Button>
@@ -297,10 +297,10 @@ const TransactionLog = () => {
             </div>
           </header>
 
-          {/* Main Content */}
+          {/* Main */}
           <main className="p-6">
             <div className="max-w-7xl mx-auto space-y-6">
-              {/* Stats Cards */}
+              {/* Stats */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Card className="glass-card p-4 animate-fade-in">
                   <div className="flex items-center justify-between">
@@ -311,8 +311,8 @@ const TransactionLog = () => {
                     <Activity className="w-8 h-8 text-primary" />
                   </div>
                 </Card>
-                
-                <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: '0.1s' }}>
+
+                <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.1s" }}>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-muted-foreground">REP Awarded</p>
@@ -321,8 +321,8 @@ const TransactionLog = () => {
                     <TrendingUp className="w-8 h-8 text-green-500" />
                   </div>
                 </Card>
-                
-                <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: '0.2s' }}>
+
+                <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.2s" }}>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-muted-foreground">REP Revoked</p>
@@ -331,8 +331,8 @@ const TransactionLog = () => {
                     <TrendingDown className="w-8 h-8 text-red-500" />
                   </div>
                 </Card>
-                
-                <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: '0.3s' }}>
+
+                <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.3s" }}>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-muted-foreground">Today's Activity</p>
@@ -344,7 +344,7 @@ const TransactionLog = () => {
               </div>
 
               {/* Filters */}
-              <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: '0.4s' }}>
+              <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.4s" }}>
                 <div className="flex flex-col lg:flex-row gap-4">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -355,9 +355,9 @@ const TransactionLog = () => {
                       className="pl-10 glass-input"
                     />
                   </div>
-                  
+
                   <div className="flex gap-2">
-                    <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
+                    <Select value={filterType} onValueChange={(v: any) => setFilterType(v)}>
                       <SelectTrigger className="w-32 glass-input">
                         <SelectValue placeholder="Type" />
                       </SelectTrigger>
@@ -368,8 +368,8 @@ const TransactionLog = () => {
                         <SelectItem value="decay">Decay</SelectItem>
                       </SelectContent>
                     </Select>
-                    
-                    <Select value={filterStatus} onValueChange={(value: any) => setFilterStatus(value)}>
+
+                    <Select value={filterStatus} onValueChange={(v: any) => setFilterStatus(v)}>
                       <SelectTrigger className="w-32 glass-input">
                         <SelectValue placeholder="Status" />
                       </SelectTrigger>
@@ -380,8 +380,8 @@ const TransactionLog = () => {
                         <SelectItem value="failed">Failed</SelectItem>
                       </SelectContent>
                     </Select>
-                    
-                    <Select value={dateFilter} onValueChange={(value: any) => setDateFilter(value)}>
+
+                    <Select value={dateFilter} onValueChange={(v: any) => setDateFilter(v)}>
                       <SelectTrigger className="w-32 glass-input">
                         <SelectValue placeholder="Date" />
                       </SelectTrigger>
@@ -396,88 +396,93 @@ const TransactionLog = () => {
                 </div>
               </Card>
 
-              {/* Transactions List */}
-              <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: '0.5s' }}>
+              {/* Transactions */}
+              <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: "0.5s" }}>
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-lg font-semibold text-foreground">Transaction History</h2>
                   <Badge variant="secondary" className="font-mono">
                     {filteredTransactions.length} transactions
                   </Badge>
                 </div>
-                
+
                 <div className="space-y-3">
-                  {filteredTransactions.length === 0 ? (
+                  {loading ? (
+                    <div className="text-center py-12 text-muted-foreground">Loading…</div>
+                  ) : filteredTransactions.length === 0 ? (
                     <div className="text-center py-12 text-muted-foreground">
                       <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
                       <p className="text-lg font-medium mb-2">No transactions found</p>
-                      <p className="text-sm">Try adjusting your search or filter criteria</p>
+                      <p className="text-sm">Try adjusting your search or filters</p>
                     </div>
                   ) : (
-                    filteredTransactions.map((transaction, index) => (
-                      <div 
-                        key={transaction.id}
+                    filteredTransactions.map((tx, idx) => (
+                      <div
+                        key={tx.id}
                         className="flex items-center justify-between p-4 glass-card rounded-lg hover:shadow-md transition-all duration-200 animate-fade-in"
-                        style={{ animationDelay: `${0.6 + index * 0.05}s` }}
+                        style={{ animationDelay: `${0.6 + idx * 0.05}s` }}
                       >
                         <div className="flex items-center gap-4">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${getTransactionTypeBgClass(transaction.type)}`}>
-                            {getTransactionIcon(transaction.type)}
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${getTransactionTypeBgClass(tx.type)}`}>
+                            {getTransactionIcon(tx.type)}
                           </div>
-                          
+
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
                               <span className="font-medium text-foreground text-lg">
-                                {formatTransactionAmount(transaction.type, transaction.amount)} REP
+                                {formatTransactionAmount(tx.type, tx.amount)} REP
                               </span>
                               <Badge variant="outline" className="text-xs capitalize">
-                                {getTransactionTypeDescription(transaction.type)}
+                                {getTransactionTypeDescription(tx.type)}
                               </Badge>
-                              <Badge 
-                                variant={transaction.status === 'completed' ? 'default' : 
-                                        transaction.status === 'pending' ? 'secondary' : 'destructive'}
+                              <Badge
+                                variant={
+                                  tx.status === "completed"
+                                    ? "default"
+                                    : tx.status === "pending"
+                                    ? "secondary"
+                                    : "destructive"
+                                }
                                 className="text-xs"
                               >
-                                {transaction.status}
+                                {tx.status}
                               </Badge>
                             </div>
-                            
+
                             <div className="mb-2">
                               <p className="text-sm text-muted-foreground mb-1">
-                                <span className="font-medium">{transaction.fromUser}</span>
-                                {' → '}
-                                <span className="font-medium">{transaction.toUser}</span>
+                                <span className="font-medium">{tx.fromUser}</span>
+                                {" → "}
+                                <span className="font-medium">{tx.toUser}</span>
                               </p>
-                              
+
                               <div className="bg-muted/30 rounded-lg p-3 mb-2">
                                 <p className="text-sm font-medium text-foreground mb-1">Reason:</p>
-                                <p className="text-sm text-muted-foreground break-words">
-                                  {transaction.reason}
-                                </p>
+                                <p className="text-sm text-muted-foreground break-words">{tx.reason}</p>
                               </div>
                             </div>
-                            
+
                             <div className="flex items-center gap-4 text-xs text-muted-foreground">
                               <div className="flex items-center gap-1">
                                 <Calendar className="w-3 h-3" />
-                                {formatDateTimeForDisplay(transaction.timestamp)}
+                                {formatDateTimeForDisplay(tx.timestamp)}
                               </div>
-                              {transaction.category && (
+                              {tx.category && (
                                 <Badge variant="outline" className="text-xs">
-                                  {transaction.category}
+                                  {tx.category}
                                 </Badge>
                               )}
                             </div>
                           </div>
                         </div>
-                        
+
                         <div className="flex items-center gap-2">
-                          {transaction.blockHeight && (
+                          {tx.blockHeight && (
                             <Button variant="ghost" size="sm" className="text-xs">
                               <Eye className="w-3 h-3 mr-1" />
-                              Block {transaction.blockHeight}
+                              Block {tx.blockHeight}
                             </Button>
                           )}
-                          {transaction.transactionHash && (
+                          {tx.transactionHash && (
                             <Button variant="ghost" size="sm" className="text-xs">
                               <ExternalLink className="w-3 h-3 mr-1" />
                               View Hash
