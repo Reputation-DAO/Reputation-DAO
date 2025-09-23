@@ -80,6 +80,12 @@ export function DashboardSidebar({ userRole, userName, userPrincipal, onDisconne
 
   const cid = useMemo(() => extractCidFromPath(location.pathname), [location.pathname]);
 
+  const safeRole: SidebarProps['userRole'] = (['admin', 'awarder', 'member'] as const).includes(
+    userRole
+  )
+    ? userRole
+    : 'member';
+
   // Build a full path for a given item using the current cid
   const makePath = (slug: string) => (cid ? `/dashboard/${slug}/${cid}` : `/dashboard/${slug}`);
 
@@ -88,9 +94,9 @@ export function DashboardSidebar({ userRole, userName, userPrincipal, onDisconne
     return location.pathname.startsWith(full);
   };
 
-  const filteredMainItems = mainNavItems.filter(item => item.roles.includes(userRole));
-  const filteredSupportItems = supportItems.filter(item => item.roles.includes(userRole));
-  const filteredSettingsItems = settingsItems.filter(item => item.roles.includes(userRole));
+  const filteredMainItems = mainNavItems.filter(item => item.roles.includes(safeRole));
+  const filteredSupportItems = supportItems.filter(item => item.roles.includes(safeRole));
+  const filteredSettingsItems = settingsItems.filter(item => item.roles.includes(safeRole));
 
   const collapsed = state === 'collapsed';
 
@@ -127,7 +133,7 @@ export function DashboardSidebar({ userRole, userName, userPrincipal, onDisconne
                   <p className="text-slate-900 dark:text-slate-100 truncate text-sm font-medium">
                     {userName || (userPrincipal ? `${userPrincipal.slice(0, 8)}...${userPrincipal.slice(-4)}` : 'Unknown User')}
                   </p>
-                  <p className="text-slate-500 dark:text-slate-400 text-xs capitalize">{userRole}</p>
+                  <p className="text-slate-500 dark:text-slate-400 text-xs capitalize">{safeRole}</p>
                 </div>
               </motion.div>
             )}
@@ -282,8 +288,8 @@ export function DashboardSidebar({ userRole, userName, userPrincipal, onDisconne
                   <p className="text-sm font-medium text-foreground truncate">{userName || 'Unknown User'}</p>
                   <div className="flex items-center gap-1">
                     <Badge variant="secondary" className="flex items-center gap-1 text-xs">
-                      <RoleIcon role={userRole} />
-                      {userRole}
+                  <RoleIcon role={safeRole} />
+                  {safeRole}
                     </Badge>
                   </div>
                 </div>

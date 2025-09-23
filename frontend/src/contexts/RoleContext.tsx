@@ -199,6 +199,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
 
           if (resolvedAdmin) finalRole = 'admin';
           else if (resolvedAwarder) finalRole = 'awarder';
+          else finalRole = 'member';
 
           try {
             localStorage.setItem('selectedOrgId', cid);
@@ -249,7 +250,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     userName,
     isAdmin: userRole === 'admin',
     isAwarder: userRole === 'awarder',
-    isUser: userRole === 'user',
+    isUser: userRole === 'user' || userRole === 'member',
     loading,
     error,
     refreshRole: determineUserRole,

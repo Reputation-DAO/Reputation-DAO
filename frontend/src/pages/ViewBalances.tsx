@@ -73,8 +73,11 @@ const ViewBalances: React.FC = () => {
   const navigate = useNavigate();
   const { cid } = useParams<{ cid: string }>();
 
-  const { userRole, currentPrincipal } = useRole();
+  const { userRole, currentPrincipal, userName: roleUserName, loading: roleLoading } = useRole();
   const userDisplay = getUserDisplayData(currentPrincipal || null);
+  const principalText = currentPrincipal?.toString() || userDisplay.userPrincipal;
+  const sidebarUserName = roleUserName || (principalText ? `User ${principalText.slice(0, 8)}` : '');
+  const sidebarPrincipal = principalText;
 
   // child canister connection
   const [child, setChild] = useState<any>(null);
@@ -287,13 +290,28 @@ const ViewBalances: React.FC = () => {
     );
   }
 
+  if (roleLoading) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <div className="inline-flex items-center gap-2 text-muted-foreground text-sm">
+          <div className="w-4 h-4 border-2 border-primary border-r-transparent rounded-full animate-spin" />
+          Determining access…
+        </div>
+      </div>
+    );
+  }
+
   // === Same fixed-sidebar alignment pattern as before ===
   return (
     <SidebarProvider>
       <InnerViewBalances
         cid={cid}
         userRole={userRole}
-        userDisplay={userDisplay}
+        userDisplay={{
+          userName: sidebarUserName,
+          userPrincipal: sidebarPrincipal,
+          displayName: userDisplay.displayName,
+        }}
         handleDisconnect={handleDisconnect}
         stats={stats}
         filteredBalances={filteredBalances}
@@ -339,11 +357,18 @@ function InnerViewBalances(props: any) {
   // Read sidebar state and shift content (collapsed: 72px, expanded: 280px)
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
+  const normalizedRole = (userRole || "").toLowerCase();
+  const sidebarRole: "admin" | "awarder" | "member" =
+    normalizedRole === "admin"
+      ? "admin"
+      : normalizedRole === "awarder"
+      ? "awarder"
+      : "member";
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
       <DashboardSidebar
-        userRole={userRole ? (userRole.toLowerCase() as "admin" | "awarder" | "member") : "member"}
+        userRole={sidebarRole}
         userName={userDisplay.userName}
         userPrincipal={userDisplay.userPrincipal}
         onDisconnect={handleDisconnect}
