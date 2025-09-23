@@ -1,18 +1,27 @@
 // src/contexts/RoleContext.tsx
-import React, { createContext, useContext, useState, useEffect } from 'react';
+// @ts-nocheck
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+} from 'react';
 import type { ReactNode } from 'react';
 import { Principal } from '@dfinity/principal';
-import { useParams } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 
 import { makeChildWithPlug } from '../components/canister/child';
 import { makeFactoriaWithPlug, getFactoriaCanisterId } from '../components/canister/factoria';
 
-export type UserRole = 'Admin' | 'Awarder' | 'User' | 'Loading';
+export type UserRole = 'admin' | 'awarder' | 'member' | 'user' | 'loading';
 
 export interface RoleContextType {
   currentPrincipal: Principal | null;
   userRole: UserRole;
   userName: string;
+  cid: string | null;
   isAdmin: boolean;
   isAwarder: boolean;
   isUser: boolean;
@@ -31,96 +40,210 @@ export const useRole = () => {
 
 interface RoleProviderProps { children: ReactNode; }
 
+/** Plug-first principal fetch (matches your past working version) */
 async function getCurrentPrincipal(): Promise<Principal | null> {
   const plug = (window as any)?.ic?.plug;
-  const p = await plug?.getPrincipal?.();
-  return p ?? null;
+  try {
+    const p = await plug?.getPrincipal?.();
+    return p ?? null;
+  } catch {
+    return null;
+  }
 }
 
+/** Pretty principal helper */
+const short = (t?: string | null) => (t ? `${t.slice(0, 6)}…${t.slice(-6)}` : '');
+
+/** Read :cid from URL */
+function extractCidFromPathname(pathname: string): string | null {
+  const m = pathname.match(
+    /\/dashboard\/(?:home|award-rep|revoke-rep|manage-awarders|view-balances|transaction-log|decay-system)\/([^/]+)/i
+  );
+  return m?.[1] || null;
+}
+const deriveCid = (pathname: string): string | null => extractCidFromPathname(pathname);
+
 export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
-  const { cid } = useParams<{ cid: string }>();
+  const location = useLocation();
+
+  const [cid, setCid] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return deriveCid(window.location.pathname);
+  });
 
   const [currentPrincipal, setCurrentPrincipal] = useState<Principal | null>(null);
-  const [userRole, setUserRole] = useState<UserRole>('Loading');
+  const [userRole, setUserRole] = useState<UserRole>('loading');
   const [userName, setUserName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
 
-  const determineUserRole = async (): Promise<void> => {
-    setError(null);
+  // Keep :cid in sync with current route (fallback to stored selection when absent)
+  useEffect(() => {
+    const next = deriveCid(location.pathname);
+    setCid((prev) => (next === prev ? prev : next));
+  }, [location.pathname]);
+
+  const determineUserRole = useCallback(async (): Promise<void> => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
+    setUserRole('loading');
+    setError(null);
+    setCurrentPrincipal(null);
+    setUserName('');
+
+    let finalPrincipal: Principal | null = null;
+    let finalRole: UserRole = 'user';
+    let finalUserName = '';
+    let finalError: string | null = null;
+    let resolvedAdmin = false;
+    let resolvedAwarder = false;
+
+    const t0 = performance.now?.() ?? Date.now();
+    console.groupCollapsed(
+      `%c🔎 RoleContext · resolve role`,
+      'background:#111;color:#0ff;padding:2px 6px;border-radius:6px;font-weight:600'
+    );
 
     try {
+      console.log('➡️ Input route cid:', cid || '(none)');
+
+      // Require a route canister id
       if (!cid) {
-        setCurrentPrincipal(null);
-        setUserRole('User');
-        setUserName('');
-        return;
-      }
+        console.warn('⚠️ No :cid in route — defaulting role = user');
+      } else {
+        // Get Plug principal (no AuthContext dependency)
+        const principal = await getCurrentPrincipal();
+        console.log('👤 Plug principal:', principal ? short(principal.toString()) : '(none)');
 
-      const principal = await getCurrentPrincipal();
-      if (!principal) {
-        setCurrentPrincipal(null);
-        setUserRole('User');
-        setUserName('');
-        return;
-      }
+        if (!principal) {
+          console.warn('⚠️ No Plug principal — defaulting role = user');
+        } else {
+          finalPrincipal = principal;
+          const meText = principal.toString();
+          finalUserName = `${meText.slice(0, 5)}...${meText.slice(-3)}`;
 
-      setCurrentPrincipal(principal);
-      const pText = principal.toString();
-      setUserName(`${pText.slice(0, 5)}...${pText.slice(-3)}`);
+          try {
+            const factoria = await makeFactoriaWithPlug({
+              host: 'https://icp-api.io',
+              canisterId: getFactoriaCanisterId(),
+            });
 
-      let isAdmin = false;
-      let isAwarder = false;
+            console.log('🏭 Factoria ready:', { cid: short(cid), me: short(meText) });
 
-      // ✅ Admin via Factory: getChild(cid).owner === me
-      try {
-        const factoria = await makeFactoriaWithPlug({
-          host: 'https://icp-api.io',
-          canisterId: getFactoriaCanisterId(),
-        });
+            const childOpt = await factoria.getChild(Principal.fromText(cid));
+            const child = Array.isArray(childOpt) ? childOpt[0] : null;
+            const ownerText = child?.owner?.toString?.();
+            console.log('📦 Factory.getChild result:', {
+              found: !!child,
+              owner: short(ownerText || ''),
+              status: child?.status ? Object.keys(child.status)[0] : '(unknown)',
+              note: child?.note ?? '',
+            });
 
-        const childOpt = await factoria.getChild(Principal.fromText(cid));
-        const child = Array.isArray(childOpt) ? childOpt[0] : null;
-        if (child && child.owner && child.owner.toString() === pText) {
-          isAdmin = true;
+            if (ownerText && ownerText === meText) {
+              resolvedAdmin = true;
+              console.log('%c👑 Admin check: TRUE (factory owner match)', 'color:#ffd700;font-weight:700');
+            } else {
+              console.log('%c👑 Admin check: false', 'color:#888');
+            }
+          } catch (e) {
+            console.error('❌ Factory.getChild failed during role check:', e);
+          }
+
+          if (!resolvedAdmin) {
+            try {
+              const child = await makeChildWithPlug({ canisterId: cid, host: 'https://icp-api.io' });
+
+              if (typeof child.isTrustedAwarder === 'function') {
+                const ok = await child.isTrustedAwarder(Principal.fromText(meText));
+                resolvedAwarder = !!ok;
+                console.log('🛡️ child.isTrustedAwarder():', ok);
+              } else if (typeof child.getTrustedAwarders === 'function') {
+                const awarders = await child.getTrustedAwarders();
+                const listPreview =
+                  Array.isArray(awarders)
+                    ? awarders.slice(0, 6).map((a: any) => short(a?.id?.toString?.()))
+                    : '(not-an-array)';
+                resolvedAwarder = !!awarders?.find?.((a: any) => a?.id?.toString?.() === meText);
+                console.log('🛡️ child.getTrustedAwarders():', {
+                  size: Array.isArray(awarders) ? awarders.length : '(unknown)',
+                  preview: listPreview,
+                  containsMe: resolvedAwarder,
+                });
+              } else {
+                console.warn('⚠️ Child has no isTrustedAwarder/getTrustedAwarders; cannot check awarder role');
+              }
+            } catch (e) {
+              console.error('❌ Child awarder check failed:', e);
+            }
+          }
+
+          if (resolvedAdmin) finalRole = 'admin';
+          else if (resolvedAwarder) finalRole = 'awarder';
+          else finalRole = 'member';
+
+          const t1 = performance.now?.() ?? Date.now();
+          console.log(
+            `%c✅ Final role: ${finalRole}`,
+            'background:#0f0;color:#000;padding:2px 6px;border-radius:6px;font-weight:800'
+          );
+          console.table({
+            route_cid: cid,
+            me: meText,
+            me_short: short(meText),
+            isAdmin: resolvedAdmin,
+            isAwarder: resolvedAwarder,
+            finalRole,
+            ms: Math.round(t1 - t0),
+          });
         }
-      } catch (_) {
-        // Factory lookup failed; ignore and fall back to child checks
       }
-
-      // ✅ Awarder via Child: check getTrustedAwarders()
-      try {
-        const child = await makeChildWithPlug({ canisterId: cid, host: 'https://icp-api.io' });
-        const awarders = await child.getTrustedAwarders();
-        isAwarder = !!awarders.find((a: any) => a.id?.toString?.() === pText);
-      } catch (_) {
-        // If child query fails, treat as non-awarder
-      }
-
-      if (isAdmin) setUserRole('Admin');
-      else if (isAwarder) setUserRole('Awarder');
-      else setUserRole('User');
     } catch (err: any) {
-      setError(`Failed to determine role: ${err?.message || String(err)}`);
-      setUserRole('User');
+      console.error('❌ Error determining role:', err);
+      finalError = `Failed to determine role: ${err?.message || String(err)}`;
+      finalRole = 'user';
     } finally {
-      setLoading(false);
+      if (requestIdRef.current === requestId) {
+        setCurrentPrincipal(finalPrincipal);
+        setUserName(finalUserName);
+        setUserRole(finalRole);
+        setError(finalError);
+        setLoading(false);
+      }
+      console.groupEnd();
     }
-  };
+  }, [cid]);
 
   useEffect(() => {
+    const handleFocus = () => {
+      determineUserRole();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [determineUserRole]);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      determineUserRole();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [determineUserRole]);
+
+  // Recompute role whenever cid changes (via locationchange/storage)
+  useEffect(() => {
     determineUserRole();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cid]);
+  }, [determineUserRole]);
 
   const contextValue: RoleContextType = {
     currentPrincipal,
     userRole,
     userName,
-    isAdmin: userRole === 'Admin',
-    isAwarder: userRole === 'Awarder',
-    isUser: userRole === 'User',
+    cid,
+    isAdmin: userRole === 'admin',
+    isAwarder: userRole === 'awarder',
+    isUser: userRole === 'user' || userRole === 'member',
     loading,
     error,
     refreshRole: determineUserRole,

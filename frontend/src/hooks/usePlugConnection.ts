@@ -1,48 +1,41 @@
-// src/hooks/usePlugConnection.ts
 import { useState, useEffect } from 'react';
+import { isPlugConnected, ensurePlugAgent, getPlugPrincipal, disconnectPlug, PLUG_HOST } from '../utils/plug';
+import { useRoute } from '../contexts/RouteContext';
 
-type ConnectOpts = {
-  host?: string;                // default icp-api.io
-  whitelist?: string[];         // optional canister whitelist
-  canisterId?: string;          // convenience to build a single-item whitelist
-};
+interface UsePlugConnectionOptions {
+  autoCheck?: boolean; // Whether to automatically check connection on mount
+}
 
-export const usePlugConnection = () => {
+export const usePlugConnection = (options: UsePlugConnectionOptions = {}) => {
+  const { autoCheck = false } = options;
+  const { isPlugAllowed, currentRoute } = useRoute();
   const [isConnected, setIsConnected] = useState(false);
   const [principal, setPrincipal] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const readPrincipal = async (): Promise<string | null> => {
-    const plug = (window as any)?.ic?.plug;
-    try {
-      const p = await plug?.agent?.getPrincipal?.();
-      return p?.toString?.() ?? null;
-    } catch {
-      return null;
-    }
-  };
+  const [isLoading, setIsLoading] = useState(autoCheck && isPlugAllowed); // Only true initially if autoCheck is enabled AND route allows Plug
 
   const checkConnection = async () => {
+    // Block Plug access on restricted routes
+    if (!isPlugAllowed) {
+      console.log(`🚫 Plug access blocked on route: ${currentRoute}`);
+      setIsConnected(false);
+      setPrincipal(null);
+      setIsLoading(false);
+      return;
+    }
+
     try {
       setIsLoading(true);
-      const plug = (window as any)?.ic?.plug;
-
-      if (!plug) {
-        setIsConnected(false);
-        setPrincipal(null);
-        return;
-      }
-
-      let connected = false;
-      try {
-        connected = (await plug.isConnected?.()) ?? Boolean(plug.agent);
-      } catch {
-        connected = Boolean(plug.agent);
-      }
+      const connected = await isPlugConnected();
       setIsConnected(connected);
-
+      
       if (connected) {
-        setPrincipal(await readPrincipal());
+        try {
+          const currentPrincipal = await getPlugPrincipal();
+          setPrincipal(currentPrincipal?.toString() || null);
+        } catch (error) {
+          console.error('Error getting principal:', error);
+          setPrincipal(null);
+        }
       } else {
         setPrincipal(null);
       }
@@ -55,38 +48,31 @@ export const usePlugConnection = () => {
     }
   };
 
+  // REMOVED: useEffect that automatically checks connection on mount
+  // This was causing Plug to initialize on every page
+  
+  // Only auto-check if explicitly requested (for authenticated pages) AND route allows Plug
   useEffect(() => {
-    checkConnection();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const connect = async (opts?: ConnectOpts) => {
-    const plug = (window as any)?.ic?.plug;
-    if (!plug) {
-      throw new Error('Plug extension not found. Please install/enable Plug.');
+    if (autoCheck && isPlugAllowed) {
+      checkConnection();
+    } else if (!isPlugAllowed) {
+      // Reset state when route doesn't allow Plug
+      setIsConnected(false);
+      setPrincipal(null);
+      setIsLoading(false);
     }
+  }, [autoCheck, isPlugAllowed, currentRoute]);
 
-    const host = opts?.host ?? 'https://icp-api.io';
-    const whitelist =
-      opts?.whitelist ??
-      (opts?.canisterId ? [opts.canisterId] : undefined);
+  const connect = async () => {
+    // Block Plug connection on restricted routes
+    if (!isPlugAllowed) {
+      console.log(`🚫 Plug connection blocked on route: ${currentRoute}`);
+      throw new Error('Plug connection not allowed on this route');
+    }
 
     try {
       setIsLoading(true);
-
-      // Ensure connected
-      const connected = await plug.isConnected?.();
-      if (!connected) {
-        const ok = await plug.requestConnect?.({ host, whitelist });
-        if (!ok) throw new Error('User rejected Plug connection.');
-      }
-
-      // Ensure agent exists
-      if (!plug.agent) {
-        await plug.createAgent?.({ host, whitelist });
-      }
-
-      // Update state
+      await ensurePlugAgent({ host: PLUG_HOST });
       await checkConnection();
     } catch (error) {
       console.error('Connection failed:', error);
@@ -97,16 +83,10 @@ export const usePlugConnection = () => {
   };
 
   const disconnect = async () => {
+    // Allow disconnect on any route
     try {
       setIsLoading(true);
-      const plug = (window as any)?.ic?.plug;
-
-      // Some Plug builds expose disconnect(); call it if present (typed as any to avoid TS errors)
-      if (plug && typeof plug.disconnect === 'function') {
-        await plug.disconnect();
-      }
-
-      // Reset local state regardless
+      await disconnectPlug();
       setIsConnected(false);
       setPrincipal(null);
     } catch (error) {
@@ -122,6 +102,6 @@ export const usePlugConnection = () => {
     isLoading,
     connect,
     disconnect,
-    checkConnection,
+    checkConnection // Export checkConnection so components can manually check when needed
   };
 };

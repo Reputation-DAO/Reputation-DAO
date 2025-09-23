@@ -1,32 +1,51 @@
+// src/pages/ViewBalances.tsx
 // @ts-nocheck
-import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import ProtectedPage from '../components/layout/ProtectedPage';
-import { Principal } from '@dfinity/principal';
+import React, { useState, useEffect, useMemo } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { Principal } from "@dfinity/principal";
+
+import { makeChildWithPlug } from "@/components/canister/child";
+
+import { useRole } from "@/contexts/RoleContext";
+import { getUserDisplayData } from "@/utils/userUtils";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
+import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "sonner";
 import {
-  Box,
-  Typography,
-  Alert,
-  Snackbar,
-  Chip,
-} from '@mui/material';
-import { AccountBalanceWallet } from '@mui/icons-material';
-
-import { makeChildWithPlug } from '../components/canister/child';
-
-import UserBalanceSearchCard from '../components/Dashboard/ViewBalances/BalanceCard';
-import OverviewCard from '../components/Dashboard/ViewBalances/statscard';
-import TopUsersCard from '../components/Dashboard/ViewBalances/TopUser';
+  Wallet,
+  Search,
+  TrendingUp,
+  TrendingDown,
+  Users,
+  Crown,
+  Shield,
+  User,
+  Star,
+  Calendar,
+  BarChart3,
+  ArrowUpRight,
+  ArrowDownRight,
+  Filter
+} from "lucide-react";
 
 interface UserBalance {
   id: string;
-  address: string;
   name: string;
+  principal: string;
+  role: 'admin' | 'awarder' | 'member';
   reputation: number;
+  reputationChange: number;
+  lastActivity: Date;
+  joinDate: Date;
+  totalAwarded: number;
+  totalRevoked: number;
   rank: number;
-  change: string;
-  lastActivity: string;
-  status: 'active' | 'inactive';
 }
 
 interface BackendTransaction {
@@ -39,209 +58,689 @@ interface BackendTransaction {
   reason: [] | [string];
 }
 
+const RoleIcon = ({ role }: { role: string }) => {
+  switch (role) {
+    case 'admin':
+      return <Crown className="w-4 h-4 text-yellow-500" />;
+    case 'awarder':
+      return <Shield className="w-4 h-4 text-blue-500" />;
+    default:
+      return <User className="w-4 h-4 text-green-500" />;
+  }
+};
+
 const ViewBalances: React.FC = () => {
+  const navigate = useNavigate();
   const { cid } = useParams<{ cid: string }>();
 
-  const searchTerm = '';
-  const [child, setChild] = useState<any>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [userBalances, setUserBalances] = useState<UserBalance[]>([]);
-  const [snackbar, setSnackbar] = useState<{
-    open: boolean;
-    message: string;
-    severity: 'success' | 'error' | 'warning' | 'info';
-  }>({ open: false, message: '', severity: 'success' });
+  const { userRole, currentPrincipal, userName: roleUserName, loading: roleLoading } = useRole();
+  const userDisplay = getUserDisplayData(currentPrincipal || null);
+  const principalText = currentPrincipal?.toString() || userDisplay.userPrincipal;
+  const sidebarUserName = roleUserName || (principalText ? `User ${principalText.slice(0, 8)}` : '');
+  const sidebarPrincipal = principalText;
 
-  // build child actor from :cid
+  // child canister connection
+  const [child, setChild] = useState<any>(null);
+  const [connecting, setConnecting] = useState(true);
+  const [connectError, setConnectError] = useState<string | null>(null);
+
+  // UI state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [balanceSearchQuery, setBalanceSearchQuery] = useState("");
+  const [searchedBalance, setSearchedBalance] = useState<{ principal: string; balance: number } | null>(null);
+  const [sortBy, setSortBy] = useState<'reputation' | 'name' | 'recent'>('reputation');
+  const [loading, setLoading] = useState(false);
+  const [balanceSearchLoading, setBalanceSearchLoading] = useState(false);
+
+  // computed balances
+  const [userBalances, setUserBalances] = useState<UserBalance[]>([]);
+
+  // connect child actor from :cid
   useEffect(() => {
     (async () => {
       try {
-        if (!cid) throw new Error('Missing :cid in route');
-        const actor = await makeChildWithPlug({ canisterId: cid, host: 'https://icp-api.io' });
+        if (!cid) throw new Error("No organization selected.");
+        const actor = await makeChildWithPlug({ canisterId: cid, host: "https://icp-api.io" });
         setChild(actor);
       } catch (e: any) {
-        setSnackbar({
-          open: true,
-          message: e?.message || 'Failed to connect to org canister',
-          severity: 'error',
-        });
+        setConnectError(e?.message || "Failed to connect to org canister");
+      } finally {
+        setConnecting(false);
       }
     })();
   }, [cid]);
 
-  // Load all balances from transaction history
+  // derive balances from transaction history
   const loadAllBalances = async () => {
     if (!child) return;
-
     try {
-      setRefreshing(true);
+      setLoading(true);
 
-      const transactions: BackendTransaction[] = await child.getTransactionHistory();
-      const txs = Array.isArray(transactions) ? transactions : [];
+      const result: BackendTransaction[] = await child.getTransactionHistory();
+      const txs = Array.isArray(result) ? result : [];
 
-      // Compute balances + last activity
+      const toNum = (v: number | bigint) => (typeof v === "bigint" ? Number(v) : v);
+
+      // maps
       const balanceMap = new Map<string, number>();
-      const activityMap = new Map<string, number>(); // ms
+      const awardSumMap = new Map<string, number>();   // total awarded to user
+      const revokeSumMap = new Map<string, number>();  // total revoked from user
+      const activityMap = new Map<string, number>();   // ms
 
-      txs.forEach((tx) => {
-        const fromStr = tx.from?.toString?.() || '';
-        const toStr = tx.to?.toString?.() || '';
-        const amount = Number(tx.amount || 0);
-        const tsMs = Number(tx.timestamp || 0) * 1000; // seconds -> ms
+      for (const tx of txs) {
+        const from = tx?.from?.toString?.() || "";
+        const to = tx?.to?.toString?.() || "";
+        const amount = toNum(tx?.amount || 0);
+        const tsMs = toNum(tx?.timestamp || 0) * 1000;
 
-        if (fromStr) {
-          const prev = activityMap.get(fromStr) ?? 0;
-          if (tsMs > prev) activityMap.set(fromStr, tsMs);
+        if (from) activityMap.set(from, Math.max(activityMap.get(from) || 0, tsMs));
+        if (to) activityMap.set(to, Math.max(activityMap.get(to) || 0, tsMs));
+
+        if (!to) continue;
+
+        if ("Award" in tx.transactionType) {
+          balanceMap.set(to, (balanceMap.get(to) || 0) + amount);
+          awardSumMap.set(to, (awardSumMap.get(to) || 0) + amount);
+        } else if ("Revoke" in tx.transactionType) {
+          const newBal = Math.max(0, (balanceMap.get(to) || 0) - amount);
+          balanceMap.set(to, newBal);
+          revokeSumMap.set(to, (revokeSumMap.get(to) || 0) + amount);
+        } else if ("Decay" in tx.transactionType) {
+          // decay typically from==to; subtract
+          const newBal = Math.max(0, (balanceMap.get(to) || 0) - amount);
+          balanceMap.set(to, newBal);
+          revokeSumMap.set(to, (revokeSumMap.get(to) || 0) + amount);
         }
-        if (toStr) {
-          const prev = activityMap.get(toStr) ?? 0;
-          if (tsMs > prev) activityMap.set(toStr, tsMs);
-        }
+      }
 
-        if (!toStr) return;
-
-        if ('Award' in tx.transactionType) {
-          balanceMap.set(toStr, (balanceMap.get(toStr) || 0) + amount);
-        } else if ('Revoke' in tx.transactionType) {
-          balanceMap.set(toStr, Math.max(0, (balanceMap.get(toStr) || 0) - amount));
-        } else if ('Decay' in tx.transactionType) {
-          // decay tx have from == to; subtract from the user
-          balanceMap.set(toStr, Math.max(0, (balanceMap.get(toStr) || 0) - amount));
-        }
-      });
-
+      // build UI list
       const list: UserBalance[] = Array.from(balanceMap.entries())
-        .map(([address, reputation], idx) => {
-          const last = activityMap.get(address);
-          const lastActivity = last ? new Date(last).toLocaleDateString() : 'Never';
-          const active = last ? (Date.now() - last) < 7 * 24 * 60 * 60 * 1000 : false;
+        .map(([principal, reputation], idx) => {
+          const last = activityMap.get(principal);
+          const lastActivity = last ? new Date(last) : new Date(0);
+          const statusActive = last ? Date.now() - last < 7 * 24 * 60 * 60 * 1000 : false;
 
           return {
             id: String(idx + 1),
-            address,
-            name: `User ${address.slice(0, 8)}`,
+            name: `User ${principal.slice(0, 8)}`,
+            principal,
+            role: 'member',
             reputation,
-            rank: 0, // assigned after sort
-            change: '+0', // placeholder (compute deltas if needed)
+            reputationChange: 0, // could be computed as delta vs. previous snapshot if you store one
             lastActivity,
-            status: active ? 'active' : 'inactive',
+            joinDate: new Date(Math.max(0, (last || Date.now()) - 90 * 24 * 3600 * 1000)), // placeholder join date
+            totalAwarded: awardSumMap.get(principal) || 0,
+            totalRevoked: revokeSumMap.get(principal) || 0,
+            rank: 0,
           };
         })
         .sort((a, b) => b.reputation - a.reputation)
         .map((u, i) => ({ ...u, rank: i + 1 }));
 
       setUserBalances(list);
-    } catch (error: any) {
-      console.error('Error loading balances:', error);
-      setSnackbar({
-        open: true,
-        message: 'Failed to load balances: ' + (error?.message || 'unknown error'),
-        severity: 'error',
-      });
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Failed to load balances");
+      setUserBalances([]);
     } finally {
-      setRefreshing(false);
+      setLoading(false);
     }
   };
 
-  // load whenever the child actor is ready
+  // load when child ready
   useEffect(() => {
     if (child) loadAllBalances();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [child]);
 
-  const handleRefresh = () => loadAllBalances();
-  const handleCloseSnackbar = () => setSnackbar((s) => ({ ...s, open: false }));
-
-  const getStatusColor = (status: string) => (status === 'active' ? 'success' : 'default');
-  const getChangeColor = (change: string | number) => {
-    const s = typeof change === 'number' ? `${change}` : change;
-    if (s.startsWith('+')) return 'hsl(var(--primary))';
-    if (s.startsWith('-')) return 'hsl(var(--destructive))';
-    return 'hsl(var(--muted-foreground))';
+  // balance lookup via child.getBalance
+  const handleBalanceSearch = async () => {
+    if (!child) return;
+    if (!balanceSearchQuery.trim()) {
+      toast.error("Please enter a valid principal ID");
+      return;
+    }
+    try {
+      setBalanceSearchLoading(true);
+      const p = Principal.fromText(balanceSearchQuery.trim());
+      const bal = await child.getBalance(p);
+      const n = typeof bal === "bigint" ? Number(bal) : Number(bal);
+      if (Number.isFinite(n)) {
+        setSearchedBalance({ principal: balanceSearchQuery.trim(), balance: n });
+        toast.success("Balance retrieved successfully!");
+      } else {
+        setSearchedBalance(null);
+        toast.error("Could not retrieve balance for this principal");
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Invalid principal ID or error retrieving balance");
+      setSearchedBalance(null);
+    } finally {
+      setBalanceSearchLoading(false);
+    }
   };
 
-  const filteredBalances = userBalances.filter(
-    (u) =>
-      u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.address.toLowerCase().includes(searchTerm.toLowerCase())
+  // filtering & sorting
+  const filteredBalances = useMemo(() => {
+    const filtered = userBalances.filter(
+      (u) =>
+        u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        u.principal.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+    return filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "reputation":
+          return b.reputation - a.reputation;
+        case "name":
+          return a.name.localeCompare(b.name);
+        case "recent":
+          return b.lastActivity.getTime() - a.lastActivity.getTime();
+        default:
+          return b.reputation - a.reputation;
+      }
+    });
+  }, [userBalances, searchQuery, sortBy]);
+
+  // derived stats
+  const stats = useMemo(() => {
+    const totalUsers = userBalances.length;
+    const totalReputation = userBalances.reduce((s, u) => s + u.reputation, 0);
+    const averageReputation = totalUsers > 0 ? Math.round(totalReputation / totalUsers) : 0;
+    const topHolder =
+      totalUsers > 0 ? userBalances.reduce((p, c) => (p.reputation > c.reputation ? p : c)) : null;
+    const recentGainer =
+      totalUsers > 0 ? userBalances.reduce((p, c) => (p.reputationChange > c.reputationChange ? p : c)) : null;
+
+    return { totalUsers, totalReputation, averageReputation, topHolder, recentGainer };
+  }, [userBalances]);
+
+  const topPerformers = useMemo(() => userBalances.slice(0, 3), [userBalances]);
+  const recentChanges = useMemo(
+    () =>
+      userBalances
+        .filter((u) => u.reputationChange !== 0)
+        .sort((a, b) => Math.abs(b.reputationChange) - Math.abs(a.reputationChange))
+        .slice(0, 5),
+    [userBalances]
   );
 
-  const totalReputation = userBalances.reduce((sum, u) => sum + u.reputation, 0);
-  const activeUsers = userBalances.filter((u) => u.status === 'active').length;
+  const handleDisconnect = () => navigate("/auth");
 
+  // connect-state UI
+  if (connecting) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <div className="text-sm text-muted-foreground">Connecting to organization…</div>
+      </div>
+    );
+  }
+  if (!cid || connectError) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <Card className="glass-card p-6">
+          <p className="text-sm text-muted-foreground">{connectError || "No organization selected."}</p>
+          <div className="mt-3">
+            <Button onClick={() => navigate("/org-selector")} variant="outline">
+              Choose Org
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  if (roleLoading) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <div className="inline-flex items-center gap-2 text-muted-foreground text-sm">
+          <div className="w-4 h-4 border-2 border-primary border-r-transparent rounded-full animate-spin" />
+          Determining access…
+        </div>
+      </div>
+    );
+  }
+
+  // === Same fixed-sidebar alignment pattern as before ===
   return (
-    <Box
-      sx={{
-        p: 3,
-        backgroundColor: 'hsl(var(--background))',
-        minHeight: '100vh',
-      }}
-    >
-      <Typography
-        variant="h4"
-        sx={{
-          mb: 3,
-          color: 'hsl(var(--foreground))',
-          fontWeight: 600,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2,
+    <SidebarProvider>
+      <InnerViewBalances
+        cid={cid}
+        userRole={userRole}
+        userDisplay={{
+          userName: sidebarUserName,
+          userPrincipal: sidebarPrincipal,
+          displayName: userDisplay.displayName,
         }}
-      >
-        <AccountBalanceWallet sx={{ color: 'hsl(var(--primary))' }} />
-        View Balances
-        {cid && (
-          <Chip
-            label={`Org: ${cid}`}
-            size="small"
-            sx={{ ml: 2, bgcolor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }}
-          />
-        )}
-      </Typography>
-
-      <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', lg: 'row' } }}>
-        {/* Search Section */}
-        <Box sx={{ flex: 1 }}>
-          <UserBalanceSearchCard
-            fetchBalance={async (principalString: string) => {
-              if (!child) throw new Error('Not connected to canister');
-              const principal = Principal.fromText(principalString.trim());
-              const bal = await child.getBalance(principal);
-              return Number(bal);
-            }}
-          />
-        </Box>
-
-        {/* Statistics */}
-        <OverviewCard
-          totalUsers={userBalances.length}
-          activeUsers={activeUsers}
-          totalReputation={totalReputation}
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-        />
-      </Box>
-
-      {/* User Balances Table */}
-      <TopUsersCard
+        handleDisconnect={handleDisconnect}
+        stats={stats}
         filteredBalances={filteredBalances}
-        getChangeColor={getChangeColor}
-        getStatusColor={getStatusColor}
+        loading={loading}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        sortBy={sortBy}
+        setSortBy={setSortBy}
+        balanceSearchQuery={balanceSearchQuery}
+        setBalanceSearchQuery={setBalanceSearchQuery}
+        handleBalanceSearch={handleBalanceSearch}
+        balanceSearchLoading={balanceSearchLoading}
+        searchedBalance={searchedBalance}
+        topPerformers={topPerformers}
+        recentChanges={recentChanges}
       />
-
-      <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={handleCloseSnackbar}>
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-    </Box>
+    </SidebarProvider>
   );
 };
 
-const ViewBalancesWithProtection: React.FC = () => (
-  <ProtectedPage>
-    <ViewBalances />
-  </ProtectedPage>
-);
+function InnerViewBalances(props: any) {
+  const {
+    cid,
+    userRole,
+    userDisplay,
+    handleDisconnect,
+    stats,
+    filteredBalances,
+    loading,
+    searchQuery,
+    setSearchQuery,
+    sortBy,
+    setSortBy,
+    balanceSearchQuery,
+    setBalanceSearchQuery,
+    handleBalanceSearch,
+    balanceSearchLoading,
+    searchedBalance,
+    topPerformers,
+    recentChanges,
+  } = props;
 
-export default ViewBalancesWithProtection;
+  // Read sidebar state and shift content (collapsed: 72px, expanded: 280px)
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
+  const normalizedRole = (userRole || "").toLowerCase();
+  const sidebarRole: "admin" | "awarder" | "member" =
+    normalizedRole === "admin"
+      ? "admin"
+      : normalizedRole === "awarder"
+      ? "awarder"
+      : "member";
+
+  return (
+    <div className="min-h-screen w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
+      <DashboardSidebar
+        userRole={sidebarRole}
+        userName={userDisplay.userName}
+        userPrincipal={userDisplay.userPrincipal}
+        onDisconnect={handleDisconnect}
+      />
+
+      {/* Push main content to the right of the fixed sidebar on md+ */}
+      <div
+        className={`flex min-h-screen flex-col transition-[padding-left] duration-300 pl-0 ${
+          collapsed ? "md:pl-[72px]" : "md:pl-[280px]"
+        }`}
+      >
+        {/* Header */}
+        <header className="h-16 border-b border-border/40 flex items-center px-6 glass-header">
+          <SidebarTrigger className="mr-4" />
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500/20 to-green-600/20 flex items-center justify-center">
+              <Wallet className="w-4 h-4 text-green-600" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold text-foreground">View Balances</h1>
+              <p className="text-xs text-muted-foreground">Org: {cid}</p>
+            </div>
+          </div>
+        </header>
+
+        {/* Main Content */}
+        <main className="p-6">
+          <div className="max-w-7xl mx-auto space-y-6">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Card className="glass-card p-4 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Users</p>
+                    <p className="text-2xl font-bold text-foreground">{stats.totalUsers}</p>
+                  </div>
+                  <Users className="w-8 h-8 text-primary" />
+                </div>
+              </Card>
+
+              <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.1s" }}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Reputation</p>
+                    <p className="text-2xl font-bold text-foreground">{stats.totalReputation.toLocaleString()}</p>
+                  </div>
+                  <Star className="w-8 h-8 text-yellow-500" />
+                </div>
+              </Card>
+
+              <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.2s" }}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Average Balance</p>
+                    <p className="text-2xl font-bold text-foreground">{stats.averageReputation}</p>
+                  </div>
+                  <BarChart3 className="w-8 h-8 text-blue-500" />
+                </div>
+              </Card>
+
+              <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.3s" }}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Top Holder</p>
+                    <p className="text-lg font-bold text-foreground">{stats.topHolder?.name || "No data"}</p>
+                    <p className="text-sm text-muted-foreground">{stats.topHolder?.reputation || 0} REP</p>
+                  </div>
+                  <Crown className="w-8 h-8 text-yellow-500" />
+                </div>
+              </Card>
+            </div>
+
+            <Tabs defaultValue="all-balances" className="space-y-6">
+              <TabsList className="grid grid-cols-3 w-full max-w-md glass">
+                <TabsTrigger value="all-balances">All Balances</TabsTrigger>
+                <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
+                <TabsTrigger value="recent-changes">Recent Changes</TabsTrigger>
+              </TabsList>
+
+              {/* All balances */}
+              <TabsContent value="all-balances" className="space-y-6">
+                {/* Balance Search */}
+                <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: "0.3s" }}>
+                  <h3 className="text-lg font-semibold text-foreground mb-4">Check Specific Balance</h3>
+                  <div className="flex flex-col md:flex-row gap-4">
+                    <div className="relative flex-1">
+                      <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Enter principal ID to check balance..."
+                        value={balanceSearchQuery}
+                        onChange={(e) => setBalanceSearchQuery(e.target.value)}
+                        className="pl-10 glass-input"
+                        onKeyDown={(e) => e.key === "Enter" && handleBalanceSearch()}
+                      />
+                    </div>
+                    <Button
+                      onClick={handleBalanceSearch}
+                      disabled={balanceSearchLoading || !balanceSearchQuery.trim()}
+                      className="min-w-32"
+                    >
+                      {balanceSearchLoading ? (
+                        <>
+                          <div className="w-4 h-4 mr-2 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                          Searching...
+                        </>
+                      ) : (
+                        <>
+                          <Search className="w-4 h-4 mr-2" />
+                          Search
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  {searchedBalance && (
+                    <div className="mt-4 p-4 bg-primary/10 rounded-lg border border-primary/20">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Principal ID</p>
+                          <p className="font-mono text-sm break-all">{searchedBalance.principal}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-muted-foreground">Balance</p>
+                          <p className="text-2xl font-bold text-primary">{searchedBalance.balance} REP</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </Card>
+
+                {/* Search and Sort */}
+                <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.4s" }}>
+                  <div className="flex flex-col md:flex-row gap-4">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search by name or principal ID..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-10 glass-input"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant={sortBy === "reputation" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSortBy("reputation")}
+                      >
+                        <Star className="w-4 h-4 mr-1" />
+                        Reputation
+                      </Button>
+                      <Button
+                        variant={sortBy === "name" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSortBy("name")}
+                      >
+                        <Filter className="w-4 h-4 mr-1" />
+                        Name
+                      </Button>
+                      <Button
+                        variant={sortBy === "recent" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSortBy("recent")}
+                      >
+                        <Calendar className="w-4 h-4 mr-1" />
+                        Recent
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Balances List */}
+                <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: "0.5s" }}>
+                  {loading ? (
+                    <div className="text-center py-12 text-muted-foreground">Loading…</div>
+                  ) : filteredBalances.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground">No users found.</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {filteredBalances.map((user, index) => (
+                        <div
+                          key={user.id}
+                          className="flex items-center justify-between p-4 glass-card rounded-lg hover:shadow-md transition-all duration-200 animate-fade-in"
+                          style={{ animationDelay: `${0.6 + index * 0.05}s` }}
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-mono text-muted-foreground w-8">#{user.rank}</span>
+                              <Avatar className="w-10 h-10">
+                                <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary-glow/20 text-primary">
+                                  {user.name
+                                    .split(" ")
+                                    .map((n) => n[0])
+                                    .join("")
+                                    .toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                            </div>
+
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-medium text-foreground">{user.name}</span>
+                                <Badge variant="secondary" className="flex items-center gap-1">
+                                  <RoleIcon role={user.role} />
+                                  {user.role}
+                                </Badge>
+                              </div>
+                              <p className="text-sm text-muted-foreground font-mono break-all">
+                                {user.principal.slice(0, 25)}...
+                              </p>
+                              <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
+                                <span>Last active: {user.lastActivity.toLocaleDateString()}</span>
+                                <span>Joined: {user.joinDate.toLocaleDateString()}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-right">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-lg font-bold text-foreground">
+                                {user.reputation.toLocaleString()} REP
+                              </span>
+                              {user.reputationChange !== 0 && (
+                                <Badge
+                                  variant={user.reputationChange > 0 ? "default" : "destructive"}
+                                  className="flex items-center gap-1"
+                                >
+                                  {user.reputationChange > 0 ? (
+                                    <ArrowUpRight className="w-3 h-3" />
+                                  ) : (
+                                    <ArrowDownRight className="w-3 h-3" />
+                                  )}
+                                  {Math.abs(user.reputationChange)}
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              <div>Awarded: {user.totalAwarded}</div>
+                              {user.totalRevoked > 0 && <div>Revoked: {user.totalRevoked}</div>}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+              </TabsContent>
+
+              {/* Leaderboard */}
+              <TabsContent value="leaderboard" className="space-y-6">
+                <Card className="glass-card p-6 animate-fade-in">
+                  <h3 className="text-lg font-semibold text-foreground mb-4">Top Performers</h3>
+                  <div className="space-y-4">
+                    {topPerformers.length === 0 && <div className="text-sm text-muted-foreground">No data.</div>}
+                    {topPerformers.map((user, index) => (
+                      <div
+                        key={user.id}
+                        className={`flex items-center gap-4 p-4 rounded-lg transition-all duration-200 ${
+                          index === 0
+                            ? "bg-gradient-to-r from-yellow-500/10 to-yellow-600/10 border border-yellow-500/20"
+                            : index === 1
+                            ? "bg-gradient-to-r from-gray-400/10 to-gray-500/10 border border-gray-400/20"
+                            : "bg-gradient-to-r from-orange-500/10 to-orange-600/10 border border-orange-500/20"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${
+                              index === 0
+                                ? "bg-gradient-to-br from-yellow-500 to-yellow-600"
+                                : index === 1
+                                ? "bg-gradient-to-br from-gray-400 to-gray-500"
+                                : "bg-gradient-to-br from-orange-500 to-orange-600"
+                            }`}
+                          >
+                            {index + 1}
+                          </div>
+                          <Avatar className="w-12 h-12">
+                            <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary-glow/20 text-primary">
+                              {user.name
+                                .split(" ")
+                                .map((n) => n[0])
+                                .join("")
+                                .toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                        </div>
+
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-semibold text-foreground">{user.name}</span>
+                            <Badge variant="secondary" className="flex items-center gap-1">
+                              <RoleIcon role={user.role} />
+                              {user.role}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground">{user.reputation.toLocaleString()} REP</p>
+                        </div>
+
+                        <div className="text-right">
+                          {user.reputationChange > 0 && (
+                            <Badge variant="default" className="flex items-center gap-1">
+                              <TrendingUp className="w-3 h-3" />
+                              +{user.reputationChange}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              </TabsContent>
+
+              {/* Recent changes */}
+              <TabsContent value="recent-changes" className="space-y-6">
+                <Card className="glass-card p-6 animate-fade-in">
+                  <h3 className="text-lg font-semibold text-foreground mb-4">Recent Reputation Changes</h3>
+                  {recentChanges.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No recent changes.</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {recentChanges.map((user) => (
+                        <div
+                          key={user.id}
+                          className="flex items-center justify-between p-4 glass-card rounded-lg hover:shadow-md transition-all duration-200"
+                        >
+                          <div className="flex items-center gap-3">
+                            <Avatar className="w-10 h-10">
+                              <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary-glow/20 text-primary">
+                                {user.name
+                                  .split(" ")
+                                  .map((n) => n[0])
+                                  .join("")
+                                  .toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-medium text-foreground">{user.name}</span>
+                                <Badge variant="secondary" className="flex items-center gap-1">
+                                  <RoleIcon role={user.role} />
+                                  {user.role}
+                                </Badge>
+                              </div>
+                              <p className="text-sm text-muted-foreground">Current: {user.reputation} REP</p>
+                            </div>
+                          </div>
+
+                          <Badge
+                            variant={user.reputationChange > 0 ? "default" : "destructive"}
+                            className="flex items-center gap-1"
+                          >
+                            {user.reputationChange > 0 ? (
+                              <TrendingUp className="w-4 h-4" />
+                            ) : (
+                              <TrendingDown className="w-4 h-4" />
+                            )}
+                            {user.reputationChange > 0 ? "+" : ""}
+                            {user.reputationChange} REP
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+export default ViewBalances;

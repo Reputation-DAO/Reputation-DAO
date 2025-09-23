@@ -1,0 +1,167 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
+import { Principal } from '@dfinity/principal';
+import { ensurePlugAgent, getPlugPrincipal, isPlugConnected, disconnectPlug, PLUG_HOST } from '../utils/plug';
+import { makeChildWithPlug } from '../components/canister/child';
+import type { ChildActor } from '../components/canister/child';
+
+export type AuthMethod = 'plug' | null;
+
+interface AuthContextType {
+  // Authentication state
+  isAuthenticated: boolean;
+  authMethod: AuthMethod;
+  principal: Principal | null;
+  isLoading: boolean;
+  
+  // Authentication methods
+  loginWithPlug: () => Promise<void>;
+  logout: () => Promise<void>;
+  
+  // Connection checking
+  checkConnection: () => Promise<void>;
+  
+  // Actor access
+  getActor: (canisterId: string) => Promise<ChildActor>;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+interface AuthProviderProps {
+  children: ReactNode;
+}
+
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authMethod, setAuthMethod] = useState<AuthMethod>(null);
+  const [principal, setPrincipal] = useState<Principal | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  /**
+   * Check current authentication status
+   */
+  const checkConnection = async () => {
+    setIsLoading(true);
+    
+    try {
+      // Check Plug wallet
+      const isPlugAuth = await isPlugConnected();
+      if (isPlugAuth) {
+        const plugPrincipal = await getPlugPrincipal();
+        setIsAuthenticated(true);
+        setAuthMethod('plug');
+        setPrincipal(plugPrincipal);
+        console.log('✅ Authenticated with Plug:', plugPrincipal?.toString());
+        setIsLoading(false);
+        return;
+      }
+
+      // No authentication found
+      setIsAuthenticated(false);
+      setAuthMethod(null);
+      setPrincipal(null);
+      console.log('ℹ️ No authentication found');
+    } catch (error) {
+      console.error('❌ Error checking authentication:', error);
+      setIsAuthenticated(false);
+      setAuthMethod(null);
+      setPrincipal(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * Login with Plug wallet
+   */
+  const loginWithPlug = async () => {
+    setIsLoading(true);
+    
+    try {
+      // Connect with Plug
+      await ensurePlugAgent({ host: PLUG_HOST });
+      const plugPrincipal = await getPlugPrincipal();
+      
+      setIsAuthenticated(true);
+      setAuthMethod('plug');
+      setPrincipal(plugPrincipal);
+      
+      console.log('✅ Plug login successful:', plugPrincipal?.toString());
+    } catch (error) {
+      console.error('❌ Plug login failed:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * Logout from current authentication method
+   */
+  const logout = async () => {
+    setIsLoading(true);
+    
+    try {
+      if (authMethod === 'plug') {
+        await disconnectPlug();
+      }
+
+      setIsAuthenticated(false);
+      setAuthMethod(null);
+      setPrincipal(null);
+      
+      console.log('✅ Logout successful');
+    } catch (error) {
+      console.error('❌ Logout failed:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * Get the appropriate actor based on authentication method
+   */
+  const getActor = async (canisterId: string) => {
+    if (!isAuthenticated) {
+      throw new Error('Not authenticated. Please login first.');
+    }
+
+    if (authMethod !== 'plug') {
+      throw new Error('Unsupported authentication method');
+    }
+
+    await ensurePlugAgent({ host: PLUG_HOST, whitelist: [canisterId] });
+    return makeChildWithPlug({ canisterId, host: PLUG_HOST });
+  };
+
+  // Check connection on mount
+  useEffect(() => {
+    checkConnection();
+  }, []);
+
+  const value: AuthContextType = {
+    isAuthenticated,
+    authMethod,
+    principal,
+    isLoading,
+    loginWithPlug,
+    logout,
+    checkConnection,
+    getActor,
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = (): AuthContextType => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};

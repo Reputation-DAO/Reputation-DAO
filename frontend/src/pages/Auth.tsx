@@ -1,289 +1,250 @@
-import {
-  Box,
-  Button,
-  TextField,
-  Typography,
-  Divider,
-  Paper,
-  useMediaQuery,
-  Stack,
-  keyframes,
-} from '@mui/material';
-import { CreditCard } from '@mui/icons-material';
-import { styled } from '@mui/system';
-import { Link as MuiLink } from '@mui/material';
-import { useState } from "react";
-import { useTheme } from '@mui/material/styles';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Wallet, Shield, Zap, ArrowRight, CheckCircle } from "lucide-react";
+import Navigation from "@/components/ui/navigation";
+import { useAuth } from "../contexts/AuthContext";
+import { useRole } from "../contexts/RoleContext";
 
-// Heartbeat glow keyframes
-const heartbeatGlow = keyframes`
-  0% { opacity: 0.06; filter: blur(15px); }
-  20% { opacity: 0.14; filter: blur(25px); }
-  50% { opacity: 0.36; filter: blur(35px); }
-  80% { opacity: 0.14; filter: blur(25px); }
-  100% { opacity: 0.06; filter: blur(15px); }
-`;
+const WalletOption = ({ icon: Icon, name, description, isRecommended, isConnected, onConnect, isLoading }: {
+  icon: any;
+  name: string;
+  description: string;
+  isRecommended?: boolean;
+  isConnected?: boolean;
+  onConnect: () => void;
+  isLoading?: boolean;
+}) => (
+  <Card className="glass-card p-6 cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-[var(--shadow-glow)] group relative overflow-hidden">
+    {isRecommended && (
+      <div className="absolute top-0 right-0 bg-gradient-to-r from-primary to-primary-glow text-white px-3 py-1 text-xs rounded-bl-lg">
+        Recommended
+      </div>
+    )}
+    
+    <div className="flex items-center gap-4 mb-4">
+      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/10 to-primary-glow/10 flex items-center justify-center group-hover:from-primary/20 group-hover:to-primary-glow/20 transition-all duration-300">
+        <Icon className="w-6 h-6 text-primary group-hover:scale-110 transition-transform duration-300" />
+      </div>
+      <div>
+        <h3 className="text-lg font-semibold text-foreground">{name}</h3>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </div>
+    </div>
+    
+    <Button 
+      onClick={onConnect}
+      disabled={isLoading || isConnected}
+      variant={isConnected ? "secondary" : "hero"}
+      className="w-full group-hover:scale-105 transition-transform duration-200"
+    >
+      {isLoading ? (
+        <>
+          <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin mr-2" />
+          Connecting...
+        </>
+      ) : isConnected ? (
+        <>
+          <CheckCircle className="w-4 h-4 mr-2" />
+          Connected
+        </>
+      ) : (
+        <>
+          Connect
+          <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform duration-200" />
+        </>
+      )}
+    </Button>
+  </Card>
+);
 
-const Root = styled(Box)({
-  display: 'flex',
-  justifyContent: 'center',
-  alignItems: 'center',
-  minHeight: '100vh',
-  width: '100%',
-  backgroundColor: 'hsl(var(--background))',
-  padding: '1rem', // decreased padding
-  position: 'relative',
-  overflow: 'hidden',
-  transition: 'background-color var(--transition-smooth)',
-});
+const Auth = () => {
+  const navigate = useNavigate();
+  const { 
+    isAuthenticated, 
+    authMethod, 
+    principal, 
+    isLoading, 
+    loginWithPlug, 
+    logout, 
+    checkConnection 
+  } = useAuth();
+  const { userRole, loading: roleLoading } = useRole();
+  const [isConnecting, setIsConnecting] = useState<string | null>(null);
+  const [showConnected, setShowConnected] = useState(false);
 
-// Glows
-const Glow = styled(Box)(({ side }: { side: 'left' | 'right' }) => ({
-  position: 'absolute',
-  top: 0,
-  [side]: 0,
-  width: '80px',
-  height: '100%',
-  background: 'hsl(var(--primary))',
-  animation: `${heartbeatGlow} 10s ease-in-out infinite`,
-  zIndex: 0,
-  pointerEvents: 'none',
-  mixBlendMode: 'screen',
-  borderRadius: side === 'left' ? '0 80px 80px 0' : '80px 0 0 80px',
-}));
+  // Check connection status on mount
+  useEffect(() => {
+    checkConnection();
+  }, []);
 
-const AuthWindow = styled(Box)(({ theme }) => ({
-  width: '100%',
-  maxWidth: 1100, // slightly reduced for padding
-  display: 'flex',
-  borderRadius: 'var(--radius)',
-  overflow: 'hidden',
-  flexDirection: 'row',
-  backgroundColor: 'hsl(var(--card))',
-  boxShadow: 'var(--shadow-lg)',
-  [theme.breakpoints.down('md')]: {
-    flexDirection: 'column',
-  },
-}));
+  // Show connected state without auto-redirect
+  useEffect(() => {
+    if (isAuthenticated && principal && !roleLoading) {
+      setShowConnected(true);
+    }
+  }, [isAuthenticated, principal, roleLoading]);
 
-const SidePanel = styled(Box)(({ theme }) => ({
-  flex: 1,
-  position: 'relative',
-  backgroundImage: `url('/assets/bgimage.png')`,
-  backgroundSize: 'cover',
-  backgroundPosition: 'center',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  flexDirection: 'column',
-  padding: '2rem', // decreased padding
-  '&::before': {
-    content: '""',
-    position: 'absolute',
-    inset: 0,
-    background: 'linear-gradient(to bottom right, hsl(var(--primary) / 0.75), hsl(var(--accent) / 0.5))',
-    backdropFilter: 'var(--glass-blur)',
-    borderRadius: 'var(--radius)',
-  },
-  [theme.breakpoints.down('md')]: {
-    width: '100%',
-    height: 180,
-    padding: '1rem',
-    backgroundPosition: 'top',
-  },
-}));
+  const handleWalletConnect = async (walletType: string) => {
+    setIsConnecting(walletType);
+    try {
+      if (walletType === "plug") {
+        await loginWithPlug();
+      } else {
+        throw new Error(`Unsupported wallet type: ${walletType}`);
+      }
+      // Connection success is handled by the useEffect above
+    } catch (error) {
+      console.error(`Failed to connect ${walletType}:`, error);
+    } finally {
+      setIsConnecting(null);
+    }
+  };
 
-const SideContent = styled(Box)({
-  position: 'relative',
-  zIndex: 2,
-  textAlign: 'center',
-  color: 'hsl(var(--primary-foreground))',
-});
-
-const FormPanel = styled(Box)({
-  flex: 1,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: '1rem', // reduced padding
-});
-
-const FormCard = styled(Paper)({
-  width: '100%',
-  maxWidth: 380, // slightly smaller for sleekness
-  padding: '1.5rem', // reduced padding
-  borderRadius: 'var(--radius)',
-  boxShadow: 'var(--shadow-lg)',
-  backgroundColor: 'hsl(var(--card))',
-  color: 'hsl(var(--foreground))',
-  transition: 'all var(--transition-smooth)',
-});
-
-export default function AuthPage() {
-  const [isSignUp, setIsSignUp] = useState(false);
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const walletOptions = [
+    {
+      icon: Zap,
+      name: "Plug Wallet",
+      description: "Connect with Plug wallet for Internet Computer",
+      isRecommended: true,
+      isConnected: isAuthenticated && authMethod === 'plug',
+      onConnect: () => handleWalletConnect("plug")
+    }
+  ];
 
   return (
-    <Root>
-      <Glow side="left" />
-      <Glow side="right" />
+    <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-muted/20">
+      <Navigation />
+      
+      <div className="relative pt-20">
+        {/* Background Effects */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl animate-pulse-glow" />
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-primary-glow/5 rounded-full blur-3xl animate-pulse-glow" style={{ animationDelay: '1s' }} />
+        </div>
 
-      <AuthWindow>
-        {!isMobile && (
-          <SidePanel>
-            <SideContent>
-              <Box
-                component="img"
-                src="/assets/dark_logo.png"
-                alt="Logo"
-                sx={{ width: 150, height: 150, mb: 1.5 }}
-              />
-              <Typography variant="h5" fontWeight="bold">
-                Reputation DAO
-              </Typography>
-              <Typography mt={0.5} fontSize={14} sx={{ color: 'hsl(var(--primary-foreground))', opacity: 0.85 }}>
-                Secure, modern, and community-driven
-              </Typography>
-            </SideContent>
-          </SidePanel>
-        )}
+        <div className="relative max-w-4xl mx-auto px-4 py-20">
+          {/* Header */}
+          <div className="text-center mb-16 animate-fade-in">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary to-primary-glow rounded-2xl mb-6 animate-pulse-glow">
+              <Shield className="w-8 h-8 text-white" />
+            </div>
+            
+            <h1 className="text-4xl md:text-5xl font-bold mb-6 bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent">
+              Connect Your Wallet
+            </h1>
+            
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
+              Choose your wallet to access the Reputation DAO dashboard and start building your on-chain reputation.
+            </p>
+          </div>
 
-        <FormPanel>
-          <FormCard>
-            <Typography variant="h6" fontWeight="600" gutterBottom>
-              {isSignUp ? 'Sign Up' : 'Login'}
-            </Typography>
+          {/* Connected Status - Show if already connected */}
+          {isAuthenticated && principal && (
+            <div className="max-w-2xl mx-auto mb-8">
+              <Card className="glass-card p-6 bg-green-500/10 border-green-500/20">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
+                      <CheckCircle className="w-6 h-6 text-green-500" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-foreground">
+                        {authMethod === 'plug' ? 'Plug Wallet' : 'Internet Identity'} Connected
+                      </h3>
+                      <p className="text-sm text-muted-foreground font-mono">
+                        {principal.toString().slice(0, 8)}...{principal.toString().slice(-8)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={logout}
+                      className="text-red-500 border-red-500/20 hover:bg-red-500/10"
+                    >
+                      Disconnect
+                    </Button>
+                    <Button
+                      onClick={() => navigate('/org-selector')}
+                      className="bg-green-500 hover:bg-green-600 text-white"
+                    >
+                      Continue
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          )}
 
-            <Box component="form" mt={1.5}>
-              {isSignUp && (
-                <TextField
-                  fullWidth
-                  label="Name"
-                  variant="outlined"
-                  margin="dense"
-                  InputProps={{
-                    sx: {
-                      borderRadius: 'var(--radius)',
-                      backgroundColor: 'hsl(var(--input))',
-                      color: 'hsl(var(--foreground))',
-                      transition: 'all var(--transition-fast)',
-                      '&:hover': { backgroundColor: 'hsl(var(--secondary))' },
-                    },
-                  }}
+          {/* Wallet Options */}
+          <div className="grid gap-6 max-w-2xl mx-auto">
+            {walletOptions.map((option, index) => (
+              <div 
+                key={option.name}
+                className="animate-fade-in"
+                style={{ animationDelay: `${index * 0.1}s` }}
+              >
+                <WalletOption
+                  {...option}
+                  isLoading={isConnecting === option.name.toLowerCase().replace(' ', '')}
                 />
-              )}
-              <TextField
-                fullWidth
-                label="Email"
-                variant="outlined"
-                margin="dense"
-                InputProps={{
-                  sx: {
-                    borderRadius: 'var(--radius)',
-                    backgroundColor: 'hsl(var(--input))',
-                    color: 'hsl(var(--foreground))',
-                    '& input': { color: 'hsl(var(--foreground))' },
-                    transition: 'all var(--transition-fast)',
-                    '&:hover': { backgroundColor: 'hsl(var(--secondary))' },
-                  },
-                }}
-                InputLabelProps={{ sx: { color: 'hsl(var(--muted-foreground))' } }}
-              />
-              <TextField
-                fullWidth
-                label="Password"
-                type="password"
-                variant="outlined"
-                margin="dense"
-                InputProps={{
-                  sx: {
-                    borderRadius: 'var(--radius)',
-                    backgroundColor: 'hsl(var(--input))',
-                    color: 'hsl(var(--foreground))',
-                    '& input': { color: 'hsl(var(--foreground))' },
-                    transition: 'all var(--transition-fast)',
-                    '&:hover': { backgroundColor: 'hsl(var(--secondary))' },
-                  },
-                }}
-                InputLabelProps={{ sx: { color: 'hsl(var(--muted-foreground))' } }}
-              />
+              </div>
+            ))}
+          </div>
 
-              <Button
-				  fullWidth
-				  variant="contained"
-				  sx={{
-				    mt: 2,
-				    py: 1.5,
-				    borderRadius: 'var(--radius)',
-				    textTransform: 'none',
-				    backgroundColor: 'hsl(var(--primary))',
-				    color: 'hsl(var(--primary-foreground))',
-				    fontWeight: 600,
-				    boxShadow: 'var(--shadow-lg)',
-				    transition: 'all var(--transition-fast)',
-				    '&:hover': {
-				      transform: 'translateY(-1px)',
-				      backgroundColor: 'hsl(var(--primary))',
-				      boxShadow: '0 8px 20px rgba(0,0,0,0.12)',
-				    },
-				  }}
-				  onClick={() => alert("Presently only 'Connect with Plug' feature is available")}
-				>
-				  {isSignUp ? 'Create Account' : 'Login'}
-				</Button>
+          {/* Security Notice */}
+          <div className="mt-16 p-6 glass-card max-w-2xl mx-auto animate-fade-in" style={{ animationDelay: '0.4s' }}>
+            <div className="flex items-start gap-4">
+              <Shield className="w-6 h-6 text-primary flex-shrink-0 mt-1" />
+              <div>
+                <h3 className="font-semibold text-foreground mb-2">Secure & Privacy-First</h3>
+                <p className="text-sm text-muted-foreground">
+                  Your wallet connection is secure and private. We never store your private keys or sensitive information. 
+                  Your reputation data is stored on-chain and remains under your control.
+                </p>
+              </div>
+            </div>
+          </div>
 
-
-              <Divider sx={{ my: 2, borderColor: 'hsl(var(--border))' }}>or</Divider>
-
-              <Stack spacing={1}>
-                <Button
-                  component={MuiLink}
-
-                  href="/org-selector" // Update this to your desired route
-
-                  variant="outlined"
-                  startIcon={<CreditCard />}
-                  fullWidth
-                  sx={{
-                    borderRadius: 'var(--radius)',
-                    textTransform: 'none',
-                    color: 'hsl(var(--foreground))',
-                    borderColor: 'hsl(var(--border))',
-                    fontWeight: 500,
-                    transition: 'all var(--transition-fast)',
-                    '&:hover': {
-                      borderColor: 'hsl(var(--foreground))',
-                      backgroundColor: 'hsl(var(--secondary))',
-                      transform: 'translateY(-1px)',
-                    },
-                  }}
-                >
-                  Connect with Plug
-                </Button>
-              </Stack>
-
-              <Typography mt={2} fontSize={13} textAlign="center" color="hsl(var(--muted-foreground))">
-                {isSignUp ? 'Already have an account?' : "Don't have an account?"}
-                <Button
-                  variant="text"
-                  onClick={() => setIsSignUp(!isSignUp)}
-                  sx={{
-                    ml: 1,
-                    textTransform: 'none',
-                    color: 'hsl(var(--primary))',
-                    fontWeight: 'bold',
-                    transition: 'color var(--transition-fast)',
-                    '&:hover': { color: 'hsl(var(--accent-foreground))' },
-                  }}
-                >
-                  {isSignUp ? 'Login' : 'Sign Up'}
-                </Button>
-              </Typography>
-            </Box>
-          </FormCard>
-        </FormPanel>
-      </AuthWindow>
-    </Root>
+          {/* Features Preview */}
+          <div className="mt-16 grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+            {[
+              {
+                icon: Zap,
+                title: "Instant Access",
+                description: "Connect and access your dashboard immediately"
+              },
+              {
+                icon: Shield,
+                title: "Secure Storage",
+                description: "Your reputation is stored securely on-chain"
+              },
+              {
+                icon: Wallet,
+                title: "Multi-Wallet",
+                description: "Support for multiple wallet providers"
+              }
+            ].map((feature, index) => (
+              <div 
+                key={feature.title}
+                className="text-center p-6 animate-fade-in"
+                style={{ animationDelay: `${0.5 + index * 0.1}s` }}
+              >
+                <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mx-auto mb-4">
+                  <feature.icon className="w-6 h-6 text-primary" />
+                </div>
+                <h3 className="font-semibold text-foreground mb-2">{feature.title}</h3>
+                <p className="text-sm text-muted-foreground">{feature.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
   );
-}
+};
+
+export default Auth;

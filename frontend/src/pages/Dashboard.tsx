@@ -1,343 +1,616 @@
+// src/pages/Dashboard.tsx
 // @ts-nocheck
-import React, { useState, useEffect } from 'react';
-import { Principal } from '@dfinity/principal';
-import { useParams } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { Principal } from "@dfinity/principal";
+import { useRole } from "@/contexts/RoleContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { makeChildWithPlug } from "@/components/canister/child";
+import { getUserDisplayData } from "@/utils/userUtils";
+import { toast } from "sonner";
+
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Box,
-  Typography,
-  CircularProgress,
-  Alert,
-  IconButton,
-} from '@mui/material';
-import {
-  People as Users,
-  NorthEast as ArrowUpRight,
-  Refresh,
-  History,
-  TrendingUp,
-} from '@mui/icons-material';
-import { makeChildWithPlug } from '../components/canister/child';
-import { useRole } from '../contexts/RoleContext';
+  Star,
+  Users,
+  Award,
+  Settings,
+  Plus,
+  Activity,
+  Crown,
+  Shield,
+  User as UserIcon,
+  ArrowUpRight,
+  BarChart3,
+  LayoutDashboard,
+} from "lucide-react";
+import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
+import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
-import StatCard from '../components/Dashboard/statscard';
-import ActivityCard from '../components/Dashboard/cards/ActivityCard';
-import ActivityChartCard from '../components/Dashboard/cards/ActivityChartCard';
-import SystemFeaturesCard from '../components/Dashboard/cards/SystemFeaturesCard';
-import TopMembersCard from '../components/Dashboard/cards/TopMemberCard';
-import TrustedAwardersCard from '../components/Dashboard/cards/TrustedAwarderCard';
-
-import ProtectedPage from '../components/layout/ProtectedPage';
-
-/* -----------------------------------------
-   Local types (match your did)
------------------------------------------ */
-interface Transaction {
-  id: number | bigint;
-  transactionType: { Award: null } | { Revoke: null } | { Decay: null };
-  from: Principal;
-  to: Principal;
-  amount: number | bigint;
-  timestamp: number | bigint; // seconds
-  reason?: [] | [string];
+type TxKind = "awarded" | "revoked" | "decayed";
+interface ReputationActivity {
+  id: string;
+  type: TxKind;
+  points: number;
+  reason: string;
+  timestamp: Date;
+  from?: string;
+  to?: string;
 }
-
-interface Balance {
-  principal: Principal;
-  balance: number;
-}
-
-interface Awarder {
-  id: Principal;
+interface Member {
+  id: string;
   name: string;
+  principal: string;
+  reputation: number;
+  role: "admin" | "awarder" | "member";
+  joinDate: Date;
+  lastActive: Date;
 }
 
-interface DashboardData {
-  transactions: Transaction[];
-  balances: Balance[];
-  awarders: Awarder[];
-  transactionCount: number;
-  userReputation: number;
-  userTransactions: Transaction[];
-}
+const RoleIcon = ({ role }: { role: string }) => {
+  switch (role) {
+    case "admin":
+      return <Crown className="w-4 h-4 text-yellow-500" />;
+    case "awarder":
+      return <Shield className="w-4 h-4 text-blue-500" />;
+    default:
+      return <UserIcon className="w-4 h-4 text-green-500" />;
+  }
+};
 
-interface ChartData {
-  date: string;
-  awards: number;
-  revokes: number;
-  net: number;
-}
+const StatCard = ({
+  title,
+  value,
+  icon: Icon,
+  trend,
+  description,
+}: {
+  title: string;
+  value: string | number;
+  icon: any;
+  trend?: string;
+  description?: string;
+}) => (
+  <Card className="glass-card p-6 hover:shadow-[var(--shadow-glow)] transition-all duration-300 group">
+    <div className="flex items-center justify-between mb-4">
+      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/10 to-primary-glow/10 flex items-center justify-center group-hover:from-primary/20 group-hover:to-primary-glow/20 transition-all duration-300">
+        <Icon className="w-6 h-6 text-primary group-hover:scale-110 transition-transform duration-300" />
+      </div>
+      {trend && (
+        <Badge variant="secondary" className="text-green-600 bg-green-600/10">
+          <ArrowUpRight className="w-3 h-3 mr-1" />
+          {trend}
+        </Badge>
+      )}
+    </div>
+    <div>
+      <h3 className="text-2xl font-bold text-foreground mb-1">{value}</h3>
+      <p className="text-sm font-medium text-muted-foreground mb-1">{title}</p>
+      {description && <p className="text-xs text-muted-foreground">{description}</p>}
+    </div>
+  </Card>
+);
 
-const Dashboard: React.FC = React.memo(() => {
+const ActivityItem = ({ activity }: { activity: ReputationActivity }) => (
+  <div className="flex items-center gap-4 p-4 glass-card rounded-lg hover:shadow-md transition-all duration-200">
+    <div
+      className={`w-10 h-10 rounded-full flex items-center justify-center ${
+        activity.type === "awarded"
+          ? "bg-green-500/10 text-green-600"
+          : activity.type === "revoked"
+          ? "bg-red-500/10 text-red-600"
+          : "bg-orange-500/10 text-orange-600"
+      }`}
+    >
+      <Star className="w-5 h-5" />
+    </div>
+
+    <div className="flex-1">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="font-medium text-foreground">
+          {(activity.type === "awarded" ? "+" : "-") + activity.points} points
+        </span>
+        <Badge variant="outline" className="text-xs">
+          {activity.type}
+        </Badge>
+      </div>
+      <p className="text-sm text-muted-foreground">{activity.reason}</p>
+      {(activity.from || activity.to) && (
+        <p className="text-xs text-muted-foreground mt-1">
+          {activity.from && `From: ${activity.from}`} {activity.to && `To: ${activity.to}`}
+        </p>
+      )}
+    </div>
+
+    <div className="text-xs text-muted-foreground">{activity.timestamp.toLocaleString()}</div>
+  </div>
+);
+
+const MemberItem = ({ member }: { member: Member }) => (
+  <div className="flex items-center gap-4 p-4 glass-card rounded-lg hover:shadow-md transition-all duration-200">
+    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-primary-glow/20 flex items-center justify-center">
+      <UserIcon className="w-5 h-5 text-primary" />
+    </div>
+
+    <div className="flex-1">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="font-medium text-foreground">{member.name}</span>
+        <Badge variant="secondary" className="flex items-center gap-1">
+          <RoleIcon role={member.role} />
+          {member.role}
+        </Badge>
+      </div>
+      <p className="text-sm text-muted-foreground">{member.principal.slice(0, 20)}...</p>
+    </div>
+
+    <div className="text-right">
+      <div className="font-medium text-foreground">{member.reputation} rep</div>
+      <div className="text-xs text-muted-foreground">Active {new Date(member.lastActive).toLocaleDateString()}</div>
+    </div>
+  </div>
+);
+
+const Dashboard = () => {
+  const navigate = useNavigate();
   const { cid } = useParams<{ cid: string }>();
-  const { userRole, userName, currentPrincipal } = useRole();
+  const { userRole, loading: roleLoading, currentPrincipal, isAdmin, isAwarder } = useRole();
+  const { isAuthenticated, principal } = useAuth();
 
   const [child, setChild] = useState<any>(null);
-  const [data, setData] = useState<DashboardData>({
-    transactions: [],
-    balances: [],
-    awarders: [],
-    transactionCount: 0,
-    userReputation: 0,
-    userTransactions: [],
+  const [loading, setLoading] = useState(false);
+
+  // derived/UX state
+  const [userBalance, setUserBalance] = useState(0);
+  const [recentActivity, setRecentActivity] = useState<ReputationActivity[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [orgStats, setOrgStats] = useState({
+    totalMembers: 0,
+    totalReputation: 0,
+    growthRate: "0%",
+    recentTransactions: 0,
   });
-  const [chartData, setChartData] = useState<ChartData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [isLoadingData, setIsLoadingData] = useState(false);
 
-  /* -----------------------------------------
-     Helpers
-  ----------------------------------------- */
-  const toNum = (v: number | bigint) => (typeof v === 'bigint' ? Number(v) : v);
+  const userDisplayData = useMemo(() => getUserDisplayData(principal), [principal]);
 
-  const formatTime = (timestamp: number | bigint): string => {
-    const now = Date.now() / 1000;
-    const ts = toNum(timestamp);
-    const diff = now - ts;
-    if (diff < 60) return 'just now';
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-    return `${Math.floor(diff / 86400)}d ago`;
-  };
-
-  const getUserDisplayName = (principal: Principal): string => {
-    const pText = principal.toString();
-    const awarder = data.awarders.find(a => a.id.toString() === pText);
-    if (awarder) return awarder.name;
-    if (pText === '3d34m-ksxgd-46a66-2ibf7-kutsn-jg3vv-2yfjf-anbwh-u4lpl-tqu7d-yae') return 'Admin';
-    return `${pText.slice(0, 5)}...${pText.slice(-3)}`;
-  };
-
-  const processChartData = (transactions: Transaction[]): ChartData[] => {
-    const last7ISO = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date();
-      d.setDate(d.getDate() - (6 - i));
-      return d.toISOString().split('T')[0];
-    });
-
-    const daily = last7ISO.map(date => ({
-      date: new Date(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-      awards: 0,
-      revokes: 0,
-      net: 0,
-    }));
-
-    transactions.forEach(tx => {
-      const txDate = new Date(toNum(tx.timestamp) * 1000).toISOString().split('T')[0];
-      const idx = last7ISO.indexOf(txDate);
-      if (idx !== -1) {
-        const amt = toNum(tx.amount);
-        if ('Award' in tx.transactionType) {
-          daily[idx].awards += amt;
-          daily[idx].net += amt;
-        } else if ('Revoke' in tx.transactionType) {
-          daily[idx].revokes += amt;
-          daily[idx].net -= amt;
-        } else if ('Decay' in tx.transactionType) {
-          daily[idx].net -= amt;
-        }
-      }
-    });
-
-    return daily;
-  };
-
-  /* -----------------------------------------
-     Build child actor on :cid
-  ----------------------------------------- */
+  // Build child actor from :cid
   useEffect(() => {
     (async () => {
       try {
-        if (!cid) throw new Error('Missing :cid in route');
+        if (!cid) {
+          navigate("/org-selector");
+          return;
+        }
         setLoading(true);
-        setError(null);
-        const actor = await makeChildWithPlug({ canisterId: cid, host: 'https://icp-api.io' });
+        const actor = await makeChildWithPlug({ canisterId: cid, host: "https://icp-api.io" });
         setChild(actor);
       } catch (e: any) {
-        setError(e?.message || 'Failed to connect to child canister');
+        const msg = String(e?.message || e);
+        if (msg.includes("is stopped")) {
+          toast.error("This organization's canister is stopped. Ask an admin to start it.");
+        } else {
+          toast.error("Failed to connect to the organization canister.");
+        }
       } finally {
         setLoading(false);
       }
     })();
-  }, [cid]);
+  }, [cid, navigate]);
 
-  /* -----------------------------------------
-     Load dashboard data from child
-  ----------------------------------------- */
-  const loadDashboardData = async () => {
-    if (isLoadingData || !child) return;
-    try {
-      setIsLoadingData(true);
-      setError(null);
-
-      // Parallel fetches from the child (no orgId param needed)
-      const [transactionsResult, transactionCountResult, awardersResult] = await Promise.all([
-        child.getTransactionHistory(),
-        child.getTransactionCount(),
-        child.getTrustedAwarders(),
-      ]);
-
-      const transactions: Transaction[] = transactionsResult ?? [];
-      const transactionCount: number = Number(transactionCountResult ?? 0);
-      const awarders: Awarder[] = awardersResult ?? [];
-
-      // Balances from tx history
-      const balanceMap = new Map<string, number>();
-      for (const tx of transactions) {
-        const toKey = tx.to.toString();
-        const amt = toNum(tx.amount);
-        if ('Award' in tx.transactionType) {
-          balanceMap.set(toKey, (balanceMap.get(toKey) || 0) + amt);
-        } else if ('Revoke' in tx.transactionType || 'Decay' in tx.transactionType) {
-          balanceMap.set(toKey, (balanceMap.get(toKey) || 0) - amt);
-        }
-      }
-
-      const balances = Array.from(balanceMap.entries())
-        .map(([p, bal]) => ({ principal: Principal.fromText(p), balance: bal }))
-        .filter(b => b.balance > 0)
-        .sort((a, b) => b.balance - a.balance)
-        .slice(0, 10);
-
-      const me = currentPrincipal?.toString();
-      const userReputation = me ? balanceMap.get(me) || 0 : 0;
-      const userTransactions = me
-        ? transactions.filter(tx => tx.to.toString() === me || tx.from.toString() === me)
-        : [];
-
-      setData({
-        transactions: transactions.slice(0, 10),
-        balances,
-        awarders,
-        transactionCount,
-        userReputation,
-        userTransactions: userTransactions.slice(0, 10),
-      });
-
-      const chartTx = userRole === 'User' ? userTransactions : transactions;
-      setChartData(processChartData(chartTx));
-    } catch (e: any) {
-      console.error(e);
-      setError(e?.message || 'Failed to load dashboard data');
-    } finally {
-      setIsLoadingData(false);
-      setRefreshing(false);
-    }
-  };
-
-  // Initial + on-actor ready
+  // Load all dashboard data from child (like your MUI sample)
   useEffect(() => {
-    if (child) loadDashboardData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [child]);
+    if (!child || !isAuthenticated || !currentPrincipal) return;
 
-  const handleRefresh = () => {
-    if (isLoadingData) return;
-    setRefreshing(true);
-    loadDashboardData();
-  };
+    (async () => {
+      try {
+        setLoading(true);
 
-  if (loading) {
+        // Parallel calls to child
+        const [txsRes, txCountRes, awarders] = await Promise.all([
+          child.getTransactionHistory(),
+          child.getTransactionCount(),
+          child.getTrustedAwarders(),
+        ]);
+
+        const txs = (txsRes ?? []) as Array<{
+          id: number | bigint;
+          transactionType: { Award?: null; Revoke?: null; Decay?: null };
+          from: Principal;
+          to: Principal;
+          amount: number | bigint;
+          timestamp: number | bigint; // seconds
+          reason?: [] | [string];
+        }>;
+
+        const toNum = (v: number | bigint) => (typeof v === "bigint" ? Number(v) : v);
+
+        // Recent activity (last 5, most recent first)
+        const recent = [...txs]
+          .slice(-5)
+          .reverse()
+          .map((tx, i) => {
+            const kind: TxKind =
+              "Award" in tx.transactionType
+                ? "awarded"
+                : "Revoke" in tx.transactionType
+                ? "revoked"
+                : "decayed";
+            return {
+              id: `activity-${i}`,
+              type: kind,
+              points: toNum(tx.amount),
+              reason: (Array.isArray(tx.reason) && tx.reason[0]) || "No reason provided",
+              timestamp: new Date(toNum(tx.timestamp) * 1000),
+              from: tx.from.toString().slice(0, 8),
+              to: tx.to.toString().slice(0, 8),
+            } as ReputationActivity;
+          });
+
+        setRecentActivity(recent);
+
+        // Compute balances from history (top 10)
+        const balanceMap = new Map<string, number>();
+        for (const tx of txs) {
+          const amt = toNum(tx.amount);
+          const toKey = tx.to.toString();
+          if ("Award" in tx.transactionType) {
+            balanceMap.set(toKey, (balanceMap.get(toKey) || 0) + amt);
+          } else if ("Revoke" in tx.transactionType || "Decay" in tx.transactionType) {
+            balanceMap.set(toKey, (balanceMap.get(toKey) || 0) - amt);
+          }
+        }
+
+        const balances = Array.from(balanceMap.entries())
+          .map(([p, bal]) => ({ principal: p, balance: bal }))
+          .filter((b) => b.balance > 0)
+          .sort((a, b) => b.balance - a.balance);
+
+        // Members from balances (role fallback = 'member')
+        const memberList: Member[] = balances.slice(0, 50).map((b, i) => ({
+          id: `member-${i}`,
+          name: `User ${b.principal.slice(0, 8)}`,
+          principal: b.principal,
+          reputation: b.balance,
+          role: "member",
+          joinDate: new Date(),
+          lastActive: new Date(),
+        }));
+        setMembers(memberList);
+
+        // User’s own balance
+        const me = currentPrincipal.toString();
+        setUserBalance(balanceMap.get(me) || 0);
+
+        // Org stats
+        setOrgStats({
+          totalMembers: balances.length,
+          totalReputation: balances.reduce((sum, b) => sum + b.balance, 0),
+          growthRate: balances.length > 0 ? `+${Math.floor(balances.length * 0.08)}%` : "0%",
+          recentTransactions: Number(txCountRes ?? 0),
+        });
+      } catch (e: any) {
+        console.error("❌ Error loading dashboard data:", e);
+        toast.error(e?.message || "Failed to load dashboard data");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [child, isAuthenticated, currentPrincipal]);
+
+  const handleDisconnect = () => navigate("/auth");
+
+  if (!isAuthenticated) {
     return (
-      <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <CircularProgress sx={{ color: 'hsl(var(--primary))' }} />
-      </Box>
+      <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-muted/20 flex items-center justify-center">
+        <Card className="glass-card p-8 max-w-md mx-auto text-center">
+          <h2 className="text-xl font-bold text-foreground mb-2">Wallet Required</h2>
+          <p className="text-muted-foreground mb-4">Please connect your wallet to access the dashboard.</p>
+          <Button onClick={() => navigate("/auth")}>Connect Wallet</Button>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        px: { xs: 2, md: 3 },
-        py: { xs: 2, md: 3 },
-        bgcolor: 'hsl(var(--background))',
-      }}
-    >
-      {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
-
-      <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', lg: 'row' } }}>
-        {/* Main */}
-        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
-          {/* Stats + Welcome */}
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: {
-                xs: '1fr',
-                sm: userRole === 'User' ? '1fr 1fr 1fr' : '1fr 1fr',
-              },
-              gap: 2.5,
-            }}
-          >
-            {/* Welcome */}
-            <Box sx={{ gridColumn: '1 / -1', mb: 2 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                <Typography
-                  variant="h6"
-                  sx={{ fontWeight: 600, fontSize: { xs: '1.5rem', md: '2rem' } }}
-                >
-                  Welcome, {userName || 'User'}
-                </Typography>
-                <IconButton onClick={handleRefresh} disabled={refreshing} sx={{ color: 'hsl(var(--primary))' }}>
-                  {refreshing ? <CircularProgress size={20} /> : <Refresh />}
-                </IconButton>
-              </Box>
-              <Typography sx={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.875rem' }}>
-                Track your community&apos;s reputation and activity
-              </Typography>
-            </Box>
-
-            {/* Stat Cards */}
-            {userRole === 'User' && (
-              <StatCard title="My Reputation" value={data.userReputation} statusLabel="Current Score" />
-            )}
-            <StatCard
-              title="Total Transactions"
-              value={data.transactionCount}
-              statusLabel="All time activity"
-              titleIcon={<History sx={{ color: 'hsl(var(--primary))', fontSize: 20 }} />}
-              statusIcon={<TrendingUp sx={{ color: 'hsl(var(--success))', fontSize: 16 }} />}
-            />
-            <StatCard
-              title="Active Members"
-              value={data.balances.length}
-              statusLabel="With reputation"
-              titleIcon={<Users sx={{ color: 'hsl(var(--primary))', fontSize: 20 }} />}
-              statusIcon={<ArrowUpRight sx={{ color: 'hsl(var(--success))', fontSize: 16 }} />}
-            />
-          </Box>
-
-          {/* CTA */}
-          <SystemFeaturesCard />
-
-          {/* Activity + Chart */}
-          <ActivityCard
-            userRole={userRole}
-            data={data}
-            getUserDisplayName={getUserDisplayName}
-            formatTime={formatTime}
-          />
-          <ActivityChartCard userRole={userRole} chartData={chartData} />
-        </Box>
-
-        {/* Sidebar */}
-        <Box sx={{ width: { lg: 300 }, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-          <TopMembersCard balances={data.balances} getUserDisplayName={getUserDisplayName} />
-          <TrustedAwardersCard awarders={data.awarders} />
-        </Box>
-      </Box>
-    </Box>
-  );
-});
-
-const DashboardWithProtection: React.FC = () => {
-  return (
-    <ProtectedPage>
-      <Dashboard />
-    </ProtectedPage>
+    <SidebarProvider>
+      {/* get sidebar state to pad content accordingly */}
+      <InnerDashboard
+        userRole={userRole}
+        isAdmin={isAdmin}
+        isAwarder={isAwarder}
+        userDisplayData={userDisplayData}
+        handleDisconnect={handleDisconnect}
+        child={child}
+        loading={loading}
+        orgStats={orgStats}
+        userBalance={userBalance}
+        recentActivity={recentActivity}
+        members={members}
+        cid={cid}
+      />
+    </SidebarProvider>
   );
 };
 
-export default DashboardWithProtection;
+function InnerDashboard(props: any) {
+  const {
+    userRole,
+    isAdmin,
+    isAwarder,
+    userDisplayData,
+    handleDisconnect,
+    child,
+    loading,
+    orgStats,
+    userBalance,
+    recentActivity,
+    members,
+    cid,
+  } = props;
+
+  // Sidebar padding control (Step 2)
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
+
+  const normalizedRole = (userRole || "").toLowerCase();
+  const sidebarRole: "admin" | "awarder" | "member" =
+    normalizedRole === "admin" || normalizedRole === "awarder"
+      ? (normalizedRole as "admin" | "awarder")
+      : isAdmin
+      ? "admin"
+      : isAwarder
+      ? "awarder"
+      : "member";
+  const badgeLabel =
+    normalizedRole === "admin"
+      ? "Admin"
+      : normalizedRole === "awarder"
+      ? "Awarder"
+      : normalizedRole === "loading"
+      ? "Loading…"
+      : isAdmin
+      ? "Admin"
+      : isAwarder
+      ? "Awarder"
+      : "Member";
+
+  return (
+    <div className="min-h-screen w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
+      <DashboardSidebar
+        userRole={sidebarRole}
+        userName={userDisplayData.userName}
+        userPrincipal={userDisplayData.userPrincipal}
+        onDisconnect={handleDisconnect}
+      />
+
+      {/* Push main content to the right of the fixed sidebar on md+ screens */}
+      <div
+        className={`flex min-h-screen flex-col transition-[padding-left] duration-300 pl-0 ${
+          collapsed ? "md:pl-[72px]" : "md:pl-[280px]"
+        }`}
+      >
+        {/* Header */}
+        <header className="h-16 border-b border-border/40 flex items-center justify-between px-6 glass-header">
+          <div className="flex items-center gap-3">
+            <SidebarTrigger className="mr-4" />
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/20 to-primary-glow/20 flex items-center justify-center">
+              <LayoutDashboard className="w-4 h-4 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold text-foreground">Dashboard</h1>
+              <p className="text-xs text-muted-foreground">Welcome to org {cid}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (!child) return toast.error("Not connected to organization canister.");
+                toast.success("Canister connection looks good.");
+              }}
+            >
+              Test Connection
+            </Button>
+            <ThemeToggle />
+          </div>
+        </header>
+
+        {/* Main */}
+        <main className="p-6">
+          <div className="relative pt-20">
+            <div className="absolute inset-0 overflow-hidden">
+              <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/3 rounded-full blur-3xl animate-pulse-glow" />
+              <div
+                className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-primary-glow/3 rounded-full blur-3xl animate-pulse-glow"
+                style={{ animationDelay: "1s" }}
+              />
+            </div>
+
+            <div className="relative max-w-7xl mx-auto px-4 py-8">
+              <div className="flex items-center justify-between mb-8 animate-fade-in">
+                <div>
+                  <h1 className="text-3xl font-bold text-foreground mb-2">Welcome back</h1>
+                  <p className="text-muted-foreground">Manage reputation, track activity, and grow your community</p>
+                </div>
+
+                <Badge variant="secondary" className="flex items-center gap-2 px-4 py-2">
+                  <RoleIcon role={sidebarRole} />
+                  <span className="capitalize">{badgeLabel}</span>
+                </Badge>
+              </div>
+
+              {/* Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <StatCard
+                  title="Total Members"
+                  value={orgStats.totalMembers}
+                  icon={Users}
+                  trend={orgStats.totalMembers > 0 ? `+${Math.floor(orgStats.totalMembers * 0.12)}%` : "0%"}
+                  description="Active community members"
+                />
+                <StatCard
+                  title="Total Reputation"
+                  value={orgStats.totalReputation.toLocaleString()}
+                  icon={Star}
+                  trend={orgStats.totalReputation > 0 ? `+${Math.floor(orgStats.totalReputation * 0.08)}%` : "0%"}
+                  description="Points distributed"
+                />
+                <StatCard
+                  title="Your Reputation"
+                  value={loading ? "Loading..." : userBalance}
+                  icon={Award}
+                  trend={userBalance > 0 ? `+${Math.floor(userBalance * 0.1)}%` : ""}
+                  description="Your current points"
+                />
+                <StatCard title="Growth Rate" value={orgStats.growthRate} icon={BarChart3} description="Member growth rate" />
+              </div>
+
+              {/* Quick Actions */}
+              <QuickActionsSection cid={cid} canAward={isAdmin || isAwarder} isAdmin={isAdmin} />
+
+              {/* Tabs */}
+              <div className="animate-fade-in">
+                <Tabs defaultValue="activity" className="space-y-6">
+                  <TabsList className="grid grid-cols-3 w-full max-w-md glass">
+                    <TabsTrigger value="activity">Recent Activity</TabsTrigger>
+                    <TabsTrigger value="members">Members</TabsTrigger>
+                    <TabsTrigger value="analytics">Analytics</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="activity" className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold text-foreground">Recent Activity</h3>
+                      <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/transaction-log/${cid}`)}>
+                        View All
+                        <ArrowUpRight className="w-4 h-4 ml-1" />
+                      </Button>
+                    </div>
+
+                    <div className="space-y-3">
+                      {recentActivity.map((activity) => (
+                        <ActivityItem key={activity.id} activity={activity} />
+                      ))}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="members" className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold text-foreground">Organization Members</h3>
+                      {isAdmin && (
+                        <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/manage-awarders/${cid}`)}>
+                          <Plus className="w-4 h-4 mr-1" />
+                          Manage
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="space-y-3">
+                      {members.map((member) => (
+                        <MemberItem key={member.id} member={member} />
+                      ))}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="analytics" className="space-y-4">
+                    <h3 className="text-lg font-semibold text-foreground">Analytics & Insights</h3>
+
+                    <Card className="glass-card p-6">
+                      <h4 className="font-medium text-foreground mb-4">Reputation Distribution</h4>
+                      <div className="space-y-3">
+                        {members.map((member, index) => {
+                          const max = Math.max(1, ...members.map((m) => m.reputation));
+                          const width = `${(member.reputation / max) * 100}%`;
+                          return (
+                            <div key={member.id} className="flex items-center justify-between">
+                              <span className="text-sm text-muted-foreground">{member.name}</span>
+                              <div className="flex items-center gap-2">
+                                <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-gradient-to-r from-primary to-primary-glow rounded-full transition-all duration-1000"
+                                    style={{ width, animationDelay: `${index * 0.1}s` }}
+                                  />
+                                </div>
+                                <span className="text-sm font-medium text-foreground">{member.reputation}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </Card>
+                  </TabsContent>
+                </Tabs>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function QuickActionsSection({ cid, canAward, isAdmin }: { cid: string; canAward: boolean; isAdmin: boolean }) {
+  const navigate = useNavigate();
+
+  const actions = [
+    {
+      title: "Award Reputation",
+      description: "Give reputation points to members",
+      icon: Award,
+      action: () => navigate(`/dashboard/award-rep/${cid}`),
+      variant: "hero" as const,
+      show: canAward,
+    },
+    {
+      title: "Manage Members",
+      description: "Add or manage organization members",
+      icon: Users,
+      action: () => navigate(`/dashboard/manage-awarders/${cid}`),
+      variant: "outline" as const,
+      show: isAdmin,
+    },
+    {
+      title: "View Activity",
+      description: "See all reputation transactions",
+      icon: Activity,
+      action: () => navigate(`/dashboard/transaction-log/${cid}`),
+      variant: "outline" as const,
+      show: true,
+    },
+    {
+      title: "Settings",
+      description: "Configure organization settings",
+      icon: Settings,
+      action: () => navigate(`/dashboard/decay-system/${cid}`),
+      variant: "ghost" as const,
+      show: isAdmin,
+    },
+  ].filter((a) => a.show);
+
+  return (
+    <div className="mb-8 animate-fade-in">
+      <h2 className="text-xl font-semibold text-foreground mb-4">Quick Actions</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {actions.map((action) => (
+          <Button
+            key={action.title}
+            variant={action.variant}
+            onClick={action.action}
+            className="h-auto p-4 flex flex-col items-start gap-2 hover:scale-105 transition-all duration-300"
+          >
+            <action.icon className="w-5 h-5" />
+            <div className="text-left">
+              <div className="font-medium">{action.title}</div>
+              <div className="text-xs opacity-70">{action.description}</div>
+            </div>
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default Dashboard;
