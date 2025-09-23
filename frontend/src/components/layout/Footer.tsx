@@ -9,12 +9,7 @@ const Footer = () => {
       { name: "Use Cases", href: "#use-cases" },
       { name: "Technical", href: "#technical" },
     ],
-    Developers: [
-      { name: "Documentation", href: "/docs" },
-      { name: "API Reference", href: "/docs/api" },
-      { name: "SDKs", href: "/docs/sdks" },
-      { name: "GitHub", href: "https://github.com/Reputation-DAO" },
-    ],
+
     Community: [
       { name: "Discord", href: "#" },
       { name: "Blog", href: "/blog" },
@@ -41,10 +36,10 @@ const Footer = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Main footer content */}
         <div className="py-16">
-          <div className="grid lg:grid-cols-5 gap-8">
+          <div className="grid gap-12 sm:gap-16 md:grid-cols-2 lg:grid-cols-5">
             {/* Brand section */}
-            <div className="lg:col-span-2">
-              <Link to="/" className="flex items-center gap-2 mb-6">
+            <div className="space-y-6 text-center md:text-left lg:col-span-2">
+              <Link to="/" className="flex items-center justify-center md:justify-start gap-2">
                 <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary-glow rounded-xl flex items-center justify-center">
                   <Zap className="w-6 h-6 text-white" />
                 </div>
@@ -52,14 +47,14 @@ const Footer = () => {
                   Reputation DAO
                 </span>
               </Link>
-              
-              <p className="text-muted-foreground mb-6 leading-relaxed max-w-md">
-                Building the future of decentralized reputation. Soulbound, tamper-proof, 
+
+              <p className="text-muted-foreground leading-relaxed max-w-xl mx-auto md:mx-0">
+                Building the future of decentralized reputation. Soulbound, tamper-proof,
                 and completely transparent identity for the web3 ecosystem.
               </p>
-              
+
               {/* Social links */}
-              <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
                 {socialLinks.map((social) => {
                   const IconComponent = social.icon;
                   return (
@@ -79,47 +74,49 @@ const Footer = () => {
             </div>
             
             {/* Links sections */}
-            {Object.entries(footerLinks).map(([category, links]) => (
-              <div key={category}>
-                <h3 className="font-semibold text-foreground mb-4">{category}</h3>
-                <ul className="space-y-3">
-                  {links.map((link) => (
-                    <li key={link.name}>
-                      {link.href.startsWith('#') || link.href.startsWith('http') ? (
-                        <a
-                          href={link.href}
-                          target={link.href.startsWith('http') ? "_blank" : undefined}
-                          rel={link.href.startsWith('http') ? "noopener noreferrer" : undefined}
-                          className="text-muted-foreground hover:text-primary transition-colors duration-300"
-                        >
-                          {link.name}
-                        </a>
-                      ) : (
-                        <Link
-                          to={link.href}
-                          className="text-muted-foreground hover:text-primary transition-colors duration-300"
-                        >
-                          {link.name}
-                        </Link>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+            <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3 lg:col-span-3">
+              {Object.entries(footerLinks).map(([category, links]) => (
+                <div key={category} className="text-center sm:text-left">
+                  <h3 className="font-semibold text-foreground mb-4">{category}</h3>
+                  <ul className="space-y-3">
+                    {links.map((link) => (
+                      <li key={link.name}>
+                        {link.href.startsWith('#') || link.href.startsWith('http') ? (
+                          <a
+                            href={link.href}
+                            target={link.href.startsWith('http') ? "_blank" : undefined}
+                            rel={link.href.startsWith('http') ? "noopener noreferrer" : undefined}
+                            className="text-muted-foreground hover:text-primary transition-colors duration-300"
+                          >
+                            {link.name}
+                          </a>
+                        ) : (
+                          <Link
+                            to={link.href}
+                            className="text-muted-foreground hover:text-primary transition-colors duration-300"
+                          >
+                            {link.name}
+                          </Link>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
         
         {/* Newsletter signup */}
         <div className="py-8 border-t border-border/50">
-          <div className="glass-card p-8 text-center">
-            <h3 className="text-2xl font-bold mb-4 text-foreground">
-              Stay Updated
-            </h3>
-            <p className="text-muted-foreground mb-6 max-w-2xl mx-auto">
-              Get the latest updates on Reputation DAO development, partnerships, and community news.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center max-w-md mx-auto">
+          <div className="glass-card p-8 md:p-10 text-center md:text-left md:flex md:items-center md:justify-between md:gap-8">
+            <div className="md:max-w-xl space-y-3">
+              <h3 className="text-2xl font-bold text-foreground">Stay Updated</h3>
+              <p className="text-muted-foreground max-w-2xl mx-auto md:mx-0">
+                Get the latest updates on Reputation DAO development, partnerships, and community news.
+              </p>
+            </div>
+            <div className="mt-6 md:mt-0 w-full md:max-w-md flex flex-col sm:flex-row gap-4">
               <input
                 type="email"
                 placeholder="Enter your email"
@@ -133,11 +130,9 @@ const Footer = () => {
         </div>
         
         {/* Copyright */}
-        <div className="py-6 border-t border-border/50 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <p className="text-muted-foreground text-sm">
-            © 2024 Reputation DAO. All rights reserved.
-          </p>
-          <div className="flex items-center gap-6 text-sm text-muted-foreground">
+        <div className="py-6 border-t border-border/50 flex flex-col lg:flex-row justify-between items-center gap-4 text-center lg:text-left">
+          <p className="text-muted-foreground text-sm">© 2024 Reputation DAO. All rights reserved.</p>
+          <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-muted-foreground">
             <Link to="/privacy" className="hover:text-primary transition-colors duration-300">
               Privacy Policy
             </Link>
