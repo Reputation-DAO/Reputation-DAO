@@ -58,7 +58,7 @@ interface DecayEvent {
 const DecaySystem = () => {
   const navigate = useNavigate();
   const { cid } = useParams<{ cid: string }>();
-  const { isAdmin, currentPrincipal, userRole, userName } = useRole();
+  const { isAdmin, currentPrincipal, userRole, userName, loading: roleLoading } = useRole();
 
   const [child, setChild] = useState<any>(null);
   const [connecting, setConnecting] = useState(true);
@@ -306,6 +306,17 @@ const DecaySystem = () => {
         <Alert>
           <AlertDescription>No organization selected.</AlertDescription>
         </Alert>
+      </div>
+    );
+  }
+
+  if (roleLoading) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <div className="inline-flex items-center gap-2 text-muted-foreground text-sm">
+          <div className="w-4 h-4 border-2 border-primary border-r-transparent rounded-full animate-spin" />
+          Determining access…
+        </div>
       </div>
     );
   }

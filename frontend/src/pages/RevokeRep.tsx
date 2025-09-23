@@ -66,7 +66,7 @@ const RevokeRep: React.FC = () => {
   const { cid } = useParams<{ cid: string }>();
 
   // permissions
-  const { userRole, isAdmin, currentPrincipal } = useRole();
+  const { userRole, isAdmin, currentPrincipal, loading: roleLoading } = useRole();
   const userDisplayData = getUserDisplayData(currentPrincipal || null);
 
   // child canister actor
@@ -250,6 +250,17 @@ const RevokeRep: React.FC = () => {
             </Button>
           </div>
         </Card>
+      </div>
+    );
+  }
+
+  if (roleLoading) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <div className="inline-flex items-center gap-2 text-muted-foreground text-sm">
+          <div className="w-4 h-4 border-2 border-primary border-r-transparent rounded-full animate-spin" />
+          Determining access…
+        </div>
       </div>
     );
   }

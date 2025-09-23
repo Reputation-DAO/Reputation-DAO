@@ -157,7 +157,7 @@ const MemberItem = ({ member }: { member: Member }) => (
 const Dashboard = () => {
   const navigate = useNavigate();
   const { cid } = useParams<{ cid: string }>();
-  const { userRole, loading: roleLoading, currentPrincipal } = useRole();
+  const { userRole, loading: roleLoading, currentPrincipal, isAdmin, isAwarder } = useRole();
   const { isAuthenticated, principal } = useAuth();
 
   const [child, setChild] = useState<any>(null);
@@ -302,46 +302,6 @@ const Dashboard = () => {
 
   const handleDisconnect = () => navigate("/auth");
 
-  // Quick actions that respect :cid
-  const quickActions = useMemo(
-    () =>
-      [
-        {
-          title: "Award Reputation",
-          description: "Give reputation points to members",
-          icon: Award,
-          action: () => navigate(`/dashboard/award-rep/${cid}`),
-          variant: "hero" as const,
-          show: ["Admin", "Awarder"].includes(userRole || ""),
-        },
-        {
-          title: "Manage Members",
-          description: "Add or manage organization members",
-          icon: Users,
-          action: () => navigate(`/dashboard/manage-awarders/${cid}`),
-          variant: "outline" as const,
-          show: userRole === "Admin",
-        },
-        {
-          title: "View Activity",
-          description: "See all reputation transactions",
-          icon: Activity,
-          action: () => navigate(`/dashboard/transaction-log/${cid}`),
-          variant: "outline" as const,
-          show: true,
-        },
-        {
-          title: "Settings",
-          description: "Configure organization settings",
-          icon: Settings,
-          action: () => navigate(`/dashboard/decay-system/${cid}`),
-          variant: "ghost" as const,
-          show: userRole === "Admin",
-        },
-      ].filter((a) => a.show),
-    [navigate, cid, userRole]
-  );
-
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-muted/20 flex items-center justify-center">
@@ -359,6 +319,8 @@ const Dashboard = () => {
       {/* get sidebar state to pad content accordingly */}
       <InnerDashboard
         userRole={userRole}
+        isAdmin={isAdmin}
+        isAwarder={isAwarder}
         userDisplayData={userDisplayData}
         handleDisconnect={handleDisconnect}
         child={child}
@@ -376,6 +338,8 @@ const Dashboard = () => {
 function InnerDashboard(props: any) {
   const {
     userRole,
+    isAdmin,
+    isAwarder,
     userDisplayData,
     handleDisconnect,
     child,
@@ -391,10 +355,32 @@ function InnerDashboard(props: any) {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
 
+  const normalizedRole = (userRole || "").toLowerCase();
+  const sidebarRole: "admin" | "awarder" | "member" =
+    normalizedRole === "admin" || normalizedRole === "awarder"
+      ? (normalizedRole as "admin" | "awarder")
+      : isAdmin
+      ? "admin"
+      : isAwarder
+      ? "awarder"
+      : "member";
+  const badgeLabel =
+    normalizedRole === "admin"
+      ? "Admin"
+      : normalizedRole === "awarder"
+      ? "Awarder"
+      : normalizedRole === "loading"
+      ? "Loading…"
+      : isAdmin
+      ? "Admin"
+      : isAwarder
+      ? "Awarder"
+      : "Member";
+
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
       <DashboardSidebar
-        userRole={(userRole?.toLowerCase() as "admin" | "awarder" | "member") || "member"}
+        userRole={sidebarRole}
         userName={userDisplayData.userName}
         userPrincipal={userDisplayData.userPrincipal}
         onDisconnect={handleDisconnect}
@@ -452,8 +438,8 @@ function InnerDashboard(props: any) {
                 </div>
 
                 <Badge variant="secondary" className="flex items-center gap-2 px-4 py-2">
-                  <RoleIcon role={userRole?.toLowerCase() || "member"} />
-                  <span className="capitalize">{userRole || "Member"}</span>
+                  <RoleIcon role={sidebarRole} />
+                  <span className="capitalize">{badgeLabel}</span>
                 </Badge>
               </div>
 
@@ -484,7 +470,7 @@ function InnerDashboard(props: any) {
               </div>
 
               {/* Quick Actions */}
-              <QuickActionsSection cid={cid} userRole={userRole} />
+              <QuickActionsSection cid={cid} canAward={isAdmin || isAwarder} isAdmin={isAdmin} />
 
               {/* Tabs */}
               <div className="animate-fade-in">
@@ -514,7 +500,7 @@ function InnerDashboard(props: any) {
                   <TabsContent value="members" className="space-y-4">
                     <div className="flex items-center justify-between">
                       <h3 className="text-lg font-semibold text-foreground">Organization Members</h3>
-                      {userRole === "Admin" && (
+                      {isAdmin && (
                         <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/manage-awarders/${cid}`)}>
                           <Plus className="w-4 h-4 mr-1" />
                           Manage
@@ -566,7 +552,7 @@ function InnerDashboard(props: any) {
   );
 }
 
-function QuickActionsSection({ cid, userRole }: { cid: string; userRole: string }) {
+function QuickActionsSection({ cid, canAward, isAdmin }: { cid: string; canAward: boolean; isAdmin: boolean }) {
   const navigate = useNavigate();
 
   const actions = [
@@ -576,7 +562,7 @@ function QuickActionsSection({ cid, userRole }: { cid: string; userRole: string 
       icon: Award,
       action: () => navigate(`/dashboard/award-rep/${cid}`),
       variant: "hero" as const,
-      show: ["Admin", "Awarder"].includes(userRole || ""),
+      show: canAward,
     },
     {
       title: "Manage Members",
@@ -584,7 +570,7 @@ function QuickActionsSection({ cid, userRole }: { cid: string; userRole: string 
       icon: Users,
       action: () => navigate(`/dashboard/manage-awarders/${cid}`),
       variant: "outline" as const,
-      show: userRole === "Admin",
+      show: isAdmin,
     },
     {
       title: "View Activity",
@@ -600,7 +586,7 @@ function QuickActionsSection({ cid, userRole }: { cid: string; userRole: string 
       icon: Settings,
       action: () => navigate(`/dashboard/decay-system/${cid}`),
       variant: "ghost" as const,
-      show: userRole === "Admin",
+      show: isAdmin,
     },
   ].filter((a) => a.show);
 

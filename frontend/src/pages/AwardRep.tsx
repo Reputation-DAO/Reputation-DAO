@@ -64,7 +64,7 @@ const categories = [
 const AwardRep = () => {
   const navigate = useNavigate();
   const { cid } = useParams<{ cid: string }>();
-  const { userRole, currentPrincipal } = useRole();
+  const { userRole, currentPrincipal, isAdmin, isAwarder, loading: roleLoading } = useRole();
 
   // child canister actor (built from :cid like your MUI example)
   const [child, setChild] = useState<any>(null);
@@ -215,7 +215,7 @@ const AwardRep = () => {
     }
 
     // Role gate (mirrors your previous check)
-    if (userRole !== "Admin" && userRole !== "Awarder") {
+    if (!isAdmin && !isAwarder) {
       toast.error("Only Admins and Awarders can award reputation");
       return;
     }
@@ -287,7 +287,18 @@ const AwardRep = () => {
     );
   }
 
-  if (userRole !== "Admin" && userRole !== "Awarder") {
+  if (roleLoading) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <div className="inline-flex items-center gap-2 text-muted-foreground text-sm">
+          <div className="w-4 h-4 border-2 border-primary border-r-transparent rounded-full animate-spin" />
+          Determining access…
+        </div>
+      </div>
+    );
+  }
+
+  if (!roleLoading && !isAdmin && !isAwarder) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-muted/20 flex items-center justify-center">
         <Card className="glass-card p-8 max-w-md mx-auto text-center">
@@ -303,6 +314,8 @@ const AwardRep = () => {
     <SidebarProvider>
       <InnerAwardRep
         userRole={userRole}
+        isAdmin={isAdmin}
+        isAwarder={isAwarder}
         principal={currentPrincipal}
         handleDisconnect={handleDisconnect}
         formData={formData}
@@ -319,6 +332,8 @@ const AwardRep = () => {
 function InnerAwardRep(props: any) {
   const {
     userRole,
+    isAdmin,
+    isAwarder,
     principal,
     handleDisconnect,
     formData,
@@ -332,11 +347,20 @@ function InnerAwardRep(props: any) {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const userDisplay = getUserDisplayData(principal || null);
+  const normalizedRole = (userRole || "").toLowerCase();
+  const sidebarRole: "admin" | "awarder" | "member" =
+    normalizedRole === "admin" || normalizedRole === "awarder"
+      ? (normalizedRole as "admin" | "awarder")
+      : isAdmin
+      ? "admin"
+      : isAwarder
+      ? "awarder"
+      : "member";
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
       <DashboardSidebar
-        userRole={(userRole?.toLowerCase() as "admin" | "awarder" | "member") || "member"}
+        userRole={sidebarRole}
         userName={userDisplay.userName}
         userPrincipal={userDisplay.userPrincipal}
         onDisconnect={handleDisconnect}

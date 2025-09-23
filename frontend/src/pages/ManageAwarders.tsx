@@ -70,7 +70,7 @@ const ManageAwarders: React.FC = () => {
   const { cid } = useParams<{ cid: string }>();
 
   // Use your role context to gate access + show user in sidebar
-  const { isAdmin, currentPrincipal } = useRole();
+  const { isAdmin, currentPrincipal, loading: roleLoading } = useRole();
   const userDisplayData = getUserDisplayData(currentPrincipal || null);
 
   // Child actor state
@@ -252,6 +252,17 @@ const ManageAwarders: React.FC = () => {
             <Button onClick={() => navigate("/org-selector")} variant="outline">Choose Org</Button>
           </div>
         </Card>
+      </div>
+    );
+  }
+
+  if (roleLoading) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <div className="inline-flex items-center gap-2 text-muted-foreground text-sm">
+          <div className="w-4 h-4 border-2 border-primary border-r-transparent rounded-full animate-spin" />
+          Determining access…
+        </div>
       </div>
     );
   }
