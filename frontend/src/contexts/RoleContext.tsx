@@ -21,6 +21,7 @@ export interface RoleContextType {
   currentPrincipal: Principal | null;
   userRole: UserRole;
   userName: string;
+  cid: string | null;
   isAdmin: boolean;
   isAwarder: boolean;
   isUser: boolean;
@@ -60,15 +61,7 @@ function extractCidFromPathname(pathname: string): string | null {
   );
   return m?.[1] || null;
 }
-const deriveCid = (pathname: string): string | null => {
-  const fromPath = extractCidFromPathname(pathname);
-  if (fromPath) return fromPath;
-  try {
-    return localStorage.getItem('selectedOrgId');
-  } catch {
-    return null;
-  }
-};
+const deriveCid = (pathname: string): string | null => extractCidFromPathname(pathname);
 
 export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   const location = useLocation();
@@ -89,17 +82,6 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   useEffect(() => {
     const next = deriveCid(location.pathname);
     setCid((prev) => (next === prev ? prev : next));
-  }, [location.pathname]);
-
-  useEffect(() => {
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key === 'selectedOrgId') {
-        const next = deriveCid(location.pathname);
-        setCid((prev) => (next === prev ? prev : next));
-      }
-    };
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
   }, [location.pathname]);
 
   const determineUserRole = useCallback(async (): Promise<void> => {
@@ -201,12 +183,6 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
           else if (resolvedAwarder) finalRole = 'awarder';
           else finalRole = 'member';
 
-          try {
-            localStorage.setItem('selectedOrgId', cid);
-          } catch (storageErr) {
-            console.warn('⚠️ Unable to persist selectedOrgId:', storageErr);
-          }
-
           const t1 = performance.now?.() ?? Date.now();
           console.log(
             `%c✅ Final role: ${finalRole}`,
@@ -239,6 +215,22 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     }
   }, [cid]);
 
+  useEffect(() => {
+    const handleFocus = () => {
+      determineUserRole();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [determineUserRole]);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      determineUserRole();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [determineUserRole]);
+
   // Recompute role whenever cid changes (via locationchange/storage)
   useEffect(() => {
     determineUserRole();
@@ -248,6 +240,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     currentPrincipal,
     userRole,
     userName,
+    cid,
     isAdmin: userRole === 'admin',
     isAwarder: userRole === 'awarder',
     isUser: userRole === 'user' || userRole === 'member',

@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { Principal } from '@dfinity/principal';
-import { isPlugConnected, getCurrentPrincipal, getPlugActor } from '../services/childCanisterService';
+import { ensurePlugAgent, getPlugPrincipal, isPlugConnected, disconnectPlug, PLUG_HOST } from '../utils/plug';
+import { makeChildWithPlug } from '../components/canister/child';
+import type { ChildActor } from '../components/canister/child';
 
 export type AuthMethod = 'plug' | null;
 
@@ -20,7 +22,7 @@ interface AuthContextType {
   checkConnection: () => Promise<void>;
   
   // Actor access
-  getActor: () => any; // Returns the appropriate actor based on auth method
+  getActor: (canisterId: string) => Promise<ChildActor>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -45,7 +47,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Check Plug wallet
       const isPlugAuth = await isPlugConnected();
       if (isPlugAuth) {
-        const plugPrincipal = await getCurrentPrincipal();
+        const plugPrincipal = await getPlugPrincipal();
         setIsAuthenticated(true);
         setAuthMethod('plug');
         setPrincipal(plugPrincipal);
@@ -77,8 +79,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     
     try {
       // Connect with Plug
-      await getPlugActor();
-      const plugPrincipal = await getCurrentPrincipal();
+      await ensurePlugAgent({ host: PLUG_HOST });
+      const plugPrincipal = await getPlugPrincipal();
       
       setIsAuthenticated(true);
       setAuthMethod('plug');
@@ -100,8 +102,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsLoading(true);
     
     try {
-      if (authMethod === 'plug' && window.ic?.plug) {
-        await window.ic.plug.disconnect();
+      if (authMethod === 'plug') {
+        await disconnectPlug();
       }
 
       setIsAuthenticated(false);
@@ -120,17 +122,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   /**
    * Get the appropriate actor based on authentication method
    */
-  const getActor = () => {
+  const getActor = async (canisterId: string) => {
     if (!isAuthenticated) {
       throw new Error('Not authenticated. Please login first.');
     }
 
-    if (authMethod === 'plug') {
-      // This will be handled by the existing getPlugActor function
-      return getPlugActor();
-    } else {
-      throw new Error('Unknown authentication method');
+    if (authMethod !== 'plug') {
+      throw new Error('Unsupported authentication method');
     }
+
+    await ensurePlugAgent({ host: PLUG_HOST, whitelist: [canisterId] });
+    return makeChildWithPlug({ canisterId, host: PLUG_HOST });
   };
 
   // Check connection on mount

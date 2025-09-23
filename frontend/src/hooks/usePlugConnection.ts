@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { isPlugConnected, getCurrentPrincipal, getPlugActor } from '../services/childCanisterService';
+import { isPlugConnected, ensurePlugAgent, getPlugPrincipal, disconnectPlug, PLUG_HOST } from '../utils/plug';
 import { useRoute } from '../contexts/RouteContext';
 
 interface UsePlugConnectionOptions {
@@ -30,7 +30,7 @@ export const usePlugConnection = (options: UsePlugConnectionOptions = {}) => {
       
       if (connected) {
         try {
-          const currentPrincipal = await getCurrentPrincipal();
+          const currentPrincipal = await getPlugPrincipal();
           setPrincipal(currentPrincipal?.toString() || null);
         } catch (error) {
           console.error('Error getting principal:', error);
@@ -72,7 +72,7 @@ export const usePlugConnection = (options: UsePlugConnectionOptions = {}) => {
 
     try {
       setIsLoading(true);
-      await getPlugActor(); // This will handle connection if needed
+      await ensurePlugAgent({ host: PLUG_HOST });
       await checkConnection();
     } catch (error) {
       console.error('Connection failed:', error);
@@ -86,9 +86,7 @@ export const usePlugConnection = (options: UsePlugConnectionOptions = {}) => {
     // Allow disconnect on any route
     try {
       setIsLoading(true);
-      if (window.ic?.plug) {
-        await window.ic.plug.disconnect();
-      }
+      await disconnectPlug();
       setIsConnected(false);
       setPrincipal(null);
     } catch (error) {

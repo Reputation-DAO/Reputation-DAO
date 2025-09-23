@@ -1,5 +1,6 @@
-import { getPlugActor } from './childCanisterService';
+import { makeChildWithPlug } from '../components/canister/child';
 import type { _SERVICE } from '../declarations/reputation_dao/reputation_dao.did.d.ts';
+import { ensurePlugAgent, PLUG_HOST } from '../utils/plug';
 
 /**
  * Simple actor service that uses Plug wallet
@@ -8,8 +9,9 @@ class ActorService {
   /**
    * Get the Plug actor
    */
-  async getActor(): Promise<_SERVICE> {
-    return await getPlugActor();
+  async getActor(canisterId: string): Promise<_SERVICE> {
+    await ensurePlugAgent({ host: PLUG_HOST, whitelist: [canisterId] });
+    return makeChildWithPlug({ canisterId, host: PLUG_HOST });
   }
 
   /**
