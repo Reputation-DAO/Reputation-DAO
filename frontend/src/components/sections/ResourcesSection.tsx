@@ -21,7 +21,7 @@ const ResourcesSection = () => {
       title: "Watch Demo",
       description: "See Reputation DAO in action with our comprehensive demo",
       icon: Play,
-      link: "https://www.youtube.com/watch?v=f5_kVgIzl_E",
+      link: "https://www.youtube.com/watch?v=iaZ4pHaWd_U",
       color: "from-red-600 to-red-700"
     },
     {
