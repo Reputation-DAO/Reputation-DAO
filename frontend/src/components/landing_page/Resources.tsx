@@ -25,7 +25,7 @@ const resources = [
   },
   {
     label: 'Watch Demo',
-    href: 'https://www.youtube.com/watch?v=f5_kVgIzl_E',
+    href: 'https://www.youtube.com/watch?v=iaZ4pHaWd_U',
     icon: <PlayCircleOutlineIcon fontSize="medium" />,
   },
   {
