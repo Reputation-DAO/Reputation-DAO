@@ -1,11 +1,10 @@
 // src/pages/Dashboard.tsx
-// @ts-nocheck
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Principal } from "@dfinity/principal";
 import { useRole } from "@/contexts/RoleContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { makeChildWithPlug } from "@/components/canister/child";
+import type { ChildActor } from "@/components/canister/child";
 import { getUserDisplayData } from "@/utils/userUtils";
 import { toast } from "sonner";
 
@@ -30,6 +29,8 @@ import {
 import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import type { Transaction, TransactionType } from "@/declarations/reputation_dao/reputation_dao.did";
+import type { UserRole } from "@/contexts/RoleContext";
 
 type TxKind = "awarded" | "revoked" | "decayed";
 interface ReputationActivity {
@@ -50,6 +51,19 @@ interface Member {
   joinDate: Date;
   lastActive: Date;
 }
+
+interface OrgStats {
+  totalMembers: number;
+  totalReputation: number;
+  growthRate: string;
+  recentTransactions: number;
+}
+
+const mapTransactionType = (type: TransactionType): TxKind => {
+  if ("Revoke" in type) return "revoked";
+  if ("Decay" in type) return "decayed";
+  return "awarded";
+};
 
 const RoleIcon = ({ role }: { role: string }) => {
   switch (role) {
@@ -160,14 +174,14 @@ const Dashboard = () => {
   const { userRole, loading: roleLoading, currentPrincipal, isAdmin, isAwarder } = useRole();
   const { isAuthenticated, principal } = useAuth();
 
-  const [child, setChild] = useState<any>(null);
+  const [child, setChild] = useState<ChildActor | null>(null);
   const [loading, setLoading] = useState(false);
 
   // derived/UX state
   const [userBalance, setUserBalance] = useState(0);
   const [recentActivity, setRecentActivity] = useState<ReputationActivity[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
-  const [orgStats, setOrgStats] = useState({
+  const [orgStats, setOrgStats] = useState<OrgStats>({
     totalMembers: 0,
     totalReputation: 0,
     growthRate: "0%",
@@ -209,44 +223,28 @@ const Dashboard = () => {
         setLoading(true);
 
         // Parallel calls to child
-        const [txsRes, txCountRes, awarders] = await Promise.all([
+        const [txsRes, txCountRes] = await Promise.all([
           child.getTransactionHistory(),
           child.getTransactionCount(),
-          child.getTrustedAwarders(),
         ]);
 
-        const txs = (txsRes ?? []) as Array<{
-          id: number | bigint;
-          transactionType: { Award?: null; Revoke?: null; Decay?: null };
-          from: Principal;
-          to: Principal;
-          amount: number | bigint;
-          timestamp: number | bigint; // seconds
-          reason?: [] | [string];
-        }>;
-
-        const toNum = (v: number | bigint) => (typeof v === "bigint" ? Number(v) : v);
+        const txs: Transaction[] = txsRes ?? [];
 
         // Recent activity (last 5, most recent first)
         const recent = [...txs]
           .slice(-5)
           .reverse()
-          .map((tx, i) => {
-            const kind: TxKind =
-              "Award" in tx.transactionType
-                ? "awarded"
-                : "Revoke" in tx.transactionType
-                ? "revoked"
-                : "decayed";
+          .map((tx, index) => {
+            const [reasonEntry] = tx.reason;
             return {
-              id: `activity-${i}`,
-              type: kind,
-              points: toNum(tx.amount),
-              reason: (Array.isArray(tx.reason) && tx.reason[0]) || "No reason provided",
-              timestamp: new Date(toNum(tx.timestamp) * 1000),
+              id: `activity-${index}`,
+              type: mapTransactionType(tx.transactionType),
+              points: Number(tx.amount ?? 0n),
+              reason: reasonEntry ?? "No reason provided",
+              timestamp: new Date(Number(tx.timestamp ?? 0n) * 1000),
               from: tx.from.toString().slice(0, 8),
               to: tx.to.toString().slice(0, 8),
-            } as ReputationActivity;
+            } satisfies ReputationActivity;
           });
 
         setRecentActivity(recent);
@@ -254,7 +252,7 @@ const Dashboard = () => {
         // Compute balances from history (top 10)
         const balanceMap = new Map<string, number>();
         for (const tx of txs) {
-          const amt = toNum(tx.amount);
+          const amt = Number(tx.amount ?? 0n);
           const toKey = tx.to.toString();
           if ("Award" in tx.transactionType) {
             balanceMap.set(toKey, (balanceMap.get(toKey) || 0) + amt);
@@ -335,7 +333,22 @@ const Dashboard = () => {
   );
 };
 
-function InnerDashboard(props: any) {
+interface InnerDashboardProps {
+  userRole: UserRole;
+  isAdmin: boolean;
+  isAwarder: boolean;
+  userDisplayData: ReturnType<typeof getUserDisplayData>;
+  handleDisconnect: () => void;
+  child: ChildActor | null;
+  loading: boolean;
+  orgStats: OrgStats;
+  userBalance: number;
+  recentActivity: ReputationActivity[];
+  members: Member[];
+  cid: string | undefined;
+}
+
+function InnerDashboard(props: InnerDashboardProps) {
   const {
     userRole,
     isAdmin,
@@ -350,6 +363,8 @@ function InnerDashboard(props: any) {
     members,
     cid,
   } = props;
+
+  const navigate = useNavigate();
 
   // Sidebar padding control (Step 2)
   const { state } = useSidebar();

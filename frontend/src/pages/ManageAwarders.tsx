@@ -1,9 +1,10 @@
 // src/pages/ManageAwarders.tsx
-// @ts-nocheck
 import React, { useState, useEffect } from "react";
+import type { Dispatch, FormEvent, SetStateAction } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 import { makeChildWithPlug } from "@/components/canister/child";
+import type { ChildActor } from "@/components/canister/child";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ import {
 import { formatDateForDisplay } from "@/utils/transactionUtils";
 import { useRole } from "@/contexts/RoleContext";
 import { getUserDisplayData } from "@/utils/userUtils";
+import type { Awarder as BackendAwarder, Transaction } from "@/declarations/reputation_dao/reputation_dao.did";
 
 interface Awarder {
   id: string;
@@ -52,6 +54,13 @@ interface NewAwarderForm {
   name: string;
   principal: string;
   role: "admin" | "awarder";
+}
+
+interface ManageAwarderStats {
+  totalAwarders: number;
+  activeAwarders: number;
+  totalAwards: number;
+  admins: number;
 }
 
 const RoleIcon = ({ role }: { role: string }) => {
@@ -74,7 +83,7 @@ const ManageAwarders: React.FC = () => {
   const userDisplayData = getUserDisplayData(currentPrincipal || null);
 
   // Child actor state
-  const [child, setChild] = useState<any>(null);
+  const [child, setChild] = useState<ChildActor | null>(null);
   const [connecting, setConnecting] = useState(true);
   const [connectError, setConnectError] = useState<string | null>(null);
 
@@ -109,48 +118,40 @@ const ManageAwarders: React.FC = () => {
     if (!child) return;
     setLoading(true);
     try {
-      // Expect shape: [{ id: Principal, name: Text }]
-      const backendAwarders = await (child.getTrustedAwarders?.() ?? child.get_trusted_awarders?.());
-      const list = Array.isArray(backendAwarders) ? backendAwarders : [];
-
-      // Enrich with simple stats (optional): awardsGiven + lastActive via transactions-by-user
-      const toNum = (v: number | bigint) => (typeof v === "bigint" ? Number(v) : v);
+      const backendAwarders = await child.getTrustedAwarders();
       const enriched: Awarder[] = await Promise.all(
-        list.map(async (a: any, idx: number) => {
-          const pStr = (a.id?.toString?.() ?? a.toString?.() ?? "").trim();
+        backendAwarders.map(async (awarder, index) => {
+          const principalText = awarder.id.toString();
           let awardsGiven = 0;
           let lastActive = new Date(0);
 
           try {
-            const txs = await (child.getTransactionsByUser?.(a.id) ?? child.get_transactions_by_user?.(a.id));
-            if (Array.isArray(txs)) {
-              for (const tx of txs) {
-                const isAward = tx?.transactionType && "Award" in tx.transactionType;
-                if (isAward && tx?.from?.toString?.() === pStr) {
-                  awardsGiven += 1;
-                }
-                const ts = toNum(tx?.timestamp ?? 0);
-                if (ts > 0) {
-                  const d = new Date(ts * 1000);
-                  if (d > lastActive) lastActive = d;
-                }
+            const transactions = await child.getTransactionsByUser(awarder.id);
+            for (const tx of transactions) {
+              if ("Award" in tx.transactionType && tx.from.toString() === principalText) {
+                awardsGiven += 1;
+              }
+
+              const timestampMs = Number(tx.timestamp ?? 0n) * 1000;
+              if (timestampMs > lastActive.getTime()) {
+                lastActive = new Date(timestampMs);
               }
             }
-          } catch {
-            // ignore tx stats errors
+          } catch (err) {
+            console.warn("Failed to load transactions for awarder", principalText, err);
           }
 
           return {
-            id: String(idx),
-            name: a.name ?? `User ${pStr.slice(0, 8)}`,
-            principal: pStr,
+            id: String(index),
+            name: awarder.name || `User ${principalText.slice(0, 8)}`,
+            principal: principalText,
             role: "awarder",
             reputation: 0,
             joinDate: new Date(),
             lastActive: lastActive.getTime() ? lastActive : new Date(),
             awardsGiven,
-            status: "active",
-          };
+            status: awardsGiven > 0 ? "active" : "inactive",
+          } satisfies Awarder;
         })
       );
 
@@ -170,9 +171,12 @@ const ManageAwarders: React.FC = () => {
   }, [child]);
 
   // --- Add awarder on child ---
-  const handleAddAwarder = async (e: React.FormEvent) => {
+  const handleAddAwarder = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!child) return;
+    if (!child) {
+      toast.error("Not connected to the organization canister.");
+      return;
+    }
 
     if (!newAwarder.name.trim() || !newAwarder.principal.trim()) {
       toast.error("Please fill in all required fields");
@@ -182,11 +186,9 @@ const ManageAwarders: React.FC = () => {
     try {
       setLoading(true);
       const p = Principal.fromText(newAwarder.principal.trim());
-      const res: string =
-        (await child.addTrustedAwarder?.(p, newAwarder.name.trim())) ??
-        (await child.add_trusted_awarder?.(p, newAwarder.name.trim()));
+      const res = await child.addTrustedAwarder(p, newAwarder.name.trim());
 
-      if (typeof res === "string" && res.toLowerCase().includes("success")) {
+      if (res.toLowerCase().includes("success")) {
         toast.success(`Added ${newAwarder.name} as ${newAwarder.role}`);
         setNewAwarder({ name: "", principal: "", role: "awarder" });
         setIsAddingAwarder(false);
@@ -203,17 +205,18 @@ const ManageAwarders: React.FC = () => {
 
   // --- Remove awarder on child ---
   const handleRemoveAwarder = async (id: string, name: string) => {
-    if (!child) return;
+    if (!child) {
+      toast.error("Not connected to the organization canister.");
+      return;
+    }
     try {
       const target = awarders.find((a) => a.id === id);
       if (!target) return toast.error("Awarder not found");
 
       const p = Principal.fromText(target.principal);
-      const res: string =
-        (await child.removeTrustedAwarder?.(p)) ??
-        (await child.remove_trusted_awarder?.(p));
+      const res = await child.removeTrustedAwarder(p);
 
-      if (typeof res === "string" && res.toLowerCase().includes("success")) {
+      if (res.toLowerCase().includes("success")) {
         toast.success(`Removed ${name}`);
         setAwarders((prev) => prev.filter((a) => a.id !== id));
       } else {
@@ -280,7 +283,7 @@ const ManageAwarders: React.FC = () => {
     );
   }
 
-  const stats = {
+  const stats: ManageAwarderStats = {
     totalAwarders: awarders.length,
     activeAwarders: awarders.filter((a) => a.status === "active").length,
     totalAwards: awarders.reduce((sum, a) => sum + a.awardsGiven, 0),
@@ -310,7 +313,23 @@ const ManageAwarders: React.FC = () => {
   );
 };
 
-function InnerManageAwarders(props: any) {
+interface InnerManageAwardersProps {
+  cid: string | undefined;
+  userDisplayData: ReturnType<typeof getUserDisplayData>;
+  handleDisconnect: () => void;
+  isAddingAwarder: boolean;
+  setIsAddingAwarder: Dispatch<SetStateAction<boolean>>;
+  newAwarder: NewAwarderForm;
+  setNewAwarder: Dispatch<SetStateAction<NewAwarderForm>>;
+  loading: boolean;
+  stats: ManageAwarderStats;
+  awarders: Awarder[];
+  handleAddAwarder: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  handleRemoveAwarder: (id: string, name: string) => Promise<void>;
+  handleRoleChange: (id: string, newRole: "admin" | "awarder") => void;
+}
+
+function InnerManageAwarders(props: InnerManageAwardersProps) {
   const {
     cid,
     userDisplayData,
@@ -382,7 +401,7 @@ function InnerManageAwarders(props: any) {
                       id="name"
                       placeholder="Enter full name"
                       value={newAwarder.name}
-                      onChange={(e) => setNewAwarder((p: any) => ({ ...p, name: e.target.value }))}
+                      onChange={(e) => setNewAwarder((prev) => ({ ...prev, name: e.target.value }))}
                       className="glass-input"
                       required
                     />
@@ -394,7 +413,7 @@ function InnerManageAwarders(props: any) {
                       id="principal"
                       placeholder="Enter ICP Principal ID"
                       value={newAwarder.principal}
-                      onChange={(e) => setNewAwarder((p: any) => ({ ...p, principal: e.target.value }))}
+                      onChange={(e) => setNewAwarder((prev) => ({ ...prev, principal: e.target.value }))}
                       className="glass-input"
                       required
                     />
@@ -404,7 +423,9 @@ function InnerManageAwarders(props: any) {
                     <Label>Role *</Label>
                     <Select
                       value={newAwarder.role}
-                      onValueChange={(value: "admin" | "awarder") => setNewAwarder((p: any) => ({ ...p, role: value }))}
+                      onValueChange={(value: "admin" | "awarder") =>
+                        setNewAwarder((prev) => ({ ...prev, role: value }))
+                      }
                     >
                       <SelectTrigger className="glass-input">
                         <SelectValue />

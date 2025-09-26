@@ -1,13 +1,16 @@
 // src/pages/AwardRep.tsx
-// @ts-nocheck
 import { useState, useEffect } from "react";
+import type { Dispatch, FormEvent, SetStateAction } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 import { makeChildWithPlug } from "@/components/canister/child";
+import type { ChildActor } from "@/components/canister/child";
 
 import { useRole } from "@/contexts/RoleContext";
+import type { UserRole } from "@/contexts/RoleContext";
 import { getUserDisplayData } from "@/utils/userUtils";
 import { formatDateForDisplay } from "@/utils/transactionUtils";
+import type { Transaction } from "@/declarations/reputation_dao/reputation_dao.did";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -48,6 +51,12 @@ interface RecentAward {
   awardedBy: string;
 }
 
+interface AwardStats {
+  totalAwards: number;
+  totalREPAwarded: number;
+  monthlyAwards: number;
+}
+
 const categories = [
   "Development",
   "Community Building",
@@ -67,7 +76,7 @@ const AwardRep = () => {
   const { userRole, currentPrincipal, isAdmin, isAwarder, loading: roleLoading } = useRole();
 
   // child canister actor (built from :cid like your MUI example)
-  const [child, setChild] = useState<any>(null);
+  const [child, setChild] = useState<ChildActor | null>(null);
   const [connecting, setConnecting] = useState(true);
   const [connectError, setConnectError] = useState<string | null>(null);
 
@@ -82,7 +91,7 @@ const AwardRep = () => {
 
   // stats + recent awards (computed from child.getTransactionHistory)
   const [recentAwards, setRecentAwards] = useState<RecentAward[]>([]);
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<AwardStats>({
     totalAwards: 0,
     totalREPAwarded: 0,
     monthlyAwards: 0,
@@ -109,47 +118,41 @@ const AwardRep = () => {
   const loadAwards = async () => {
     if (!child) return;
     try {
-      const txs =
-        (await child.getTransactionHistory?.()) ??
-        (await child.get_transaction_history?.());
-      const arr: any[] = Array.isArray(txs) ? txs : [];
+      const txs = await child.getTransactionHistory();
+      const arr: Transaction[] = Array.isArray(txs) ? txs : [];
 
-      const toNum = (v: number | bigint) => (typeof v === "bigint" ? Number(v) : v);
+      const awards = arr.filter((tx) => "Award" in tx.transactionType);
 
-      // filter Award transactions
-      const awards = arr.filter((tx) => tx?.transactionType && "Award" in tx.transactionType);
-
-      const totalREPAwarded = awards.reduce((sum, tx) => sum + toNum(tx.amount || 0), 0);
+      const totalREPAwarded = awards.reduce((sum, tx) => sum + Number(tx.amount ?? 0n), 0);
       const totalAwards = awards.length;
 
       const now = new Date();
       const monthlyAwards = awards.filter((tx) => {
-        const ts = toNum(tx.timestamp || 0);
-        if (!ts) return false;
-        const d = new Date(ts * 1000);
-        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        const timestampSeconds = Number(tx.timestamp ?? 0n);
+        if (!timestampSeconds) return false;
+        const date = new Date(timestampSeconds * 1000);
+        return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
       }).length;
 
       setStats({ totalAwards, totalREPAwarded, monthlyAwards });
 
       // newest-first assumed; take first 5
-      const lastFive = awards.slice(0, 5).map((tx: any, index: number) => {
-        const ts = toNum(tx.timestamp || 0);
-        const reason =
-          (Array.isArray(tx.reason) && tx.reason.length ? tx.reason[0] : tx.reason) ||
-          "No reason provided";
-        const toStr = tx.to?.toString?.() ?? "";
-        const fromStr = tx.from?.toString?.() ?? "";
+      const lastFive = awards.slice(0, 5).map((tx, index) => {
+        const [reasonEntry] = tx.reason;
+        const recipientPrincipal = tx.to.toString();
+        const issuerPrincipal = tx.from.toString();
+        const timestampSeconds = Number(tx.timestamp ?? 0n);
+
         return {
-          id: tx.id?.toString?.() ?? `award-${index}`,
-          recipientName: `User ${toStr.slice(0, 8)}`,
-          recipientAddress: toStr,
-          amount: toNum(tx.amount || 0),
+          id: tx.id.toString(),
+          recipientName: `User ${recipientPrincipal.slice(0, 8)}`,
+          recipientAddress: recipientPrincipal,
+          amount: Number(tx.amount ?? 0n),
           category: "General",
-          reason,
-          timestamp: ts ? new Date(ts * 1000) : new Date(),
-          awardedBy: `User ${fromStr.slice(0, 8)}`,
-        } as RecentAward;
+          reason: reasonEntry ?? "No reason provided",
+          timestamp: timestampSeconds ? new Date(timestampSeconds * 1000) : new Date(),
+          awardedBy: `User ${issuerPrincipal.slice(0, 8)}`,
+        } satisfies RecentAward;
       });
 
       setRecentAwards(lastFive);
@@ -172,7 +175,7 @@ const AwardRep = () => {
   };
 
   // ---- Submit award (principal validation, self-award prevention, BigInt amount, optional reason) ----
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     const { recipientAddress, reputationAmount, reason } = formData;
@@ -220,15 +223,17 @@ const AwardRep = () => {
       return;
     }
 
+    if (!child) {
+      toast.error("Not connected to the organization canister.");
+      return;
+    }
+
     setIsAwarding(true);
     try {
       const optReason = reason.trim() ? [reason.trim()] : [];
-      const res: string =
-        (await child.awardRep?.(toPrincipal, amt, optReason)) ??
-        (await child.award_rep?.(toPrincipal, amt, optReason));
+      const res = await child.awardRep(toPrincipal, amt, optReason);
 
-      if (typeof res === "string" && res.toLowerCase().startsWith("error")) {
-        // surface canister error string
+      if (res.toLowerCase().startsWith("error")) {
         toast.error(res);
         return;
       }
@@ -324,12 +329,28 @@ const AwardRep = () => {
         isAwarding={isAwarding}
         stats={stats}
         recentAwards={recentAwards}
+        cid={cid ?? ""}
       />
     </SidebarProvider>
   );
 };
 
-function InnerAwardRep(props: any) {
+interface InnerAwardRepProps {
+  userRole: UserRole;
+  isAdmin: boolean;
+  isAwarder: boolean;
+  principal: Principal | null | undefined;
+  handleDisconnect: () => void;
+  formData: AwardFormData;
+  handleInputChange: (field: keyof AwardFormData, value: string) => void;
+  handleSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  isAwarding: boolean;
+  stats: AwardStats;
+  recentAwards: RecentAward[];
+  cid: string;
+}
+
+function InnerAwardRep(props: InnerAwardRepProps) {
   const {
     userRole,
     isAdmin,
@@ -342,11 +363,13 @@ function InnerAwardRep(props: any) {
     isAwarding,
     stats,
     recentAwards,
+    cid,
   } = props;
 
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const userDisplay = getUserDisplayData(principal || null);
+  const navigate = useNavigate();
   const normalizedRole = (userRole || "").toLowerCase();
   const sidebarRole: "admin" | "awarder" | "member" =
     normalizedRole === "admin" || normalizedRole === "awarder"

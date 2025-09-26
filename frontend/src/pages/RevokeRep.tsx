@@ -1,13 +1,16 @@
 // src/pages/RevokeRep.tsx
-// @ts-nocheck
 import React, { useState, useEffect } from "react";
+import type { Dispatch, FormEvent, SetStateAction } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 import { makeChildWithPlug } from "@/components/canister/child";
+import type { ChildActor } from "@/components/canister/child";
 
 import { useRole } from "@/contexts/RoleContext";
+import type { UserRole } from "@/contexts/RoleContext";
 import { getUserDisplayData } from "@/utils/userUtils";
 import { formatDateForDisplay } from "@/utils/transactionUtils";
+import type { Transaction } from "@/declarations/reputation_dao/reputation_dao.did";
 
 import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
@@ -50,6 +53,12 @@ interface RecentRevocation {
   revokedBy: string;
 }
 
+interface RevocationStats {
+  totalRevocations: number;
+  totalREPRevoked: number;
+  monthlyRevocations: number;
+}
+
 const revocationCategories = [
   "Misconduct",
   "Policy Violation",
@@ -70,7 +79,7 @@ const RevokeRep: React.FC = () => {
   const userDisplayData = getUserDisplayData(currentPrincipal || null);
 
   // child canister actor
-  const [child, setChild] = useState<any>(null);
+  const [child, setChild] = useState<ChildActor | null>(null);
   const [connecting, setConnecting] = useState(true);
   const [connectError, setConnectError] = useState<string | null>(null);
 
@@ -85,7 +94,7 @@ const RevokeRep: React.FC = () => {
   const [recentRevocations, setRecentRevocations] = useState<RecentRevocation[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<RevocationStats>({
     totalRevocations: 0,
     totalREPRevoked: 0,
     monthlyRevocations: 0
@@ -111,19 +120,23 @@ const RevokeRep: React.FC = () => {
     if (!child) return;
     try {
       // Get all org transactions from child
-      const txs = await (child.getTransactionHistory?.() ?? child.get_transaction_history?.());
-      const arr = Array.isArray(txs) ? txs : [];
+      const txs = await child.getTransactionHistory();
+      const arr: Transaction[] = Array.isArray(txs) ? txs : [];
 
-      const toNum = (v: number | bigint) => (typeof v === "bigint" ? Number(v) : v);
+      const toNum = (v: number | bigint | null | undefined) => {
+        if (typeof v === "bigint") return Number(v);
+        if (typeof v === "number") return v;
+        return 0;
+      };
 
-      const revokeTx = arr.filter((tx) => tx?.transactionType && "Revoke" in tx.transactionType);
+      const revokeTx = arr.filter((tx) => tx.transactionType && "Revoke" in tx.transactionType);
 
       const totalRevocations = revokeTx.length;
-      const totalREPRevoked = revokeTx.reduce((sum, tx) => sum + toNum(tx.amount || 0), 0);
+      const totalREPRevoked = revokeTx.reduce((sum, tx) => sum + Number(tx.amount ?? 0n), 0);
 
       const now = new Date();
       const monthlyRevocations = revokeTx.filter((tx) => {
-        const ts = toNum(tx.timestamp || 0);
+        const ts = toNum(tx.timestamp);
         if (!ts) return false;
         const d = new Date(ts * 1000);
         return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
@@ -134,18 +147,22 @@ const RevokeRep: React.FC = () => {
       // Recent list (latest 5)
       const recent = revokeTx
         .slice(0, 5)
-        .map((tx: any, i: number) => {
-          const ts = toNum(tx.timestamp || 0);
+        .map((tx, index) => {
+          const timestampSeconds = Number(tx.timestamp ?? 0n);
+          const [reasonEntry] = tx.reason;
+          const recipientPrincipal = tx.to.toString();
+          const issuerPrincipal = tx.from.toString();
+
           return {
-            id: tx.id?.toString?.() ?? `rev-${i}`,
-            recipientName: `User ${tx.to?.toString?.().slice(0, 8)}`,
-            recipientAddress: tx.to?.toString?.() ?? "",
-            amount: toNum(tx.amount || 0),
+            id: tx.id ? tx.id.toString() : `rev-${index}`,
+            recipientName: `User ${recipientPrincipal.slice(0, 8)}`,
+            recipientAddress: recipientPrincipal,
+            amount: Number(tx.amount ?? 0n),
             category: "General",
-            reason: (Array.isArray(tx.reason) ? tx.reason[0] : tx.reason) || "No reason provided",
-            timestamp: ts ? new Date(ts * 1000) : new Date(),
-            revokedBy: `User ${tx.from?.toString?.().slice(0, 8)}`
-          } as RecentRevocation;
+            reason: reasonEntry ?? "No reason provided",
+            timestamp: timestampSeconds ? new Date(timestampSeconds * 1000) : new Date(),
+            revokedBy: `User ${issuerPrincipal.slice(0, 8)}`,
+          } satisfies RecentRevocation;
         });
 
       setRecentRevocations(recent);
@@ -186,7 +203,7 @@ const RevokeRep: React.FC = () => {
     return true;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!validateForm()) return;
     if (!showConfirmation) {
@@ -202,11 +219,9 @@ const RevokeRep: React.FC = () => {
       const amountBig = BigInt(Number(formData.reputationAmount));
 
       // Backend expects: revokeRep(principal, amount, [reason])
-      const res: string =
-        (await child.revokeRep?.(recipientPrincipal, amountBig, [formData.reason.trim()])) ??
-        (await child.revoke_rep?.(recipientPrincipal, amountBig, [formData.reason.trim()]));
+      const res = await child.revokeRep(recipientPrincipal, amountBig, [formData.reason.trim()]);
 
-      if (typeof res === "string" && res.toLowerCase().startsWith("error")) {
+      if (res.toLowerCase().startsWith("error")) {
         throw new Error(res);
       }
 
@@ -302,7 +317,23 @@ const RevokeRep: React.FC = () => {
   );
 };
 
-function InnerRevokeRep(props: any) {
+interface InnerRevokeRepProps {
+  cid: string;
+  userRole: UserRole;
+  userDisplayData: ReturnType<typeof getUserDisplayData>;
+  handleDisconnect: () => void;
+  stats: RevocationStats;
+  recentRevocations: RecentRevocation[];
+  formData: RevokeFormData;
+  setFormData: Dispatch<SetStateAction<RevokeFormData>>;
+  handleInputChange: (field: keyof RevokeFormData, value: string) => void;
+  handleSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  showConfirmation: boolean;
+  setShowConfirmation: Dispatch<SetStateAction<boolean>>;
+  loading: boolean;
+}
+
+function InnerRevokeRep(props: InnerRevokeRepProps) {
   const {
     cid,
     userRole,

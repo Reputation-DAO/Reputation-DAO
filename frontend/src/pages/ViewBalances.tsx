@@ -1,12 +1,14 @@
 // src/pages/ViewBalances.tsx
-// @ts-nocheck
 import React, { useState, useEffect, useMemo } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 
 import { makeChildWithPlug } from "@/components/canister/child";
+import type { ChildActor } from "@/components/canister/child";
 
 import { useRole } from "@/contexts/RoleContext";
+import type { UserRole } from "@/contexts/RoleContext";
 import { getUserDisplayData } from "@/utils/userUtils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,6 +35,7 @@ import {
   ArrowDownRight,
   Filter
 } from "lucide-react";
+import type { Transaction, TransactionType } from "@/declarations/reputation_dao/reputation_dao.did";
 
 interface UserBalance {
   id: string;
@@ -48,14 +51,14 @@ interface UserBalance {
   rank: number;
 }
 
-interface BackendTransaction {
-  id: bigint;
-  transactionType: { Award: null } | { Revoke: null } | { Decay: null };
-  from: Principal;
-  to: Principal;
-  amount: bigint;
-  timestamp: bigint; // seconds
-  reason: [] | [string];
+type SortOption = 'reputation' | 'name' | 'recent';
+
+interface ViewStats {
+  totalUsers: number;
+  totalReputation: number;
+  averageReputation: number;
+  topHolder: UserBalance | null;
+  recentGainer: UserBalance | null;
 }
 
 const RoleIcon = ({ role }: { role: string }) => {
@@ -80,7 +83,7 @@ const ViewBalances: React.FC = () => {
   const sidebarPrincipal = principalText;
 
   // child canister connection
-  const [child, setChild] = useState<any>(null);
+  const [child, setChild] = useState<ChildActor | null>(null);
   const [connecting, setConnecting] = useState(true);
   const [connectError, setConnectError] = useState<string | null>(null);
 
@@ -88,7 +91,7 @@ const ViewBalances: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [balanceSearchQuery, setBalanceSearchQuery] = useState("");
   const [searchedBalance, setSearchedBalance] = useState<{ principal: string; balance: number } | null>(null);
-  const [sortBy, setSortBy] = useState<'reputation' | 'name' | 'recent'>('reputation');
+  const [sortBy, setSortBy] = useState<SortOption>('reputation');
   const [loading, setLoading] = useState(false);
   const [balanceSearchLoading, setBalanceSearchLoading] = useState(false);
 
@@ -112,14 +115,14 @@ const ViewBalances: React.FC = () => {
 
   // derive balances from transaction history
   const loadAllBalances = async () => {
-    if (!child) return;
+    if (!child) {
+      toast.error("Not connected to the organization canister.");
+      return;
+    }
     try {
       setLoading(true);
 
-      const result: BackendTransaction[] = await child.getTransactionHistory();
-      const txs = Array.isArray(result) ? result : [];
-
-      const toNum = (v: number | bigint) => (typeof v === "bigint" ? Number(v) : v);
+      const txs = await child.getTransactionHistory();
 
       // maps
       const balanceMap = new Map<string, number>();
@@ -128,10 +131,10 @@ const ViewBalances: React.FC = () => {
       const activityMap = new Map<string, number>();   // ms
 
       for (const tx of txs) {
-        const from = tx?.from?.toString?.() || "";
-        const to = tx?.to?.toString?.() || "";
-        const amount = toNum(tx?.amount || 0);
-        const tsMs = toNum(tx?.timestamp || 0) * 1000;
+        const from = tx.from.toString();
+        const to = tx.to.toString();
+        const amount = Number(tx.amount ?? 0n);
+        const tsMs = Number(tx.timestamp ?? 0n) * 1000;
 
         if (from) activityMap.set(from, Math.max(activityMap.get(from) || 0, tsMs));
         if (to) activityMap.set(to, Math.max(activityMap.get(to) || 0, tsMs));
@@ -158,8 +161,6 @@ const ViewBalances: React.FC = () => {
         .map(([principal, reputation], idx) => {
           const last = activityMap.get(principal);
           const lastActivity = last ? new Date(last) : new Date(0);
-          const statusActive = last ? Date.now() - last < 7 * 24 * 60 * 60 * 1000 : false;
-
           return {
             id: String(idx + 1),
             name: `User ${principal.slice(0, 8)}`,
@@ -172,7 +173,7 @@ const ViewBalances: React.FC = () => {
             totalAwarded: awardSumMap.get(principal) || 0,
             totalRevoked: revokeSumMap.get(principal) || 0,
             rank: 0,
-          };
+          } satisfies UserBalance;
         })
         .sort((a, b) => b.reputation - a.reputation)
         .map((u, i) => ({ ...u, rank: i + 1 }));
@@ -204,7 +205,7 @@ const ViewBalances: React.FC = () => {
       setBalanceSearchLoading(true);
       const p = Principal.fromText(balanceSearchQuery.trim());
       const bal = await child.getBalance(p);
-      const n = typeof bal === "bigint" ? Number(bal) : Number(bal);
+      const n = Number(bal);
       if (Number.isFinite(n)) {
         setSearchedBalance({ principal: balanceSearchQuery.trim(), balance: n });
         toast.success("Balance retrieved successfully!");
@@ -222,7 +223,7 @@ const ViewBalances: React.FC = () => {
   };
 
   // filtering & sorting
-  const filteredBalances = useMemo(() => {
+  const filteredBalances = useMemo<UserBalance[]>(() => {
     const filtered = userBalances.filter(
       (u) =>
         u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -243,7 +244,7 @@ const ViewBalances: React.FC = () => {
   }, [userBalances, searchQuery, sortBy]);
 
   // derived stats
-  const stats = useMemo(() => {
+  const stats = useMemo<ViewStats>(() => {
     const totalUsers = userBalances.length;
     const totalReputation = userBalances.reduce((s, u) => s + u.reputation, 0);
     const averageReputation = totalUsers > 0 ? Math.round(totalReputation / totalUsers) : 0;
@@ -255,8 +256,8 @@ const ViewBalances: React.FC = () => {
     return { totalUsers, totalReputation, averageReputation, topHolder, recentGainer };
   }, [userBalances]);
 
-  const topPerformers = useMemo(() => userBalances.slice(0, 3), [userBalances]);
-  const recentChanges = useMemo(
+  const topPerformers = useMemo<UserBalance[]>(() => userBalances.slice(0, 3), [userBalances]);
+  const recentChanges = useMemo<UserBalance[]>(
     () =>
       userBalances
         .filter((u) => u.reputationChange !== 0)
@@ -332,7 +333,32 @@ const ViewBalances: React.FC = () => {
   );
 };
 
-function InnerViewBalances(props: any) {
+interface InnerViewBalancesProps {
+  cid: string | undefined;
+  userRole: UserRole;
+  userDisplay: {
+    userName: string;
+    userPrincipal: string;
+    displayName: string;
+  };
+  handleDisconnect: () => void;
+  stats: ViewStats;
+  filteredBalances: UserBalance[];
+  loading: boolean;
+  searchQuery: string;
+  setSearchQuery: Dispatch<SetStateAction<string>>;
+  sortBy: SortOption;
+  setSortBy: Dispatch<SetStateAction<SortOption>>;
+  balanceSearchQuery: string;
+  setBalanceSearchQuery: Dispatch<SetStateAction<string>>;
+  handleBalanceSearch: () => Promise<void>;
+  balanceSearchLoading: boolean;
+  searchedBalance: { principal: string; balance: number } | null;
+  topPerformers: UserBalance[];
+  recentChanges: UserBalance[];
+}
+
+function InnerViewBalances(props: InnerViewBalancesProps) {
   const {
     cid,
     userRole,

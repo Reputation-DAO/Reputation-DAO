@@ -1,62 +1,78 @@
 // src/pages/Blog.tsx
-// @ts-nocheck
 import { useEffect, useMemo, useState } from "react";
 import Navigation from "@/components/ui/navigation";
 import Footer from "@/components/layout/Footer";
 import { Calendar, User as UserIcon, ArrowRight } from "lucide-react";
-import { blogActor } from "@/components/canister/blogBackend"; // unchanged
+import { blogActor } from "@/components/canister/blogBackend";
+import type {
+  Post as BackendPost,
+  PostStatus as BackendPostStatus,
+  Author as BackendAuthor,
+} from "@/declarations/blog_backend/blog_backend.did";
 
-type PostStatus = "Draft" | "Published" | "Archived";
-type AuthorObj = { name: string; avatar: string };
+type PostStatusLabel = "Draft" | "Published" | "Archived" | "Unknown";
 
-type Post = {
-  id: bigint;
-  status: { Draft?: null; Published?: null; Archived?: null } | PostStatus;
-  title: string;
-  content: string;
-  views: bigint;
-  date: bigint;          // ns
-  author: AuthorObj;     // object
-  isEditorsPick: boolean;
-  isFeatured: boolean;
-  category: string;
-  image: string;
+type BlogPost = BackendPost & {
+  statusLabel: PostStatusLabel;
+  idText: string;
+  dateMs: number | null;
 };
 
-const statusString = (s: Post["status"]): PostStatus | "Unknown" => {
-  if (!s) return "Unknown";
-  if (typeof s === "string") return (["Draft","Published","Archived"].includes(s) ? s : "Unknown") as any;
-  const k = Object.keys(s)[0] as PostStatus | undefined;
-  return (k ?? "Unknown");
+const statusLabel = (status: BackendPostStatus | string | null | undefined): PostStatusLabel => {
+  if (!status) return "Unknown";
+  if (typeof status === "string") {
+    return status === "Draft" || status === "Published" || status === "Archived" ? status : "Unknown";
+  }
+  if ("Published" in status) return "Published";
+  if ("Draft" in status) return "Draft";
+  if ("Archived" in status) return "Archived";
+  return "Unknown";
 };
 
-const nsToMs = (v?: bigint | number) => {
-  if (v === undefined || v === null) return undefined;
-  const n = Number(v);
-  if (!Number.isFinite(n)) return undefined;
-  return Math.floor(n / 1_000_000);
+const nsToMs = (value: bigint | number | undefined | null): number | null => {
+  if (value === undefined || value === null) return null;
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? Math.floor(value / 1_000_000) : null;
+  }
+  try {
+    return Number(value / 1_000_000n);
+  } catch {
+    return null;
+  }
 };
 
-const fmtDate = (ns?: bigint | number) => {
-  const ms = nsToMs(ns);
-  if (!ms) return "";
-  const d = new Date(ms);
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+const fmtDate = (milliseconds: number | null | undefined) => {
+  if (!milliseconds && milliseconds !== 0) return "";
+  const date = new Date(milliseconds);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 };
 
-const safeAuthor = (a?: AuthorObj) => a?.name ?? "—";
-const postKey = (p: Post) => p.id?.toString() || p.title;
+const safeAuthor = (author?: BackendAuthor | null) => author?.name ?? "—";
+
+const normalizePost = (post: BackendPost): BlogPost => {
+  const idText = post.id.toString();
+  const dateMs = nsToMs(post.date);
+  return {
+    ...post,
+    statusLabel: statusLabel(post.status),
+    idText,
+    dateMs,
+  };
+};
+
+const postKey = (post: BlogPost) => post.idText || post.title;
 
 const Blog = () => {
   const [loading, setLoading] = useState(true);
-  const [posts, setPosts] = useState<(Post & { _status: PostStatus | "Unknown" })[]>([]);
+  const [posts, setPosts] = useState<BlogPost[]>([]);
 
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const data: Post[] = await blogActor.getPosts();
-        const formatted = (data ?? []).map((p) => ({ ...p, _status: statusString(p.status) }));
+        const data = await blogActor.getPosts();
+        const formatted = (data ?? []).map(normalizePost);
         if (alive) setPosts(formatted);
       } catch (e) {
         console.error(e);
@@ -69,7 +85,7 @@ const Blog = () => {
   }, []);
 
   const published = useMemo(
-    () => posts.filter((p) => p._status === "Published"),
+    () => posts.filter((p) => p.statusLabel === "Published"),
     [posts]
   );
 
@@ -82,7 +98,7 @@ const Blog = () => {
     const fpKey = featuredPost ? postKey(featuredPost) : null;
     return published
       .filter((p) => postKey(p) !== fpKey)
-      .sort((a, b) => Number(b.date) - Number(a.date));
+      .sort((a, b) => (b.dateMs ?? 0) - (a.dateMs ?? 0));
   }, [published, featuredPost]);
 
   return (
@@ -163,12 +179,12 @@ const Blog = () => {
                         </div>
                         <div className="flex items-center gap-2">
                           <Calendar className="w-4 h-4" />
-                          {fmtDate(featuredPost.date)}
+                          {fmtDate(featuredPost.dateMs)}
                         </div>
                       </div>
 
                       <a
-                        href={`/posts/${featuredPost.id?.toString() ?? ""}`}
+                        href={`/posts/${featuredPost.idText}`}
                         className="flex items-center gap-2 text-primary font-medium hover:gap-3 transition-all duration-300"
                       >
                         Read More <ArrowRight className="w-4 h-4" />
@@ -223,7 +239,7 @@ const Blog = () => {
                     className="glass-card p-6 hover-lift cursor-pointer group"
                     style={{ animationDelay: `${index * 100}ms` }}
                   >
-                    <a href={`/posts/${post.id?.toString() ?? ""}`} className="block">
+                    <a href={`/posts/${post.idText}`} className="block">
                       <div className="w-full h-48 rounded-xl mb-6 overflow-hidden bg-muted">
                         {post.image ? (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -262,7 +278,7 @@ const Blog = () => {
                         </div>
                         <div className="flex items-center gap-2">
                           <Calendar className="w-3 h-3" />
-                          {fmtDate(post.date)}
+                          {fmtDate(post.dateMs)}
                         </div>
                       </div>
                     </a>

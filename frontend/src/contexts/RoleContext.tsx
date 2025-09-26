@@ -1,5 +1,4 @@
 // src/contexts/RoleContext.tsx
-// @ts-nocheck
 import React, {
   createContext,
   useContext,

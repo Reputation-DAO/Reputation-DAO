@@ -1,5 +1,4 @@
 // src/pages/Community.tsx
-// @ts-nocheck
 import { useCallback, useState } from "react";
 import Navigation from "@/components/ui/navigation";
 import Footer from "@/components/layout/Footer";

@@ -1,7 +1,8 @@
 // OrgSelector.tsx — shadcn UI + full ReputationFactory logic (Owned + Public) with uniform solid design
-// @ts-nocheck
 
 import React, { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import type { LucideIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { usePlugConnection } from "@/hooks/usePlugConnection";
 import { Principal } from "@dfinity/principal";
@@ -63,17 +64,22 @@ import {
   makeFactoriaWithPlug,
   getFactoriaCanisterId,
 } from "@/components/canister/factoria";
+import type {
+  Child as FactoryChild,
+  _SERVICE as FactoriaActor,
+} from "@/declarations/factoria/factoria.did";
 
 // ---------------- Types ----------------
 type Plan = "Free" | "Basic" | "Pro";
-type Status = "Active" | "Archived";
+type OrgStatus = "Active" | "Archived";
+type FilterOption = "all" | "admin" | "member" | "owned";
 
 type OrgRecord = {
   id: string;
   name: string;
   canisterId: string;
   plan?: Plan;
-  status: Status;
+  status: OrgStatus;
   publicVisibility?: boolean;
   createdAt?: number;
   users?: string;
@@ -83,8 +89,8 @@ type OrgRecord = {
   isStopped?: boolean;
 };
 
-const toStatus = (s: any): Status =>
-  s && typeof s === "object" && "Archived" in s ? "Archived" : "Active";
+const toStatus = (statusVariant: FactoryChild["status"]): OrgStatus =>
+  "Archived" in statusVariant ? "Archived" : "Active";
 
 const natToStr = (n?: bigint) =>
   typeof n === "bigint" ? n.toString() : undefined;
@@ -94,7 +100,7 @@ const WalletDisplay = () => {
   const { isConnected, principal } = usePlugConnection({ autoCheck: true });
   if (!isConnected || !principal) return null;
 
-  const principalStr = principal.toString();
+  const principalStr = principal;
   const shortPrincipal = `${principalStr.slice(0, 8)}...${principalStr.slice(-8)}`;
 
   return (
@@ -108,7 +114,9 @@ const WalletDisplay = () => {
               variant="ghost"
               size="sm"
               onClick={() => {
-                navigator.clipboard.writeText(principalStr);
+    navigator.clipboard.writeText(principalStr).catch(() => {
+      toast.error("Failed to copy principal");
+    });
                 toast.success("Principal copied");
               }}
               className="h-6 w-6 p-0"
@@ -138,7 +146,7 @@ const RoleIcon = ({ role }: { role: string }) => {
 };
 
 // -------------- Small helper components --------------
-const Metric = ({ icon: Icon, label }: { icon: any; label: React.ReactNode }) => (
+const Metric = ({ icon: Icon, label }: { icon: LucideIcon; label: ReactNode }) => (
   <div className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground bg-background">
     <Icon className="w-3.5 h-3.5" />
     <span className="truncate">{label}</span>
@@ -152,21 +160,14 @@ const StatusDot = ({ ok }: { ok: boolean }) => (
 );
 
 // ---------------- Card (Owned) ----------------
-const OwnedCard = ({
-  org,
-  onManage,
-  onTopUp,
-  onTogglePower,
-  onEdit,
-  onDelete,
-}: {
+const OwnedCard: React.FC<{
   org: OrgRecord;
   onManage: () => void;
   onTopUp: () => void;
   onTogglePower: () => void;
   onEdit: () => void;
   onDelete: () => void;
-}) => {
+}> = ({ org, onManage, onTopUp, onTogglePower, onEdit, onDelete }) => {
   const idShort = `${org.id.slice(0, 10)}…${org.id.slice(-6)}`;
 
   return (
@@ -229,8 +230,10 @@ const OwnedCard = ({
                     <TooltipTrigger asChild>
                       <button
                         onClick={() => {
-                          navigator.clipboard.writeText(org.id);
-                          toast.success("Canister ID copied");
+                          navigator.clipboard
+                            .writeText(org.id)
+                            .then(() => toast.success("Canister ID copied"))
+                            .catch(() => toast.error("Failed to copy canister ID"));
                         }}
                         className="opacity-70 hover:opacity-100 transition-opacity"
                         aria-label="Copy canister id"
@@ -362,8 +365,10 @@ const PublicCard = ({ org, onJoin }: { org: OrgRecord; onJoin: () => void }) => 
                     <TooltipTrigger asChild>
                       <button
                         onClick={() => {
-                          navigator.clipboard.writeText(org.id);
-                          toast.success("Canister ID copied");
+                          navigator.clipboard
+                            .writeText(org.id)
+                            .then(() => toast.success("Canister ID copied"))
+                            .catch(() => toast.error("Failed to copy canister ID"));
                         }}
                         className="opacity-70 hover:opacity-100"
                         aria-label="Copy canister id"
@@ -390,13 +395,10 @@ const PublicCard = ({ org, onJoin }: { org: OrgRecord; onJoin: () => void }) => 
 };
 
 // ---------------- Dialogs ----------------
-const CreateOrgDialog = ({
-  onCreateOrg,
-  creating,
-}: {
+const CreateOrgDialog: React.FC<{
   onCreateOrg: (name: string, cycles: string, plan: Plan, isPublic: boolean) => Promise<void>;
   creating: boolean;
-}) => {
+}> = ({ onCreateOrg, creating }) => {
   const [name, setName] = useState("");
   const [cycles, setCycles] = useState("0");
   const [plan, setPlan] = useState<Plan>("Free");
@@ -404,13 +406,20 @@ const CreateOrgDialog = ({
   const [isOpen, setIsOpen] = useState(false);
 
   const handleCreate = async () => {
-    if (name.trim()) {
+    if (!name.trim()) {
+      toast.error("Organization name is required");
+      return;
+    }
+
+    try {
       await onCreateOrg(name.trim(), cycles, plan, isPublic);
       setName("");
       setCycles("0");
       setPlan("Free");
       setIsPublic(true);
       setIsOpen(false);
+    } catch (error) {
+      console.error("Create organization failed", error);
     }
   };
 
@@ -444,7 +453,7 @@ const CreateOrgDialog = ({
           </div>
           <div>
             <label className="text-sm font-medium mb-2 block">Plan (UI only)</label>
-            <Select value={plan} onValueChange={setPlan}>
+            <Select value={plan} onValueChange={(value) => setPlan(value as Plan)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="Free">Free</SelectItem>
@@ -536,7 +545,7 @@ const ConfirmDialog = ({
   onOpenChange: (v: boolean) => void;
   title: string;
   message: string;
-  onConfirm: () => void;
+  onConfirm: () => Promise<void> | void;
   confirmLabel?: string;
   destructive?: boolean;
 }) => (
@@ -548,7 +557,7 @@ const ConfirmDialog = ({
       <div className="text-sm text-muted-foreground">{message}</div>
       <div className="flex justify-end gap-2 mt-4">
         <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-        <Button onClick={onConfirm} variant={destructive ? "destructive" : "default"}>
+        <Button onClick={() => void onConfirm()} variant={destructive ? "destructive" : "default"}>
           {confirmLabel}
         </Button>
       </div>
@@ -565,7 +574,7 @@ const TopUpDialog = ({
   open: boolean;
   onOpenChange: (v: boolean) => void;
   target: OrgRecord | null;
-  onTopUp: (amount: string) => void;
+  onTopUp: (amount: string) => Promise<void>;
 }) => {
   const [amount, setAmount] = useState("0");
   useEffect(() => setAmount("0"), [open]);
@@ -585,7 +594,7 @@ const TopUpDialog = ({
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button onClick={() => onTopUp(amount)}>Top Up</Button>
+            <Button onClick={() => void onTopUp(amount)}>Top Up</Button>
           </div>
         </div>
       </DialogContent>
@@ -599,9 +608,10 @@ const OrgSelector: React.FC = () => {
   const { isConnected, principal } = usePlugConnection({ autoCheck: true });
 
   // actor + wallet
-  const [factoria, setFactoria] = useState<any | null>(null);
+  const [factoria, setFactoria] = useState<FactoriaActor | null>(null);
   const [principalText, setPrincipalText] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(true);
+  const [creatingOrg, setCreatingOrg] = useState(false);
 
   // Owned + Public
   const [owned, setOwned] = useState<OrgRecord[]>([]);
@@ -610,11 +620,9 @@ const OrgSelector: React.FC = () => {
   const [loadingPublic, setLoadingPublic] = useState(false);
 
   // Selection + filters (kept for your UI)
-  const [selectedOrg, setSelectedOrg] = useState<OrgRecord | null>(null);
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState<FilterOption>("all");
 
   // Dialog state
-  const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editOrg, setEditOrg] = useState<OrgRecord | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -626,22 +634,48 @@ const OrgSelector: React.FC = () => {
   const MIN_CYCLES = 900_000_000_000n;   // 0.9T
 
   useEffect(() => {
-    (async () => {
+    let cancelled = false;
+
+    const connect = async () => {
+      setConnecting(true);
+
+      if (!isConnected || !principal) {
+        if (!cancelled) {
+          setFactoria(null);
+          setPrincipalText(null);
+          setConnecting(false);
+        }
+        return;
+      }
+
       try {
-        setConnecting(true);
-        if (!isConnected || !principal) return;
         const actor = await makeFactoriaWithPlug({
           host: "https://icp-api.io",
           canisterId: getFactoriaCanisterId(),
         });
-        setFactoria(actor);
-        setPrincipalText(principal.toString());
-      } catch (e: any) {
-        toast.error(e?.message || "Failed to connect Plug / Factoria.");
+
+        if (!cancelled) {
+          setFactoria(actor);
+          setPrincipalText(principal);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          const message = error instanceof Error ? error.message : "Failed to connect Plug / Factoria.";
+          toast.error(message);
+          setFactoria(null);
+        }
       } finally {
-        setConnecting(false);
+        if (!cancelled) {
+          setConnecting(false);
+        }
       }
-    })();
+    };
+
+    void connect();
+
+    return () => {
+      cancelled = true;
+    };
   }, [isConnected, principal]);
 
   const fetchOwned = async () => {
@@ -649,37 +683,43 @@ const OrgSelector: React.FC = () => {
     setLoadingOwned(true);
     try {
       const owner = Principal.fromText(principalText);
-      const children: Principal[] = await factoria.listByOwner(owner);
+      const children = await factoria.listByOwner(owner);
 
       const rows: OrgRecord[] = [];
-      for (const child of children) {
-        const childIdText = child.toText();
-        const c = await factoria.getChild(child);
-        if (!Array.isArray(c) || !c.length) continue;
-        const rec = c[0];
+      for (const childPrincipal of children) {
+        const childIdText = childPrincipal.toText();
+        const childRecordOpt = await factoria.getChild(childPrincipal);
+        if (childRecordOpt.length === 0) continue;
+        const [childRecord] = childRecordOpt;
 
-        let users, cycles, txCount, paused;
+        let users: string | undefined;
+        let cycles: string | undefined;
+        let txCount: string | undefined;
+        let paused: boolean | undefined;
         let isStopped = false;
+
         try {
-          const h = await factoria.childHealth(child);
-          if (Array.isArray(h) && h.length) {
-            users = natToStr(h[0].users);
-            cycles = natToStr(h[0].cycles);
-            txCount = natToStr(h[0].txCount);
-            paused = Boolean(h[0].paused);
+          const healthOpt = await factoria.childHealth(childPrincipal);
+          if (healthOpt.length > 0) {
+            const [health] = healthOpt;
+            users = natToStr(health.users);
+            cycles = natToStr(health.cycles);
+            txCount = natToStr(health.txCount);
+            paused = health.paused;
           } else {
             isStopped = true;
           }
-        } catch {
+        } catch (error) {
+          console.warn("Failed to fetch child health", error);
           isStopped = true;
         }
 
         rows.push({
           id: childIdText,
-          name: rec.note?.trim?.() ? rec.note : childIdText,
+          name: childRecord.note?.trim() ? childRecord.note : childIdText,
           canisterId: childIdText,
-          status: toStatus(rec.status),
-          createdAt: Number(rec.created_at || 0),
+          status: toStatus(childRecord.status),
+          createdAt: Number(childRecord.created_at ?? 0n),
           users,
           cycles,
           txCount,
@@ -690,8 +730,9 @@ const OrgSelector: React.FC = () => {
         });
       }
       setOwned(rows);
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to fetch owned organizations.");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Failed to fetch owned organizations.";
+      toast.error(message);
     } finally {
       setLoadingOwned(false);
     }
@@ -701,31 +742,32 @@ const OrgSelector: React.FC = () => {
     if (!factoria) return;
     setLoadingPublic(true);
     try {
-      const all = await factoria.listChildren();
+      const allChildren = await factoria.listChildren();
       const mine = new Set(owned.map((o) => o.id));
 
-      const rows: OrgRecord[] = [];
-      for (const rec of all as any[]) {
-        const idText =
-          typeof rec.id?.toText === "function" ? rec.id.toText() : String(rec.id);
-        const status = toStatus(rec.status);
-        if (status !== "Active") continue;
-        if (mine.has(idText)) continue;
+      const rows: OrgRecord[] = allChildren
+        .map((child): OrgRecord | null => {
+          const idText = child.id.toText();
+          const status = toStatus(child.status);
+          if (status !== "Active" || mine.has(idText)) return null;
 
-        rows.push({
-          id: idText,
-          name: rec.note?.trim?.() ? rec.note : idText,
-          canisterId: idText,
-          status,
-          createdAt: Number(rec.created_at || 0),
-          publicVisibility: true,
-          plan: "Free",
-          isStopped: false,
-        });
-      }
+          return {
+            id: idText,
+            name: child.note?.trim() ? child.note : idText,
+            canisterId: idText,
+            status,
+            createdAt: Number(child.created_at ?? 0n),
+            publicVisibility: true,
+            plan: "Free",
+            isStopped: false,
+          } satisfies OrgRecord;
+        })
+        .filter((org): org is OrgRecord => org !== null);
+
       setPublicOrgs(rows);
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to fetch public organizations.");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Failed to fetch public organizations.";
+      toast.error(message);
     } finally {
       setLoadingPublic(false);
     }
@@ -759,27 +801,39 @@ const OrgSelector: React.FC = () => {
   };
 
   const handleCreateOrg = async (name: string, cyclesStr: string, _plan: Plan, _isPublic: boolean) => {
-    if (!factoria || !principalText) return;
+    if (!factoria || !principalText) {
+      toast.error("Connect your wallet before creating an organization.");
+      throw new Error("Missing Factoria actor or principal");
+    }
+
+    setCreatingOrg(true);
     try {
       const owner = Principal.fromText(principalText);
       const cycles = BigInt(cyclesStr || "0");
 
-      if (cycles > 1_500_000_000_000n) {
+      if (cycles > MAX_CYCLES) {
         toast.error("Only canisters ≤ 1.5T cycles can be created.");
-        return;
-      } else if (cycles < 900_000_000_000n) {
+        throw new Error("Cycles above maximum threshold");
+      }
+      if (cycles < MIN_CYCLES) {
         toast.error("Need at least more than 0.9T cycles.");
-        return;
+        throw new Error("Cycles below minimum threshold");
       }
 
       const controllers: Principal[] = [];
       const newId = await factoria.createOrReuseChildFor(owner, cycles, controllers, name.trim());
       toast.success(`Organization created: ${newId.toText()}`);
-      setCreateOpen(false);
       await fetchOwned();
       await fetchPublic();
-    } catch (e: any) {
-      toast.error(e?.message || "Create failed.");
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      if (!err.message.includes("threshold")) {
+        const message = err.message || "Create failed.";
+        toast.error(message);
+      }
+      throw err;
+    } finally {
+      setCreatingOrg(false);
     }
   };
 
@@ -816,6 +870,10 @@ const OrgSelector: React.FC = () => {
     if (!factoria || !topUpOrg) return;
     try {
       const amt = BigInt(amount || "0");
+      if (amt <= 0n) {
+        toast.error("Enter a positive cycle amount");
+        return;
+      }
       const res = await factoria.topUpChild(Principal.fromText(topUpOrg.canisterId), amt);
       if ("ok" in res) toast.success(`Top up OK: +${res.ok.toString()} cycles`);
       else toast.error(res.err);
@@ -825,13 +883,6 @@ const OrgSelector: React.FC = () => {
     } catch (e: any) {
       toast.error(e?.message || "Top up failed.");
     }
-  };
-
-  const handleContinue = () => {
-    if (!selectedOrg) return;
-    localStorage.setItem("selectedOrgId", selectedOrg.id);
-    localStorage.setItem("selectedOrgName", selectedOrg.name);
-    navigate(`/dashboard/home/${selectedOrg.id}`);
   };
 
   const combined = useMemo(() => [...owned, ...publicOrgs], [owned, publicOrgs]);
@@ -899,7 +950,7 @@ const OrgSelector: React.FC = () => {
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <Filter className="w-4 h-4 text-muted-foreground" />
-                <Select value={filter} onValueChange={setFilter}>
+                <Select value={filter} onValueChange={(value) => setFilter(value as FilterOption)}>
                   <SelectTrigger className="w-36">
                     <SelectValue placeholder="Filter" />
                   </SelectTrigger>
@@ -920,10 +971,8 @@ const OrgSelector: React.FC = () => {
 
             <div className="flex items-center gap-3">
               <CreateOrgDialog
-                onCreateOrg={async (name, cycles, plan, isPublic) => {
-                  await handleCreateOrg(name, cycles, plan, isPublic);
-                }}
-                creating={false}
+                onCreateOrg={handleCreateOrg}
+                creating={creatingOrg}
               />
             </div>
           </div>
@@ -1007,19 +1056,6 @@ const OrgSelector: React.FC = () => {
             )}
           </div>
 
-          {/* CONTINUE (optional old flow) */}
-          {selectedOrg && (
-            <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50">
-              <Button
-                onClick={handleContinue}
-                size="lg"
-                className="shadow-lg hover:shadow-xl transition-all duration-300 px-8"
-              >
-                Continue to Dashboard
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </div>
-          )}
         </div>
       </div>
 

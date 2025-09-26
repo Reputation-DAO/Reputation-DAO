@@ -1,9 +1,9 @@
 // src/pages/TransactionLog.tsx
-// @ts-nocheck
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 import { makeChildWithPlug } from "@/components/canister/child";
+import type { ChildActor } from "@/components/canister/child";
 
 import { useRole } from "@/contexts/RoleContext";
 import { getUserDisplayData } from "@/utils/userUtils";
@@ -94,7 +94,7 @@ const TransactionLog: React.FC = () => {
   const sidebarUserName = roleUserName || (principalText ? `User ${principalText.slice(0, 8)}` : '');
   const sidebarPrincipal = principalText;
 
-  const [child, setChild] = useState<any>(null);
+  const [child, setChild] = useState<ChildActor | null>(null);
   const [connecting, setConnecting] = useState(true);
   const [connectError, setConnectError] = useState<string | null>(null);
 

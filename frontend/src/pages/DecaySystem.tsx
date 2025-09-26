@@ -1,9 +1,9 @@
 // src/pages/DecaySystem.tsx
-// @ts-nocheck
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 import { makeChildWithPlug } from "@/components/canister/child";
+import type { ChildActor } from "@/components/canister/child";
 import { useRole } from "@/contexts/RoleContext";
 import { getUserDisplayData } from "@/utils/userUtils";
 
@@ -60,7 +60,7 @@ const DecaySystem = () => {
   const { cid } = useParams<{ cid: string }>();
   const { isAdmin, currentPrincipal, userRole, userName, loading: roleLoading } = useRole();
 
-  const [child, setChild] = useState<any>(null);
+  const [child, setChild] = useState<ChildActor | null>(null);
   const [connecting, setConnecting] = useState(true);
 
   const userDisplayData = useMemo(
