@@ -23,6 +23,7 @@ import ViewBalances from "./pages/ViewBalances";
 import TransactionLog from "./pages/TransactionLog";
 import DecaySystem from "./pages/DecaySystem";
 import NotFound from "./pages/NotFound";
+import PostViewer from "./pages/PostViewer";
 
 // docs layout + sections
 import DocsLayout from "@/components/layout/DocsLayout";
@@ -50,6 +51,7 @@ const App = () => (
                   {/* Marketing / top-level */}
                   <Route path="/" element={<Home />} />
                   <Route path="/blog" element={<Blog />} />
+                  <Route path="/posts/:id" element={<PostViewer />} />
                   <Route path="/community" element={<Community />} />
                   <Route path="/auth" element={<Auth />} />
 
