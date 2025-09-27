@@ -83,22 +83,7 @@ const HowItWorksSection = () => {
         
         {/* Call to action */}
         <div className="text-center mt-16">
-          <div className="glass-card p-8 max-w-2xl mx-auto">
-            <h3 className="text-2xl font-bold mb-4 text-foreground">
-              Ready to build your reputation?
-            </h3>
-            <p className="text-muted-foreground mb-6">
-              Join the future of trust and start earning verifiable reputation today.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button className="px-8 py-3 bg-gradient-to-r from-primary to-primary-glow text-white rounded-lg hover:scale-105 transition-all duration-300 hover:shadow-[var(--shadow-glow)]">
-                Get Started
-              </button>
-              <button className="px-8 py-3 border border-primary/20 text-primary rounded-lg hover:bg-primary/5 transition-all duration-300">
-                Learn More
-              </button>
-            </div>
-          </div>
+          
         </div>
       </div>
     </section>

@@ -84,28 +84,7 @@ const BenefitsSection = () => {
         </div>
         
         {/* Bottom CTA */}
-        <div className="mt-20 text-center">
-          <div className="glass-card p-10 max-w-4xl mx-auto border border-primary/20">
-            <div className="grid md:grid-cols-2 gap-8 items-center">
-              <div className="text-left">
-                <h3 className="text-3xl font-bold mb-4 text-foreground">
-                  Build Trust That Lasts
-                </h3>
-                <p className="text-muted-foreground text-lg">
-                  Your actions create permanent, verifiable proof of your contributions to the decentralized ecosystem.
-                </p>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <button className="px-8 py-4 bg-gradient-to-r from-primary to-primary-glow text-white rounded-xl hover:scale-105 transition-all duration-300 hover:shadow-[var(--shadow-glow)] font-semibold">
-                  Start Building
-                </button>
-                <button className="px-8 py-4 border border-primary/30 text-primary rounded-xl hover:bg-primary/5 transition-all duration-300 font-semibold">
-                  View Demo
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        
       </div>
     </section>
   );

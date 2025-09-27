@@ -88,47 +88,7 @@ const ResourcesSection = () => {
         </div>
         
         {/* Call to action */}
-        <div className="text-center">
-          <div className="glass-card p-10 max-w-4xl mx-auto border border-primary/20">
-            <h3 className="text-3xl font-bold mb-4 text-foreground">
-              Ready to Dive Deeper?
-            </h3>
-            <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
-              Join our community of developers, contributors, and innovators building the future of decentralized reputation.
-            </p>
-            
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button variant="hero" size="lg" className="group">
-                <Github className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                View on GitHub
-              </Button>
-              <Button variant="outline" size="lg" className="group">
-                <span>Join Community</span>
-                <GitBranch className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-              </Button>
-            </div>
-            
-            {/* Stats */}
-            <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-6">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-primary mb-1">100+</div>
-                <div className="text-sm text-muted-foreground">Contributors</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-primary mb-1">1K+</div>
-                <div className="text-sm text-muted-foreground">GitHub Stars</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-primary mb-1">50+</div>
-                <div className="text-sm text-muted-foreground">Integrations</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-primary mb-1">24/7</div>
-                <div className="text-sm text-muted-foreground">Community Support</div>
-              </div>
-            </div>
-          </div>
-        </div>
+        
       </div>
     </section>
   );

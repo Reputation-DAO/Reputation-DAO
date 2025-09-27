@@ -86,24 +86,7 @@ const FAQSection = () => {
         </div>
         
         {/* Contact section */}
-        <div className="mt-16 text-center">
-          <div className="glass-card p-8 border border-primary/20">
-            <h3 className="text-2xl font-bold mb-4 text-foreground">
-              Still have questions?
-            </h3>
-            <p className="text-muted-foreground mb-6">
-              Our community and development team are here to help you get started.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button className="px-6 py-3 bg-gradient-to-r from-primary to-primary-glow text-white rounded-lg hover:scale-105 transition-all duration-300 hover:shadow-[var(--shadow-glow)]">
-                Join Discord
-              </button>
-              <button className="px-6 py-3 border border-primary/30 text-primary rounded-lg hover:bg-primary/5 transition-all duration-300">
-                Contact Support
-              </button>
-            </div>
-          </div>
-        </div>
+        
       </div>
     </section>
   );
