@@ -14,8 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
-import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
+import { DashboardLayout, SidebarTrigger } from "@/components/layout/DashboardLayout";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
@@ -338,24 +337,21 @@ const DecaySystem = () => {
     );
   }
 
-  // === Same fixed-sidebar alignment as Step 2 (Dashboard) ===
   return (
-    <SidebarProvider>
-      <InnerDecaySystem
-        cid={cid}
-        settings={settings}
-        hasUnsavedChanges={hasUnsavedChanges}
-        loading={loading}
-        userDisplayData={userDisplayData}
-        handleDisconnect={handleDisconnect}
-        handleSaveSettings={handleSaveSettings}
-        handleRunManualDecay={handleRunManualDecay}
-        handleSettingChange={handleSettingChange}
-        handleTestingModeToggle={handleTestingModeToggle}
-        decayStats={decayStats}
-        recentDecayEvents={recentDecayEvents}
-      />
-    </SidebarProvider>
+    <InnerDecaySystem
+      cid={cid}
+      settings={settings}
+      hasUnsavedChanges={hasUnsavedChanges}
+      loading={loading}
+      userDisplayData={userDisplayData}
+      handleDisconnect={handleDisconnect}
+      handleSaveSettings={handleSaveSettings}
+      handleRunManualDecay={handleRunManualDecay}
+      handleSettingChange={handleSettingChange}
+      handleTestingModeToggle={handleTestingModeToggle}
+      decayStats={decayStats}
+      recentDecayEvents={recentDecayEvents}
+    />
   );
 };
 
@@ -375,27 +371,16 @@ function InnerDecaySystem(props: any) {
     recentDecayEvents,
   } = props;
 
-  // Read sidebar state and shift content (collapsed: 72px, expanded: 280px)
-  const { state } = useSidebar();
-  const collapsed = state === "collapsed";
-
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
-      <DashboardSidebar
-        userRole={"admin"}
-        userName={userDisplayData.userName}
-        userPrincipal={userDisplayData.userPrincipal}
-        onDisconnect={handleDisconnect}
-      />
-
-      {/* Push main content to the right of the fixed sidebar on md+ */}
-      <div
-        className={`flex min-h-screen flex-col transition-[padding-left] duration-300 pl-0 ${
-          collapsed ? "md:pl-[72px]" : "md:pl-[280px]"
-        }`}
-      >
-        {/* Header */}
-        <header className="h-16 border-b border-border/40 flex items-center px-6 glass-header">
+    <DashboardLayout
+      sidebar={{
+        userRole: "admin",
+        userName: userDisplayData.userName,
+        userPrincipal: userDisplayData.userPrincipal,
+        onDisconnect: handleDisconnect,
+      }}
+    >
+      <header className="h-16 border-b border-border/40 flex items-center px-6 glass-header">
           <SidebarTrigger className="mr-4" />
           <div className="flex items-center justify-between w-full">
             <div className="flex items-center gap-3">
@@ -675,8 +660,7 @@ function InnerDecaySystem(props: any) {
             </div>
           </div>
         </main>
-      </div>
-    </div>
+    </DashboardLayout>
   );
 }
 

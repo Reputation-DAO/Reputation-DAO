@@ -14,8 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
-import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
+import { DashboardLayout, SidebarTrigger } from "@/components/layout/DashboardLayout";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import {
@@ -290,26 +289,22 @@ const ManageAwarders: React.FC = () => {
     admins: awarders.filter((a) => a.role === "admin").length,
   };
 
-  // ✅ Only sidebar alignment change: wrap content in SidebarProvider,
-  // and move useSidebar() into the inner component.
   return (
-    <SidebarProvider>
-      <InnerManageAwarders
-        cid={cid}
-        userDisplayData={userDisplayData}
-        handleDisconnect={handleDisconnect}
-        isAddingAwarder={isAddingAwarder}
-        setIsAddingAwarder={setIsAddingAwarder}
-        newAwarder={newAwarder}
-        setNewAwarder={setNewAwarder}
-        loading={loading}
-        stats={stats}
-        awarders={awarders}
-        handleAddAwarder={handleAddAwarder}
-        handleRemoveAwarder={handleRemoveAwarder}
-        handleRoleChange={handleRoleChange}
-      />
-    </SidebarProvider>
+    <InnerManageAwarders
+      cid={cid}
+      userDisplayData={userDisplayData}
+      handleDisconnect={handleDisconnect}
+      isAddingAwarder={isAddingAwarder}
+      setIsAddingAwarder={setIsAddingAwarder}
+      newAwarder={newAwarder}
+      setNewAwarder={setNewAwarder}
+      loading={loading}
+      stats={stats}
+      awarders={awarders}
+      handleAddAwarder={handleAddAwarder}
+      handleRemoveAwarder={handleRemoveAwarder}
+      handleRoleChange={handleRoleChange}
+    />
   );
 };
 
@@ -346,27 +341,16 @@ function InnerManageAwarders(props: InnerManageAwardersProps) {
     handleRoleChange,
   } = props;
 
-  // Read sidebar state safely inside provider
-  const { state } = useSidebar();
-  const collapsed = state === "collapsed";
-
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
-      <DashboardSidebar
-        userRole={"admin"}
-        userName={userDisplayData.userName}
-        userPrincipal={userDisplayData.userPrincipal}
-        onDisconnect={handleDisconnect}
-      />
-
-      {/* Push main content to the right of the fixed sidebar on md+ */}
-      <div
-        className={`flex min-h-screen flex-col transition-[padding-left] duration-300 pl-0 ${
-          collapsed ? "md:pl-[72px]" : "md:pl-[280px]"
-        }`}
-      >
-        {/* Header */}
-        <header className="h-16 border-b border-border/40 flex items-center px-6 glass-header">
+    <DashboardLayout
+      sidebar={{
+        userRole: "admin",
+        userName: userDisplayData.userName,
+        userPrincipal: userDisplayData.userPrincipal,
+        onDisconnect: handleDisconnect,
+      }}
+    >
+      <header className="h-16 border-b border-border/40 flex items-center px-6 glass-header">
           <SidebarTrigger className="mr-4" />
           <div className="flex items-center justify-between w-full">
             <div className="flex items-center gap-3">
@@ -602,8 +586,7 @@ function InnerManageAwarders(props: InnerManageAwardersProps) {
             </Card>
           </div>
         </main>
-      </div>
-    </div>
+    </DashboardLayout>
   );
 }
 

@@ -26,8 +26,7 @@ import {
   BarChart3,
   LayoutDashboard,
 } from "lucide-react";
-import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
-import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
+import { DashboardLayout, SidebarTrigger } from "@/components/layout/DashboardLayout";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import type { Transaction, TransactionType } from "@/declarations/reputation_dao/reputation_dao.did";
 import type { UserRole } from "@/contexts/RoleContext";
@@ -313,23 +312,20 @@ const Dashboard = () => {
   }
 
   return (
-    <SidebarProvider>
-      {/* get sidebar state to pad content accordingly */}
-      <InnerDashboard
-        userRole={userRole}
-        isAdmin={isAdmin}
-        isAwarder={isAwarder}
-        userDisplayData={userDisplayData}
-        handleDisconnect={handleDisconnect}
-        child={child}
-        loading={loading}
-        orgStats={orgStats}
-        userBalance={userBalance}
-        recentActivity={recentActivity}
-        members={members}
-        cid={cid}
-      />
-    </SidebarProvider>
+    <InnerDashboard
+      userRole={userRole}
+      isAdmin={isAdmin}
+      isAwarder={isAwarder}
+      userDisplayData={userDisplayData}
+      handleDisconnect={handleDisconnect}
+      child={child}
+      loading={loading}
+      orgStats={orgStats}
+      userBalance={userBalance}
+      recentActivity={recentActivity}
+      members={members}
+      cid={cid}
+    />
   );
 };
 
@@ -366,10 +362,6 @@ function InnerDashboard(props: InnerDashboardProps) {
 
   const navigate = useNavigate();
 
-  // Sidebar padding control (Step 2)
-  const { state } = useSidebar();
-  const collapsed = state === "collapsed";
-
   const normalizedRole = (userRole || "").toLowerCase();
   const sidebarRole: "admin" | "awarder" | "member" =
     normalizedRole === "admin" || normalizedRole === "awarder"
@@ -393,177 +385,165 @@ function InnerDashboard(props: InnerDashboardProps) {
       : "Member";
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
-      <DashboardSidebar
-        userRole={sidebarRole}
-        userName={userDisplayData.userName}
-        userPrincipal={userDisplayData.userPrincipal}
-        onDisconnect={handleDisconnect}
-      />
-
-      {/* Push main content to the right of the fixed sidebar on md+ screens */}
-      <div
-        className={`flex min-h-screen flex-col transition-[padding-left] duration-300 pl-0 ${
-          collapsed ? "md:pl-[72px]" : "md:pl-[280px]"
-        }`}
-      >
-        {/* Header */}
-        <header className="h-16 border-b border-border/40 flex items-center justify-between px-6 glass-header">
-          <div className="flex items-center gap-3">
-            <SidebarTrigger className="mr-4" />
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/20 to-primary-glow/20 flex items-center justify-center">
-              <LayoutDashboard className="w-4 h-4 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-lg font-semibold text-foreground">Dashboard</h1>
-              <p className="text-xs text-muted-foreground">Welcome to org {cid}</p>
-            </div>
+    <DashboardLayout
+      sidebar={{
+        userRole: sidebarRole,
+        userName: userDisplayData.userName,
+        userPrincipal: userDisplayData.userPrincipal,
+        onDisconnect: handleDisconnect,
+      }}
+    >
+      <header className="h-16 border-b border-border/40 flex items-center justify-between px-6 glass-header">
+        <div className="flex items-center gap-3">
+          <SidebarTrigger className="mr-4" />
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/20 to-primary-glow/20 flex items-center justify-center">
+            <LayoutDashboard className="w-4 h-4 text-primary" />
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (!child) return toast.error("Not connected to organization canister.");
-                toast.success("Canister connection looks good.");
-              }}
-            >
-              Test Connection
-            </Button>
-            <ThemeToggle />
+          <div>
+            <h1 className="text-lg font-semibold text-foreground">Dashboard</h1>
+            <p className="text-xs text-muted-foreground">Welcome to org {cid}</p>
           </div>
-        </header>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (!child) return toast.error("Not connected to organization canister.");
+              toast.success("Canister connection looks good.");
+            }}
+          >
+            Test Connection
+          </Button>
+          <ThemeToggle />
+        </div>
+      </header>
 
-        {/* Main */}
-        <main className="p-6">
-          <div className="relative pt-20">
-            <div className="absolute inset-0 overflow-hidden">
-              <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/3 rounded-full blur-3xl animate-pulse-glow" />
-              <div
-                className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-primary-glow/3 rounded-full blur-3xl animate-pulse-glow"
-                style={{ animationDelay: "1s" }}
+      <main className="p-6">
+        <div className="relative pt-20">
+          <div className="absolute inset-0 overflow-hidden">
+            <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/3 rounded-full blur-3xl animate-pulse-glow" />
+            <div
+              className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-primary-glow/3 rounded-full blur-3xl animate-pulse-glow"
+              style={{ animationDelay: "1s" }}
+            />
+          </div>
+
+          <div className="relative max-w-7xl mx-auto px-4 py-8">
+            <div className="flex items-center justify-between mb-8 animate-fade-in">
+              <div>
+                <h1 className="text-3xl font-bold text-foreground mb-2">Welcome back</h1>
+                <p className="text-muted-foreground">Manage reputation, track activity, and grow your community</p>
+              </div>
+
+              <Badge variant="secondary" className="flex items-center gap-2 px-4 py-2">
+                <RoleIcon role={sidebarRole} />
+                <span className="capitalize">{badgeLabel}</span>
+              </Badge>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <StatCard
+                title="Total Members"
+                value={orgStats.totalMembers}
+                icon={Users}
+                trend={orgStats.totalMembers > 0 ? `+${Math.floor(orgStats.totalMembers * 0.12)}%` : "0%"}
+                description="Active community members"
               />
+              <StatCard
+                title="Total Reputation"
+                value={orgStats.totalReputation.toLocaleString()}
+                icon={Star}
+                trend={orgStats.totalReputation > 0 ? `+${Math.floor(orgStats.totalReputation * 0.08)}%` : "0%"}
+                description="Points distributed"
+              />
+              <StatCard
+                title="Your Reputation"
+                value={loading ? "Loading..." : userBalance}
+                icon={Award}
+                trend={userBalance > 0 ? `+${Math.floor(userBalance * 0.1)}%` : ""}
+                description="Your current points"
+              />
+              <StatCard title="Growth Rate" value={orgStats.growthRate} icon={BarChart3} description="Member growth rate" />
             </div>
 
-            <div className="relative max-w-7xl mx-auto px-4 py-8">
-              <div className="flex items-center justify-between mb-8 animate-fade-in">
-                <div>
-                  <h1 className="text-3xl font-bold text-foreground mb-2">Welcome back</h1>
-                  <p className="text-muted-foreground">Manage reputation, track activity, and grow your community</p>
-                </div>
+            <QuickActionsSection cid={cid} canAward={isAdmin || isAwarder} isAdmin={isAdmin} />
 
-                <Badge variant="secondary" className="flex items-center gap-2 px-4 py-2">
-                  <RoleIcon role={sidebarRole} />
-                  <span className="capitalize">{badgeLabel}</span>
-                </Badge>
-              </div>
+            <div className="animate-fade-in">
+              <Tabs defaultValue="activity" className="space-y-6">
+                <TabsList className="grid grid-cols-3 w-full max-w-md glass">
+                  <TabsTrigger value="activity">Recent Activity</TabsTrigger>
+                  <TabsTrigger value="members">Members</TabsTrigger>
+                  <TabsTrigger value="analytics">Analytics</TabsTrigger>
+                </TabsList>
 
-              {/* Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                <StatCard
-                  title="Total Members"
-                  value={orgStats.totalMembers}
-                  icon={Users}
-                  trend={orgStats.totalMembers > 0 ? `+${Math.floor(orgStats.totalMembers * 0.12)}%` : "0%"}
-                  description="Active community members"
-                />
-                <StatCard
-                  title="Total Reputation"
-                  value={orgStats.totalReputation.toLocaleString()}
-                  icon={Star}
-                  trend={orgStats.totalReputation > 0 ? `+${Math.floor(orgStats.totalReputation * 0.08)}%` : "0%"}
-                  description="Points distributed"
-                />
-                <StatCard
-                  title="Your Reputation"
-                  value={loading ? "Loading..." : userBalance}
-                  icon={Award}
-                  trend={userBalance > 0 ? `+${Math.floor(userBalance * 0.1)}%` : ""}
-                  description="Your current points"
-                />
-                <StatCard title="Growth Rate" value={orgStats.growthRate} icon={BarChart3} description="Member growth rate" />
-              </div>
+                <TabsContent value="activity" className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-foreground">Recent Activity</h3>
+                    <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/transaction-log/${cid}`)}>
+                      View All
+                      <ArrowUpRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  </div>
 
-              {/* Quick Actions */}
-              <QuickActionsSection cid={cid} canAward={isAdmin || isAwarder} isAdmin={isAdmin} />
+                  <div className="space-y-3">
+                    {recentActivity.map((activity) => (
+                      <ActivityItem key={activity.id} activity={activity} />
+                    ))}
+                  </div>
+                </TabsContent>
 
-              {/* Tabs */}
-              <div className="animate-fade-in">
-                <Tabs defaultValue="activity" className="space-y-6">
-                  <TabsList className="grid grid-cols-3 w-full max-w-md glass">
-                    <TabsTrigger value="activity">Recent Activity</TabsTrigger>
-                    <TabsTrigger value="members">Members</TabsTrigger>
-                    <TabsTrigger value="analytics">Analytics</TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="activity" className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold text-foreground">Recent Activity</h3>
-                      <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/transaction-log/${cid}`)}>
-                        View All
-                        <ArrowUpRight className="w-4 h-4 ml-1" />
+                <TabsContent value="members" className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-foreground">Organization Members</h3>
+                    {isAdmin && (
+                      <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/manage-awarders/${cid}`)}>
+                        <Plus className="w-4 h-4 mr-1" />
+                        Manage
                       </Button>
-                    </div>
+                    )}
+                  </div>
 
+                  <div className="space-y-3">
+                    {members.map((member) => (
+                      <MemberItem key={member.id} member={member} />
+                    ))}
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="analytics" className="space-y-4">
+                  <h3 className="text-lg font-semibold text-foreground">Analytics & Insights</h3>
+
+                  <Card className="glass-card p-6">
+                    <h4 className="font-medium text-foreground mb-4">Reputation Distribution</h4>
                     <div className="space-y-3">
-                      {recentActivity.map((activity) => (
-                        <ActivityItem key={activity.id} activity={activity} />
-                      ))}
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="members" className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold text-foreground">Organization Members</h3>
-                      {isAdmin && (
-                        <Button variant="outline" size="sm" onClick={() => navigate(`/dashboard/manage-awarders/${cid}`)}>
-                          <Plus className="w-4 h-4 mr-1" />
-                          Manage
-                        </Button>
-                      )}
-                    </div>
-
-                    <div className="space-y-3">
-                      {members.map((member) => (
-                        <MemberItem key={member.id} member={member} />
-                      ))}
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="analytics" className="space-y-4">
-                    <h3 className="text-lg font-semibold text-foreground">Analytics & Insights</h3>
-
-                    <Card className="glass-card p-6">
-                      <h4 className="font-medium text-foreground mb-4">Reputation Distribution</h4>
-                      <div className="space-y-3">
-                        {members.map((member, index) => {
-                          const max = Math.max(1, ...members.map((m) => m.reputation));
-                          const width = `${(member.reputation / max) * 100}%`;
-                          return (
-                            <div key={member.id} className="flex items-center justify-between">
-                              <span className="text-sm text-muted-foreground">{member.name}</span>
-                              <div className="flex items-center gap-2">
-                                <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
-                                  <div
-                                    className="h-full bg-gradient-to-r from-primary to-primary-glow rounded-full transition-all duration-1000"
-                                    style={{ width, animationDelay: `${index * 0.1}s` }}
-                                  />
-                                </div>
-                                <span className="text-sm font-medium text-foreground">{member.reputation}</span>
+                      {members.map((member, index) => {
+                        const max = Math.max(1, ...members.map((m) => m.reputation));
+                        const width = `${(member.reputation / max) * 100}%`;
+                        return (
+                          <div key={member.id} className="flex items-center justify-between">
+                            <span className="text-sm text-muted-foreground">{member.name}</span>
+                            <div className="flex items-center gap-2">
+                              <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-gradient-to-r from-primary to-primary-glow rounded-full transition-all duration-1000"
+                                  style={{ width, animationDelay: `${index * 0.1}s` }}
+                                />
                               </div>
+                              <span className="text-sm font-medium text-foreground">{member.reputation}</span>
                             </div>
-                          );
-                        })}
-                      </div>
-                    </Card>
-                  </TabsContent>
-                </Tabs>
-              </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </Card>
+                </TabsContent>
+              </Tabs>
             </div>
           </div>
-        </main>
-      </div>
-    </div>
+        </div>
+      </main>
+    </DashboardLayout>
   );
 }
 

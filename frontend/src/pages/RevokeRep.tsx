@@ -12,8 +12,7 @@ import { getUserDisplayData } from "@/utils/userUtils";
 import { formatDateForDisplay } from "@/utils/transactionUtils";
 import type { Transaction } from "@/declarations/reputation_dao/reputation_dao.did";
 
-import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
-import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
+import { DashboardLayout, SidebarTrigger } from "@/components/layout/DashboardLayout";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -297,23 +296,21 @@ const RevokeRep: React.FC = () => {
 
   // === Same fixed-sidebar alignment pattern as other pages ===
   return (
-    <SidebarProvider>
-      <InnerRevokeRep
-        cid={cid}
-        userRole={userRole}
-        userDisplayData={userDisplayData}
-        handleDisconnect={handleDisconnect}
-        stats={stats}
-        recentRevocations={recentRevocations}
-        formData={formData}
-        setFormData={setFormData}
-        handleInputChange={handleInputChange}
-        handleSubmit={handleSubmit}
-        showConfirmation={showConfirmation}
-        setShowConfirmation={setShowConfirmation}
-        loading={loading}
-      />
-    </SidebarProvider>
+    <InnerRevokeRep
+      cid={cid}
+      userRole={userRole}
+      userDisplayData={userDisplayData}
+      handleDisconnect={handleDisconnect}
+      stats={stats}
+      recentRevocations={recentRevocations}
+      formData={formData}
+      setFormData={setFormData}
+      handleInputChange={handleInputChange}
+      handleSubmit={handleSubmit}
+      showConfirmation={showConfirmation}
+      setShowConfirmation={setShowConfirmation}
+      loading={loading}
+    />
   );
 };
 
@@ -352,27 +349,16 @@ function InnerRevokeRep(props: InnerRevokeRepProps) {
 
   const navigate = useNavigate();
 
-  // Read sidebar state and shift content (collapsed: 72px, expanded: 280px)
-  const { state } = useSidebar();
-  const collapsed = state === "collapsed";
-
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
-      <DashboardSidebar
-        userRole={userRole?.toLowerCase() as "admin" | "awarder" | "member"}
-        userName={userDisplayData.userName}
-        userPrincipal={userDisplayData.userPrincipal}
-        onDisconnect={handleDisconnect}
-      />
-
-      {/* Push main content to the right of the fixed sidebar on md+ */}
-      <div
-        className={`flex min-h-screen flex-col transition-[padding-left] duration-300 pl-0 ${
-          collapsed ? "md:pl-[72px]" : "md:pl-[280px]"
-        }`}
-      >
-        {/* Header */}
-        <header className="h-16 border-b border-border/40 flex items-center justify-between px-6 glass-header">
+    <DashboardLayout
+      sidebar={{
+        userRole: userRole?.toLowerCase() as "admin" | "awarder" | "member",
+        userName: userDisplayData.userName,
+        userPrincipal: userDisplayData.userPrincipal,
+        onDisconnect: handleDisconnect,
+      }}
+    >
+      <header className="h-16 border-b border-border/40 flex items-center justify-between px-6 glass-header">
           <div className="flex items-center gap-3">
             <SidebarTrigger className="mr-4" />
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500/20 to-red-600/20 flex items-center justify-center">
@@ -639,8 +625,7 @@ function InnerRevokeRep(props: InnerRevokeRepProps) {
             </div>
           </div>
         </main>
-      </div>
-    </div>
+    </DashboardLayout>
   );
 }
 

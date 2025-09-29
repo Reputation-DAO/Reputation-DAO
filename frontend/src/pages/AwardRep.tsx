@@ -19,8 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
-import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
+import { DashboardLayout, SidebarTrigger } from "@/components/layout/DashboardLayout";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { toast } from "sonner";
 
@@ -316,22 +315,20 @@ const AwardRep = () => {
 
   // === Fixed-sidebar alignment pattern (same as RevokeRep) ===
   return (
-    <SidebarProvider>
-      <InnerAwardRep
-        userRole={userRole}
-        isAdmin={isAdmin}
-        isAwarder={isAwarder}
-        principal={currentPrincipal}
-        handleDisconnect={handleDisconnect}
-        formData={formData}
-        handleInputChange={handleInputChange}
-        handleSubmit={handleSubmit}
-        isAwarding={isAwarding}
-        stats={stats}
-        recentAwards={recentAwards}
-        cid={cid ?? ""}
-      />
-    </SidebarProvider>
+    <InnerAwardRep
+      userRole={userRole}
+      isAdmin={isAdmin}
+      isAwarder={isAwarder}
+      principal={currentPrincipal}
+      handleDisconnect={handleDisconnect}
+      formData={formData}
+      handleInputChange={handleInputChange}
+      handleSubmit={handleSubmit}
+      isAwarding={isAwarding}
+      stats={stats}
+      recentAwards={recentAwards}
+      cid={cid ?? ""}
+    />
   );
 };
 
@@ -366,8 +363,6 @@ function InnerAwardRep(props: InnerAwardRepProps) {
     cid,
   } = props;
 
-  const { state } = useSidebar();
-  const collapsed = state === "collapsed";
   const userDisplay = getUserDisplayData(principal || null);
   const navigate = useNavigate();
   const normalizedRole = (userRole || "").toLowerCase();
@@ -381,21 +376,15 @@ function InnerAwardRep(props: InnerAwardRepProps) {
       : "member";
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
-      <DashboardSidebar
-        userRole={sidebarRole}
-        userName={userDisplay.userName}
-        userPrincipal={userDisplay.userPrincipal}
-        onDisconnect={handleDisconnect}
-      />
-
-      <div
-        className={`flex min-h-screen flex-col transition-[padding-left] duration-300 pl-0 ${
-          collapsed ? "md:pl-[72px]" : "md:pl-[280px]"
-        }`}
-      >
-        {/* Header */}
-        <header className="h-16 border-b border-border/40 flex items-center justify-between px-6 glass-header">
+    <DashboardLayout
+      sidebar={{
+        userRole: sidebarRole,
+        userName: userDisplay.userName,
+        userPrincipal: userDisplay.userPrincipal,
+        onDisconnect: handleDisconnect,
+      }}
+    >
+      <header className="h-16 border-b border-border/40 flex items-center justify-between px-6 glass-header">
           <div className="flex items-center gap-3">
             <SidebarTrigger className="mr-4" />
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-600/20 flex items-center justify-center">
@@ -602,9 +591,8 @@ function InnerAwardRep(props: InnerAwardRepProps) {
               </div>
             </div>
           </div>
-        </main>
-      </div>
-    </div>
+      </main>
+    </DashboardLayout>
   );
 }
 

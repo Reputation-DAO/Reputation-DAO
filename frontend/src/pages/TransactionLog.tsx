@@ -13,8 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
-import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
+import { DashboardLayout, SidebarTrigger } from "@/components/layout/DashboardLayout";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { toast } from "sonner";
 
@@ -274,31 +273,28 @@ const TransactionLog: React.FC = () => {
     );
   }
 
-  // === Same fixed-sidebar alignment as Step 2 ===
   return (
-    <SidebarProvider>
-      <InnerTransactionLog
-        cid={cid}
-        userRole={userRole}
-        userDisplay={{
-          userName: sidebarUserName,
-          userPrincipal: sidebarPrincipal,
-          displayName: userDisplay.displayName,
-        }}
-        handleDisconnect={handleDisconnect}
-        stats={stats}
-        filteredTransactions={filteredTransactions}
-        loading={loading}
-        setSearchQuery={setSearchQuery}
-        searchQuery={searchQuery}
-        filterType={filterType}
-        setFilterType={setFilterType}
-        filterStatus={filterStatus}
-        setFilterStatus={setFilterStatus}
-        dateFilter={dateFilter}
-        setDateFilter={setDateFilter}
-      />
-    </SidebarProvider>
+    <InnerTransactionLog
+      cid={cid}
+      userRole={userRole}
+      userDisplay={{
+        userName: sidebarUserName,
+        userPrincipal: sidebarPrincipal,
+        displayName: userDisplay.displayName,
+      }}
+      handleDisconnect={handleDisconnect}
+      stats={stats}
+      filteredTransactions={filteredTransactions}
+      loading={loading}
+      setSearchQuery={setSearchQuery}
+      searchQuery={searchQuery}
+      filterType={filterType}
+      setFilterType={setFilterType}
+      filterStatus={filterStatus}
+      setFilterStatus={setFilterStatus}
+      dateFilter={dateFilter}
+      setDateFilter={setDateFilter}
+    />
   );
 };
 
@@ -321,9 +317,6 @@ function InnerTransactionLog(props: any) {
     setDateFilter,
   } = props;
 
-  // Read sidebar state and shift content (collapsed: 72px, expanded: 280px)
-  const { state } = useSidebar();
-  const collapsed = state === "collapsed";
   const normalizedRole = (userRole || "").toLowerCase();
   const sidebarRole: "admin" | "awarder" | "member" =
     normalizedRole === "admin"
@@ -333,22 +326,15 @@ function InnerTransactionLog(props: any) {
       : "member";
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
-      <DashboardSidebar
-        userRole={sidebarRole}
-        userName={userDisplay.userName}
-        userPrincipal={userDisplay.userPrincipal}
-        onDisconnect={handleDisconnect}
-      />
-
-      {/* Push main content to the right of the fixed sidebar on md+ */}
-      <div
-        className={`flex min-h-screen flex-col transition-[padding-left] duration-300 pl-0 ${
-          collapsed ? "md:pl-[72px]" : "md:pl-[280px]"
-        }`}
-      >
-        {/* Header */}
-        <header className="h-16 border-b border-border/40 flex items-center justify-between px-6 glass-header">
+    <DashboardLayout
+      sidebar={{
+        userRole: sidebarRole,
+        userName: userDisplay.userName,
+        userPrincipal: userDisplay.userPrincipal,
+        onDisconnect: handleDisconnect,
+      }}
+    >
+      <header className="h-16 border-b border-border/40 flex items-center justify-between px-6 glass-header">
           <div className="flex items-center gap-3">
             <SidebarTrigger className="mr-4" />
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-600/20 flex items-center justify-center">
@@ -373,7 +359,6 @@ function InnerTransactionLog(props: any) {
           </div>
         </header>
 
-        {/* Main */}
         <main className="p-6">
           <div className="max-w-7xl mx-auto space-y-6">
             {/* Stats */}
@@ -572,8 +557,7 @@ function InnerTransactionLog(props: any) {
             </Card>
           </div>
         </main>
-      </div>
-    </div>
+    </DashboardLayout>
   );
 }
 

@@ -15,8 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
-import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
+import { DashboardLayout, SidebarTrigger } from "@/components/layout/DashboardLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
@@ -304,32 +303,30 @@ const ViewBalances: React.FC = () => {
 
   // === Same fixed-sidebar alignment pattern as before ===
   return (
-    <SidebarProvider>
-      <InnerViewBalances
-        cid={cid}
-        userRole={userRole}
-        userDisplay={{
-          userName: sidebarUserName,
-          userPrincipal: sidebarPrincipal,
-          displayName: userDisplay.displayName,
-        }}
-        handleDisconnect={handleDisconnect}
-        stats={stats}
-        filteredBalances={filteredBalances}
-        loading={loading}
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        sortBy={sortBy}
-        setSortBy={setSortBy}
-        balanceSearchQuery={balanceSearchQuery}
-        setBalanceSearchQuery={setBalanceSearchQuery}
-        handleBalanceSearch={handleBalanceSearch}
-        balanceSearchLoading={balanceSearchLoading}
-        searchedBalance={searchedBalance}
-        topPerformers={topPerformers}
-        recentChanges={recentChanges}
-      />
-    </SidebarProvider>
+    <InnerViewBalances
+      cid={cid}
+      userRole={userRole}
+      userDisplay={{
+        userName: sidebarUserName,
+        userPrincipal: sidebarPrincipal,
+        displayName: userDisplay.displayName,
+      }}
+      handleDisconnect={handleDisconnect}
+      stats={stats}
+      filteredBalances={filteredBalances}
+      loading={loading}
+      searchQuery={searchQuery}
+      setSearchQuery={setSearchQuery}
+      sortBy={sortBy}
+      setSortBy={setSortBy}
+      balanceSearchQuery={balanceSearchQuery}
+      setBalanceSearchQuery={setBalanceSearchQuery}
+      handleBalanceSearch={handleBalanceSearch}
+      balanceSearchLoading={balanceSearchLoading}
+      searchedBalance={searchedBalance}
+      topPerformers={topPerformers}
+      recentChanges={recentChanges}
+    />
   );
 };
 
@@ -380,9 +377,6 @@ function InnerViewBalances(props: InnerViewBalancesProps) {
     recentChanges,
   } = props;
 
-  // Read sidebar state and shift content (collapsed: 72px, expanded: 280px)
-  const { state } = useSidebar();
-  const collapsed = state === "collapsed";
   const normalizedRole = (userRole || "").toLowerCase();
   const sidebarRole: "admin" | "awarder" | "member" =
     normalizedRole === "admin"
@@ -392,22 +386,15 @@ function InnerViewBalances(props: InnerViewBalancesProps) {
       : "member";
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-background via-background/95 to-muted/20">
-      <DashboardSidebar
-        userRole={sidebarRole}
-        userName={userDisplay.userName}
-        userPrincipal={userDisplay.userPrincipal}
-        onDisconnect={handleDisconnect}
-      />
-
-      {/* Push main content to the right of the fixed sidebar on md+ */}
-      <div
-        className={`flex min-h-screen flex-col transition-[padding-left] duration-300 pl-0 ${
-          collapsed ? "md:pl-[72px]" : "md:pl-[280px]"
-        }`}
-      >
-        {/* Header */}
-        <header className="h-16 border-b border-border/40 flex items-center px-6 glass-header">
+    <DashboardLayout
+      sidebar={{
+        userRole: sidebarRole,
+        userName: userDisplay.userName,
+        userPrincipal: userDisplay.userPrincipal,
+        onDisconnect: handleDisconnect,
+      }}
+    >
+      <header className="h-16 border-b border-border/40 flex items-center px-6 glass-header">
           <SidebarTrigger className="mr-4" />
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500/20 to-green-600/20 flex items-center justify-center">
@@ -420,7 +407,6 @@ function InnerViewBalances(props: InnerViewBalancesProps) {
           </div>
         </header>
 
-        {/* Main Content */}
         <main className="p-6">
           <div className="max-w-7xl mx-auto space-y-6">
             {/* Stats Cards */}
@@ -764,8 +750,7 @@ function InnerViewBalances(props: InnerViewBalancesProps) {
             </Tabs>
           </div>
         </main>
-      </div>
-    </div>
+    </DashboardLayout>
   );
 }
 

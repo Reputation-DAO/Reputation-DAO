@@ -73,7 +73,7 @@ const actor = await makeChildWithPlug({
     <section className="mb-12">
       <h2 className="text-2xl font-semibold text-foreground mb-4">UI System</h2>
       <p className="text-muted-foreground mb-4">
-        Layout components such as <code>Navigation</code>, <code>Footer</code>, and <code>DashboardSidebar</code> pair with reusable shadcn/ui primitives (cards, tabs, forms). Tailwind themes are configured in <code>tailwind.config.ts</code>.
+        Layout components such as <code>Navigation</code>, <code>Footer</code>, and <code>DashboardLayout</code> pair with reusable shadcn/ui primitives (cards, tabs, forms). Tailwind themes are configured in <code>tailwind.config.ts</code>.
       </p>
       <p className="text-muted-foreground">
         To add a new UI atom, scaffold it under <code>frontend/src/components/ui</code> and export via <code>components.json</code> so shadcn generates consistent tokens.
