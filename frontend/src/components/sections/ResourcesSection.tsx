@@ -3,13 +3,7 @@ import { Button } from "@/components/ui/button";
 
 const ResourcesSection = () => {
   const resources = [
-    {
-      title: "GitHub",
-      description: "Explore the complete source code and contribute to the project",
-      icon: Github,
-      link: "https://github.com/Reputation-DAO/Reputation-DAO",
-      color: "from-gray-600 to-gray-700"
-    },
+    
     {
       title: "Core Idea",
       description: "Deep dive into the foundational concepts and philosophy",
@@ -24,20 +18,7 @@ const ResourcesSection = () => {
       link: "https://www.youtube.com/watch?v=iaZ4pHaWd_U",
       color: "from-red-600 to-red-700"
     },
-    {
-      title: "Presentation",
-      description: "Official presentation slides and project overview",
-      icon: Presentation,
-      link: "https://drive.google.com/file/d/18A6LH4TseJolKCbDPOf7et7IXwCj2fs0/view?usp=sharing",
-      color: "from-green-600 to-green-700"
-    },
-    {
-      title: "Complete Flow Chart",
-      description: "Visual workflow and system architecture diagrams",
-      icon: GitBranch,
-      link: "https://www.figma.com/board/fWhXwD7MX9wxylm8SumTqr/REPUTAION-DAO-WORKFLOW?t=xV8nwU4sJ0ZQSwEq-0",
-      color: "from-purple-600 to-purple-700"
-    }
+    
   ];
 
   return (

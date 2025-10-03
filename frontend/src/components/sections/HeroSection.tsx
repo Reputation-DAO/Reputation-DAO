@@ -64,12 +64,7 @@ const HeroSection = () => {
                 Get Started
               </Button>
             </Link>
-            <a href="https://github.com/Reputation-DAO/Reputation-DAO" target="_blank" rel="noopener noreferrer">
-              <Button variant="outline" size="xl" className="group">
-                <span>View GitHub</span>
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </Button>
-            </a>
+            
           </div>
           
           {/* Stats */}
