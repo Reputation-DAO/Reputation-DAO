@@ -1,10 +1,9 @@
 // src/pages/Dashboard.tsx
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useRole } from "@/contexts/RoleContext";
+import { useRole, type UserRole } from "@/contexts/RoleContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { makeChildWithPlug } from "@/components/canister/child";
-import type { ChildActor } from "@/components/canister/child";
+import { makeChildWithPlug, type ChildActor } from "@/components/canister/child";
 import { getUserDisplayData } from "@/utils/userUtils";
 import { toast } from "sonner";
 
@@ -29,7 +28,6 @@ import {
 import { DashboardLayout, SidebarTrigger } from "@/components/layout/DashboardLayout";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import type { Transaction, TransactionType } from "@/declarations/reputation_dao/reputation_dao.did";
-import type { UserRole } from "@/contexts/RoleContext";
 
 type TxKind = "awarded" | "revoked" | "decayed";
 interface ReputationActivity {

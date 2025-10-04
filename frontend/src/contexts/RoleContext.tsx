@@ -222,14 +222,6 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     return () => window.removeEventListener('focus', handleFocus);
   }, [determineUserRole]);
 
-  useEffect(() => {
-    const handleFocus = () => {
-      determineUserRole();
-    };
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, [determineUserRole]);
-
   // Recompute role whenever cid changes (via locationchange/storage)
   useEffect(() => {
     determineUserRole();

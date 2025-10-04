@@ -2,8 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { Principal } from '@dfinity/principal';
 import { ensurePlugAgent, getPlugPrincipal, isPlugConnected, disconnectPlug, PLUG_HOST } from '../utils/plug';
-import { makeChildWithPlug } from '../components/canister/child';
-import type { ChildActor } from '../components/canister/child';
+import { makeChildWithPlug, type ChildActor } from '../components/canister/child';
 
 export type AuthMethod = 'plug' | null;
 

@@ -3,11 +3,9 @@ import React, { useState, useEffect } from "react";
 import type { Dispatch, FormEvent, SetStateAction } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
-import { makeChildWithPlug } from "@/components/canister/child";
-import type { ChildActor } from "@/components/canister/child";
+import { makeChildWithPlug, type ChildActor } from "@/components/canister/child";
 
-import { useRole } from "@/contexts/RoleContext";
-import type { UserRole } from "@/contexts/RoleContext";
+import { useRole, type UserRole } from "@/contexts/RoleContext";
 import { getUserDisplayData } from "@/utils/userUtils";
 import { formatDateForDisplay } from "@/utils/transactionUtils";
 import type { Transaction } from "@/declarations/reputation_dao/reputation_dao.did";

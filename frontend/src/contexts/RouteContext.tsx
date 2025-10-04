@@ -22,9 +22,13 @@ export const RouteProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     const path = location.pathname;
     setCurrentRoute(path);
-    
-    // Check if current route allows Plug
-    const allowed = !RESTRICTED_ROUTES.includes(path);
+
+    const matches = (route: string) => path === route || path.startsWith(`${route}/`);
+    const explicitlyRestricted = RESTRICTED_ROUTES.some(matches);
+    const explicitlyAllowed = ALLOWED_ROUTES.some(matches);
+
+    // Allow Plug only on whitelisted routes that are not explicitly blocked
+    const allowed = explicitlyAllowed && !explicitlyRestricted;
     setIsPlugAllowed(allowed);
     
     console.log(`🛣️ Route changed to: ${path}, Plug allowed: ${allowed}`);

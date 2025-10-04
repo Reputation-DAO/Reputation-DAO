@@ -3,8 +3,7 @@ import React, { useState, useEffect } from "react";
 import type { Dispatch, FormEvent, SetStateAction } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
-import { makeChildWithPlug } from "@/components/canister/child";
-import type { ChildActor } from "@/components/canister/child";
+import { makeChildWithPlug, type ChildActor } from "@/components/canister/child";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
