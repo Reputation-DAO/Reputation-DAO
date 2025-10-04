@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import Navigation from "@/components/ui/navigation";
 import Footer from "@/components/layout/Footer";
-import { blogActor } from "@/components/canister/blogBackend";
+import { blogActor } from "@/lib/canisters";
 import type {
   Post as BackendPost,
   Author as BackendAuthor,

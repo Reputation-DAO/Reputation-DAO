@@ -1,6 +1,5 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/core";
+import { Toaster, SonnerToaster } from "@/components/ui/composed";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
@@ -15,7 +14,7 @@ import Blog from "./pages/Blog";
 import Community from "./pages/Community";
 import Auth from "./pages/Auth";
 import OrgSelector from "./pages/OrgSelector";
-import Dashboard from "./pages/Dashboard";
+import Dashboard from "./features/dashboard";
 import AwardRep from "./pages/AwardRep";
 import RevokeRep from "./pages/RevokeRep";
 import ManageAwarders from "./pages/ManageAwarders";
@@ -46,7 +45,7 @@ const App = () => (
             <RoleProvider>
               <TooltipProvider>
                 <Toaster />
-                <Sonner />
+                <SonnerToaster />
                 <Routes>
                   {/* Marketing / top-level */}
                   <Route path="/" element={<Home />} />

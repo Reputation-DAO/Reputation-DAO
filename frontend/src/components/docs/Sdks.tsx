@@ -4,7 +4,7 @@ const items = [
   {
     title: "connect2ic + Plug",
     body: "Wallet onboarding and actor creation are handled through connect2ic. We register Plug, Stoic, and Internet Identity providers, then expose the child actor via makeChildWithPlug.",
-    resource: "frontend/src/components/canister/child.ts"
+    resource: "frontend/src/lib/canisters/child.ts"
   },
   {
     title: "Auth & Role Contexts",
@@ -19,7 +19,7 @@ const items = [
   {
     title: "Data Fetching",
     body: "TanStack Query caches canister calls and invalidates on write actions, keeping dashboards responsive without manual state juggling.",
-    resource: "frontend/src/pages/Dashboard.tsx"
+    resource: "frontend/src/features/dashboard/DashboardPage.tsx"
   }
 ];
 
@@ -41,15 +41,14 @@ const Sdks = () => (
         Authentication starts in <code>AuthContext</code>, which checks Plug connectivity and exposes <code>getActor</code>. The helper <code>makeChildWithPlug</code> uses connect2ic to instantiate candid actors with the correct whitelist.
       </p>
       <pre className="glass-card p-4 text-sm overflow-x-auto">
-{`import { makeChildWithPlug } from "@/components/canister/child";
+{`import { makeChildWithPlug } from "@/lib/canisters";
 
 const actor = await makeChildWithPlug({
   canisterId: process.env.VITE_REPUTATION_DAO_CANISTER_ID!,
-  host: PLUG_HOST,
 });`}
       </pre>
       <p className="text-muted-foreground mt-4">
-        When adding new canisters, extend <code>frontend/src/components/canister</code> with typed helpers so hooks and pages remain strongly typed.
+        When adding new canisters, extend <code>frontend/src/lib/canisters</code> with typed helpers so hooks and pages remain strongly typed.
       </p>
     </section>
 

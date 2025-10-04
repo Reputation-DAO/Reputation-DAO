@@ -3,8 +3,7 @@ import React, { useState, useEffect } from "react";
 import type { Dispatch, FormEvent, SetStateAction } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
-import { makeChildWithPlug, type ChildActor } from "@/components/canister/child";
-import { PLUG_HOST } from "@/utils/plug";
+import { makeChildWithPlug, type ChildActor } from "@/lib/canisters";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -102,7 +101,7 @@ const ManageAwarders: React.FC = () => {
       try {
         if (!cid) throw new Error("No organization selected.");
         setConnecting(true);
-        const actor = await makeChildWithPlug({ canisterId: cid, host: PLUG_HOST });
+        const actor = await makeChildWithPlug({ canisterId: cid });
         setChild(actor);
       } catch (e: any) {
         setConnectError(e?.message || "Failed to connect to org canister");

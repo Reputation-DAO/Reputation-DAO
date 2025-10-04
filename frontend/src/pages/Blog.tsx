@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import Navigation from "@/components/ui/navigation";
 import Footer from "@/components/layout/Footer";
 import { Calendar, User as UserIcon, ArrowRight } from "lucide-react";
-import { blogActor } from "@/components/canister/blogBackend";
+import { blogActor } from "@/lib/canisters";
 import type {
   Post as BackendPost,
   PostStatus as BackendPostStatus,

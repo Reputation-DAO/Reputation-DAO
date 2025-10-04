@@ -1,10 +1,10 @@
-// src/components/canister/child.ts
+// lib/canisters/child.ts
 import { HttpAgent, Actor } from "@dfinity/agent";
 import type { ActorSubclass } from "@dfinity/agent";
 
-import { idlFactory } from '../../declarations/reputation_dao/reputation_dao.did.js';
-import type { _SERVICE } from '../../declarations/reputation_dao/reputation_dao.did.d.ts';
-import { PLUG_HOST } from "../../utils/plug";
+import { idlFactory } from '@/declarations/reputation_dao/reputation_dao.did.js';
+import type { _SERVICE } from '@/declarations/reputation_dao/reputation_dao.did.d.ts';
+import { PLUG_HOST } from '@/utils/plug';
 
 export type ChildActor = ActorSubclass<_SERVICE>;
 

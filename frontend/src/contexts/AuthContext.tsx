@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { Principal } from '@dfinity/principal';
 import { ensurePlugAgent, getPlugPrincipal, isPlugConnected, disconnectPlug, PLUG_HOST } from '../utils/plug';
-import { makeChildWithPlug, type ChildActor } from '../components/canister/child';
+import { makeChildWithPlug, type ChildActor } from '@/lib/canisters';
 
 export type AuthMethod = 'plug' | null;
 
@@ -131,7 +131,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
 
     await ensurePlugAgent({ host: PLUG_HOST, whitelist: [canisterId] });
-    return makeChildWithPlug({ canisterId, host: PLUG_HOST });
+    return makeChildWithPlug({ canisterId });
   };
 
   // Check connection on mount

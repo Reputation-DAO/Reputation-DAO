@@ -60,15 +60,11 @@ import {
 } from "lucide-react";
 
 // Factory actor helpers (Plug-first)
-import {
-  makeFactoriaWithPlug,
-  getFactoriaCanisterId,
-} from "@/components/canister/factoria";
+import { makeFactoriaWithPlug, getFactoriaCanisterId } from "@/lib/canisters";
 import type {
   Child as FactoryChild,
   _SERVICE as FactoriaActor,
 } from "@/declarations/factoria/factoria.did";
-import { PLUG_HOST } from "@/utils/plug";
 
 // ---------------- Types ----------------
 type Plan = "Free" | "Basic" | "Pro";
@@ -651,7 +647,6 @@ const OrgSelector: React.FC = () => {
 
       try {
         const actor = await makeFactoriaWithPlug({
-          host: PLUG_HOST,
           canisterId: getFactoriaCanisterId(),
         });
 

@@ -2,8 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
-import { makeChildWithPlug, type ChildActor } from "@/components/canister/child";
-import { PLUG_HOST } from "@/utils/plug";
+import { makeChildWithPlug, type ChildActor } from "@/lib/canisters";
 
 import { useRole } from "@/contexts/RoleContext";
 import { getUserDisplayData } from "@/utils/userUtils";
@@ -109,7 +108,7 @@ const TransactionLog: React.FC = () => {
     (async () => {
       try {
         if (!cid) throw new Error("No organization selected.");
-        const actor = await makeChildWithPlug({ canisterId: cid, host: PLUG_HOST });
+        const actor = await makeChildWithPlug({ canisterId: cid });
         setChild(actor);
       } catch (e: any) {
         setConnectError(e?.message || "Failed to connect to org canister");

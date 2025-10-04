@@ -1,12 +1,11 @@
-// src/pages/Dashboard.tsx
+// features/dashboard/DashboardPage.tsx
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useRole, type UserRole } from "@/contexts/RoleContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { makeChildWithPlug, type ChildActor } from "@/components/canister/child";
+import { makeChildWithPlug, type ChildActor } from "@/lib/canisters";
 import { getUserDisplayData } from "@/utils/userUtils";
 import { toast } from "sonner";
-import { PLUG_HOST } from "@/utils/plug";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -197,7 +196,7 @@ const Dashboard = () => {
           return;
         }
         setLoading(true);
-        const actor = await makeChildWithPlug({ canisterId: cid, host: PLUG_HOST });
+        const actor = await makeChildWithPlug({ canisterId: cid });
         setChild(actor);
       } catch (e: any) {
         const msg = String(e?.message || e);
