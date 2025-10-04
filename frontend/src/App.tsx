@@ -33,6 +33,7 @@ import ApiReference from "@/components/docs/ApiReference";
 import Sdks from "@/components/docs/Sdks";
 import SecurityGuide from "@/components/docs/SecurityGuide";
 import CommunityResources from "@/components/docs/CommunityResources";
+import CliReference from "@/components/docs/CliReference";
 
 const queryClient = new QueryClient();
 
@@ -60,6 +61,7 @@ const App = () => (
                     <Route path="getting-started" element={<GettingStarted />} />
                     <Route path="smart-contracts" element={<SmartContracts />} />
                     <Route path="api" element={<ApiReference />} />
+                    <Route path="cli" element={<CliReference />} />
                     <Route path="sdks" element={<Sdks />} />
                     <Route path="security" element={<SecurityGuide />} />
                     <Route path="community" element={<CommunityResources />} />

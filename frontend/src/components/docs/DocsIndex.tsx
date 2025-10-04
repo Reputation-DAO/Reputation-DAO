@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Book, Code, Zap, Database, Shield, Users } from "lucide-react";
+import { Book, Code, Zap, Database, Shield, Users, Terminal } from "lucide-react";
 
 const sections = [
   {
@@ -24,6 +24,18 @@ const sections = [
       "Child reputation APIs",
       "Blog backend endpoints",
       "Shell test harness"
+    ]
+  },
+  {
+    title: "CLI Reference",
+    description: "Automate reputation workflows from the terminal using the repdao CLI and its dedicated identity store.",
+    icon: Terminal,
+    href: "/docs/cli",
+    items: [
+      "Installation & quick start",
+      "Identity management",
+      "Award & revoke commands",
+      "Analytics queries"
     ]
   },
   {
