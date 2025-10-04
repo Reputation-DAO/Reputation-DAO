@@ -13,6 +13,7 @@ import { useLocation } from 'react-router-dom';
 
 import { makeChildWithPlug } from '../components/canister/child';
 import { makeFactoriaWithPlug, getFactoriaCanisterId } from '../components/canister/factoria';
+import { PLUG_HOST } from '../utils/plug';
 
 export type UserRole = 'admin' | 'awarder' | 'member' | 'user' | 'loading';
 
@@ -124,7 +125,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
 
           try {
             const factoria = await makeFactoriaWithPlug({
-              host: 'https://icp-api.io',
+              host: PLUG_HOST,
               canisterId: getFactoriaCanisterId(),
             });
 
@@ -152,7 +153,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
 
           if (!resolvedAdmin) {
             try {
-              const child = await makeChildWithPlug({ canisterId: cid, host: 'https://icp-api.io' });
+              const child = await makeChildWithPlug({ canisterId: cid, host: PLUG_HOST });
 
               if (typeof child.isTrustedAwarder === 'function') {
                 const ok = await child.isTrustedAwarder(Principal.fromText(meText));

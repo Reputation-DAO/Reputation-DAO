@@ -68,6 +68,7 @@ import type {
   Child as FactoryChild,
   _SERVICE as FactoriaActor,
 } from "@/declarations/factoria/factoria.did";
+import { PLUG_HOST } from "@/utils/plug";
 
 // ---------------- Types ----------------
 type Plan = "Free" | "Basic" | "Pro";
@@ -650,7 +651,7 @@ const OrgSelector: React.FC = () => {
 
       try {
         const actor = await makeFactoriaWithPlug({
-          host: "https://icp-api.io",
+          host: PLUG_HOST,
           canisterId: getFactoriaCanisterId(),
         });
 

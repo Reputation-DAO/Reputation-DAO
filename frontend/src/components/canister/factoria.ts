@@ -2,9 +2,10 @@
 import { Actor, HttpAgent } from '@dfinity/agent';
 import { idlFactory } from '../../declarations/factoria/factoria.did.js';
 import type { _SERVICE } from '../../declarations/factoria/factoria.did.d.ts';
+import { PLUG_HOST } from '../../utils/plug';
 
 const FACTORIA_CANISTER_ID = import.meta.env.VITE_FACTORIA_CANISTER_ID || "ttoz7-uaaaa-aaaam-qd34a-cai";
-const DEFAULT_HOST = 'https://ic0.app';
+const DEFAULT_HOST = PLUG_HOST;
 
 export async function makeFactoriaActor(opts?: {
   agent?: HttpAgent;

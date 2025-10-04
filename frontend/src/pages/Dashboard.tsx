@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { makeChildWithPlug, type ChildActor } from "@/components/canister/child";
 import { getUserDisplayData } from "@/utils/userUtils";
 import { toast } from "sonner";
+import { PLUG_HOST } from "@/utils/plug";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -196,7 +197,7 @@ const Dashboard = () => {
           return;
         }
         setLoading(true);
-        const actor = await makeChildWithPlug({ canisterId: cid, host: "https://icp-api.io" });
+        const actor = await makeChildWithPlug({ canisterId: cid, host: PLUG_HOST });
         setChild(actor);
       } catch (e: any) {
         const msg = String(e?.message || e);

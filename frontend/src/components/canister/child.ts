@@ -4,17 +4,20 @@ import type { ActorSubclass } from "@dfinity/agent";
 
 import { idlFactory } from '../../declarations/reputation_dao/reputation_dao.did.js';
 import type { _SERVICE } from '../../declarations/reputation_dao/reputation_dao.did.d.ts';
+import { PLUG_HOST } from "../../utils/plug";
 
 export type ChildActor = ActorSubclass<_SERVICE>;
 
 type MakeChildOpts = {
-  host?: string;          // defaults to ic0.app
+  host?: string;          // defaults to PLUG_HOST
   canisterId: string;     // child canister id (:cid)
   whitelist?: string[];   // optional extra canisters
 };
 
+const DEFAULT_HOST = PLUG_HOST;
+
 export async function makeChildWithPlug(opts: MakeChildOpts): Promise<ChildActor> {
-  const host = opts.host ?? "https://ic0.app";
+  const host = opts.host ?? DEFAULT_HOST;
   const whitelist = opts.whitelist ?? [opts.canisterId];
 
   console.log('🔧 makeChildWithPlug called with:', { canisterId: opts.canisterId, host, whitelist });

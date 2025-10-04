@@ -4,6 +4,7 @@ import type { Dispatch, FormEvent, SetStateAction } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 import { makeChildWithPlug, type ChildActor } from "@/components/canister/child";
+import { PLUG_HOST } from "@/utils/plug";
 
 import { useRole, type UserRole } from "@/contexts/RoleContext";
 import { getUserDisplayData } from "@/utils/userUtils";
@@ -101,7 +102,7 @@ const AwardRep = () => {
     (async () => {
       try {
         if (!cid) throw new Error("No organization selected.");
-        const actor = await makeChildWithPlug({ canisterId: cid, host: "https://icp-api.io" });
+        const actor = await makeChildWithPlug({ canisterId: cid, host: PLUG_HOST });
         setChild(actor);
       } catch (e: any) {
         setConnectError(e?.message || "Failed to connect to org canister");
