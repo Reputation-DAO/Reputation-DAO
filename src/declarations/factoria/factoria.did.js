@@ -1,13 +1,16 @@
 export const idlFactory = ({ IDL }) => {
   const Status = IDL.Variant({ 'Active' : IDL.Null, 'Archived' : IDL.Null });
+  const Visibility = IDL.Variant({ 'Private' : IDL.Null, 'Public' : IDL.Null });
   const Child = IDL.Record({
     'id' : IDL.Principal,
     'status' : Status,
     'owner' : IDL.Principal,
     'note' : IDL.Text,
     'created_at' : IDL.Nat64,
+    'visibility' : Visibility,
   });
   return IDL.Service({
+    'adminDrainChild' : IDL.Func([IDL.Principal, IDL.Nat], [IDL.Nat], []),
     'adminSetPool' : IDL.Func([IDL.Vec(IDL.Principal)], [IDL.Text], []),
     'archiveChild' : IDL.Func([IDL.Principal], [IDL.Text], []),
     'childHealth' : IDL.Func(
@@ -72,6 +75,7 @@ export const idlFactory = ({ IDL }) => {
     'setDefaultChildWasm' : IDL.Func([IDL.Vec(IDL.Nat8)], [], []),
     'startChild' : IDL.Func([IDL.Principal], [], []),
     'stopChild' : IDL.Func([IDL.Principal], [], []),
+    'toggleVisibility' : IDL.Func([IDL.Principal], [Visibility], []),
     'topUpChild' : IDL.Func(
         [IDL.Principal, IDL.Nat],
         [IDL.Variant({ 'ok' : IDL.Nat, 'err' : IDL.Text })],

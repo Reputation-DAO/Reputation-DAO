@@ -1,3 +1,4 @@
+// src/components/layout/DashboardLayout.tsx
 import React, {
   ReactNode,
   useCallback,
@@ -26,6 +27,8 @@ import {
   HelpCircle,
   MessageCircle,
   PanelLeft,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -34,6 +37,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { toast } from "sonner";
+import { Principal } from "@dfinity/principal";
+import { makeFactoriaWithPlug } from "@/lib/canisters"; // <-- ensure this exists
 
 const SIDEBAR_COOKIE_NAME = "sidebar:collapsed";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
@@ -76,14 +82,10 @@ function useDashboardSidebar() {
 }
 
 function readCollapsedFromCookie() {
-  if (typeof document === "undefined") {
-    return false;
-  }
-
+  if (typeof document === "undefined") return false;
   const entry = document.cookie
     .split("; ")
     .find((row) => row.startsWith(`${SIDEBAR_COOKIE_NAME}=`));
-
   if (!entry) return false;
   return entry.split("=")[1] === "true";
 }
@@ -99,9 +101,7 @@ function DashboardSidebarProvider({ children }: { children: ReactNode }) {
   const [openMobile, setOpenMobile] = useState(false);
 
   useEffect(() => {
-    if (!isMobile) {
-      setOpenMobile(false);
-    }
+    if (!isMobile) setOpenMobile(false);
   }, [isMobile]);
 
   const toggle = useCallback(() => {
@@ -123,7 +123,6 @@ function DashboardSidebarProvider({ children }: { children: ReactNode }) {
         toggle();
       }
     };
-
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [toggle]);
@@ -205,24 +204,20 @@ function DashboardNavigation({ sidebar }: { sidebar: DashboardLayoutProps["sideb
   const cid = useMemo(() => extractCidFromPath(location.pathname), [location.pathname]);
 
   const safeRole: "admin" | "awarder" | "member" =
-    (['admin', 'awarder', 'member'] as const).includes(sidebar.userRole)
+    (["admin", "awarder", "member"] as const).includes(sidebar.userRole)
       ? sidebar.userRole
-      : 'member';
+      : "member";
 
   const filteredMainItems = mainNavItems.filter((item) => item.roles.includes(safeRole));
   const filteredSupportItems = supportItems.filter((item) => item.roles.includes(safeRole));
   const filteredSettingsItems = settingsItems.filter((item) => item.roles.includes(safeRole));
 
   useEffect(() => {
-    if (isMobile) {
-      setOpenMobile(false);
-    }
+    if (isMobile) setOpenMobile(false);
   }, [isMobile, location.pathname, setOpenMobile]);
 
   const handleNavItemSelect = useCallback(() => {
-    if (isMobile) {
-      setOpenMobile(false);
-    }
+    if (isMobile) setOpenMobile(false);
   }, [isMobile, setOpenMobile]);
 
   const sidebarBody = (
@@ -243,10 +238,7 @@ function DashboardNavigation({ sidebar }: { sidebar: DashboardLayoutProps["sideb
   if (isMobile) {
     return (
       <Sheet open={openMobile} onOpenChange={setOpenMobile}>
-        <SheetContent
-          className="w-[18rem] bg-white dark:bg-slate-900 p-0"
-          side="left"
-        >
+        <SheetContent className="w-[18rem] bg-white dark:bg-slate-900 p-0" side="left">
           <div className="flex h-full w-full flex-col overflow-y-auto">
             {sidebarBody}
           </div>
@@ -263,9 +255,7 @@ function DashboardNavigation({ sidebar }: { sidebar: DashboardLayoutProps["sideb
       transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
     >
       <div className="absolute inset-0 bg-gradient-to-b from-slate-50/80 via-white to-slate-50/40 dark:from-slate-900/90 dark:via-slate-900 dark:to-slate-900/80" />
-      <div className="relative z-10 flex h-full flex-col">
-        {sidebarBody}
-      </div>
+      <div className="relative z-10 flex h-full flex-col">{sidebarBody}</div>
     </motion.div>
   );
 }
@@ -302,6 +292,52 @@ function SidebarContent({
     (slug: string) => pathname.startsWith(makePath(slug)),
     [pathname, makePath]
   );
+
+  // ---------- Visibility state & handlers ----------
+  const [vis, setVis] = useState<"Public" | "Private" | null>(null);
+  const [visBusy, setVisBusy] = useState(false);
+
+  // Load current visibility for this cid
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!cid) {
+          setVis(null);
+          return;
+        }
+        const factoria = await makeFactoriaWithPlug({
+          canisterId: import.meta.env.VITE_FACTORIA_CANISTER_ID,
+        });
+        const res = await factoria.getChild(Principal.fromText(cid));
+        if (Array.isArray(res) && res.length) {
+          const v = "Public" in res[0].visibility ? "Public" : "Private";
+          setVis(v);
+        } else {
+          setVis(null);
+        }
+      } catch {
+        setVis(null);
+      }
+    })();
+  }, [cid]);
+
+  const onToggleVisibility = useCallback(async () => {
+    try {
+      if (!cid) return;
+      setVisBusy(true);
+      const factoria = await makeFactoriaWithPlug({
+        canisterId: import.meta.env.VITE_FACTORIA_CANISTER_ID,
+      });
+      const next = await factoria.toggleVisibility(Principal.fromText(cid));
+      const now = "Public" in next ? "Public" : "Private";
+      setVis(now);
+      toast.success(`Visibility set to ${now}`);
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to toggle visibility");
+    } finally {
+      setVisBusy(false);
+    }
+  }, [cid]);
 
   return (
     <div className="flex h-full flex-col">
@@ -351,12 +387,7 @@ function SidebarContent({
             const active = isActivePath(item.slug);
             const to = makePath(item.slug);
             return (
-              <motion.div
-                key={item.id}
-                whileHover={{ x: collapsed ? 0 : 2 }}
-                whileTap={{ scale: 0.98 }}
-                transition={{ duration: 0.15 }}
-              >
+              <motion.div key={item.id} whileHover={{ x: collapsed ? 0 : 2 }} whileTap={{ scale: 0.98 }} transition={{ duration: 0.15 }}>
                 <NavLink
                   to={to}
                   onClick={onNavigate}
@@ -417,12 +448,7 @@ function SidebarContent({
               {filteredSupportItems.map((item) => {
                 const Icon = item.icon;
                 return (
-                  <motion.div
-                    key={item.id}
-                    whileHover={{ x: collapsed ? 0 : 2 }}
-                    whileTap={{ scale: 0.98 }}
-                    transition={{ duration: 0.15 }}
-                  >
+                  <motion.div key={item.id} whileHover={{ x: collapsed ? 0 : 2 }} whileTap={{ scale: 0.98 }} transition={{ duration: 0.15 }}>
                     <NavLink
                       to={item.url}
                       onClick={onNavigate}
@@ -471,11 +497,11 @@ function SidebarContent({
             <div className="flex items-center gap-3 p-3 glass-card rounded-lg">
               <Avatar className="w-8 h-8">
                 <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary-glow/20 text-primary">
-                  {sidebar.userName ? sidebar.userName.charAt(0).toUpperCase() : 'U'}
+                  {sidebar.userName ? sidebar.userName.charAt(0).toUpperCase() : "U"}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">{sidebar.userName || 'Unknown User'}</p>
+                <p className="text-sm font-medium text-foreground truncate">{sidebar.userName || "Unknown User"}</p>
                 <div className="flex items-center gap-1">
                   <Badge variant="secondary" className="flex items-center gap-1 text-xs">
                     <RoleIcon role={safeRole} />
@@ -484,6 +510,25 @@ function SidebarContent({
                 </div>
               </div>
             </div>
+
+            {/* Toggle Visibility button (admin only, requires :cid) */}
+            {cid && safeRole === "admin" && (
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                onClick={onToggleVisibility}
+                disabled={visBusy || vis === null}
+              >
+                {visBusy ? (
+                  <div className="w-4 h-4 border-2 border-current border-r-transparent rounded-full animate-spin" />
+                ) : vis === "Public" ? (
+                  <EyeOff className="w-4 h-4" />
+                ) : (
+                  <Eye className="w-4 h-4" />
+                )}
+                {vis === "Public" ? "Make Private" : "Make Public"}
+              </Button>
+            )}
 
             <Button
               variant="ghost"
@@ -498,15 +543,10 @@ function SidebarContent({
           <div className="flex flex-col items-center gap-2">
             <Avatar className="w-8 h-8">
               <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary-glow/20 text-primary">
-                {sidebar.userName ? sidebar.userName.charAt(0).toUpperCase() : 'U'}
+                {sidebar.userName ? sidebar.userName.charAt(0).toUpperCase() : "U"}
               </AvatarFallback>
             </Avatar>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={sidebar.onDisconnect}
-              className="w-8 h-8 p-0"
-            >
+            <Button variant="ghost" size="sm" onClick={sidebar.onDisconnect} className="w-8 h-8 p-0">
               <LogOut className="w-4 h-4" />
             </Button>
           </div>
@@ -532,7 +572,6 @@ export const SidebarTrigger = React.forwardRef<
   React.ComponentProps<typeof Button>
 >(({ className, onClick, ...props }, ref) => {
   const { toggle } = useDashboardSidebar();
-
   return (
     <Button
       ref={ref}
@@ -552,4 +591,3 @@ export const SidebarTrigger = React.forwardRef<
   );
 });
 SidebarTrigger.displayName = "SidebarTrigger";
-

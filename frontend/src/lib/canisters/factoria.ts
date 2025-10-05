@@ -1,7 +1,7 @@
 // lib/canisters/factoria.ts
 import { Actor, HttpAgent } from '@dfinity/agent';
-import { idlFactory } from '@/declarations/factoria/factoria.did.js';
-import type { _SERVICE } from '@/declarations/factoria/factoria.did.d.ts';
+import { idlFactory } from '../../../../src/declarations/factoria/factoria.did.js';
+import type { _SERVICE } from '../../../../src/declarations/factoria/factoria.did.d.ts';
 import { PLUG_HOST } from '@/utils/plug';
 
 const FACTORIA_CANISTER_ID = import.meta.env.VITE_FACTORIA_CANISTER_ID || "ttoz7-uaaaa-aaaam-qd34a-cai";

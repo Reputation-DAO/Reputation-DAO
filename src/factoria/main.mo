@@ -74,14 +74,17 @@ actor ReputationFactory {
 
   // -------------------- Registry/Pool Types --------------------
   public type Status = { #Active; #Archived };
+  public type Visibility = { #Public; #Private };
 
   public type Child = {
     id         : Principal;
-    owner      : Principal;  // logical owner (book-keeping)
-    created_at : Nat64;      // ns
+    owner      : Principal;
+    created_at : Nat64;
     note       : Text;
     status     : Status;
+    visibility : Visibility;   // NEW
   };
+
 
   // -------------------- Stable State --------------------
   stable var store           : [Child] = [];                  // flat snapshot of children
@@ -269,7 +272,9 @@ actor ReputationFactory {
     });
     await IC.start_canister({ canister_id = cid });
 
-    let rec : Child = { id = cid; owner; created_at = nowNs(); note; status = #Active };
+    let rec : Child = {
+    id = cid; owner; created_at = nowNs(); note; status = #Active; visibility = #Public
+  };
     recordChild(rec);
     cid
   };
@@ -355,7 +360,9 @@ public shared({ caller }) func createOrReuseChildFor(
 
         // 4) Book-keeping (Active again)
         switch (byId.get(cid)) { case (?old) { removeOwnerIndex(old.owner, cid) }; case null {} };
-        let rec : Child = { id = cid; owner; created_at = nowNs(); note; status = #Active };
+       let rec : Child = {
+    id = cid; owner; created_at = nowNs(); note; status = #Active; visibility = #Public
+  };
         recordOrRefresh(rec);
         addOwnerIndex(owner, cid);
 
@@ -385,7 +392,9 @@ public shared({ caller }) func createOrReuseChildFor(
   });
   await IC.start_canister({ canister_id = cid });
 
-  let rec : Child = { id = cid; owner; created_at = nowNs(); note: Text = note; status = #Active };
+  let rec : Child = {
+    id = cid; owner; created_at = nowNs(); note; status = #Active; visibility = #Public
+  };
   recordChild(rec);
 
   // Creation burns fees; top up delta if needed to meet requested total
@@ -433,7 +442,9 @@ public shared({ caller }) func createOrReuseChildFor(
           }
         });
 
-        let c2 : Child = { id = c.id; owner = c.owner; created_at = c.created_at; note = c.note; status = #Archived };
+        let c2 : Child = {
+          id = canister_id;owner = c.owner; created_at = c.created_at; note = c.note; status = #Archived; visibility = c.visibility
+        };
         updateChild(c2);
 
         removeOwnerIndex(c.owner, c.id);
@@ -530,7 +541,10 @@ public shared({ caller }) func reinstallChild(canister_id : Principal, owner : P
       case null { "Error: unknown canister" };
       case (?c) {
         removeOwnerIndex(c.owner, canister_id);
-        let c2 : Child = { id = c.id; owner = newOwner; created_at = c.created_at; note = c.note; status = c.status };
+
+        let c2 : Child = {
+          id = canister_id ; owner = newOwner; created_at = c.created_at;note = c.note; status = c.status ; visibility = c.visibility;
+        };
         updateChild(c2);
         addOwnerIndex(newOwner, canister_id);
         "Success: owner updated"
@@ -575,4 +589,47 @@ public shared({ caller }) func adminSetPool(newPool : [Principal]) : async Text 
   storePool := Buffer.toArray(pool);
   "ok"
 };
+
+// Require admin and attempt to drain cycles from a child.
+// Returns the number of cycles that the child accepted (or 0 on error).
+public shared({ caller }) func adminDrainChild(canister_id : Principal, minRemain : Nat) : async Nat {
+  requireAdmin(caller);                           // only the global admin may call this
+  let child : ChildDrain = actor (Principal.toText(canister_id));
+  try {
+    let accepted = await child.returnCyclesToFactory(minRemain);
+    accepted
+  } catch (_) {
+    // child didn't export the method, or call failed — return 0 as "nothing drained"
+    0
+  }
+};
+public shared({ caller }) func toggleVisibility(
+  canister_id : Principal
+) : async Visibility {
+  requireOrgAdmin(caller, canister_id);
+
+  let c = switch (byId.get(canister_id)) {
+    case (?x) x;
+    case null Debug.trap("unknown canister");
+  };
+
+  let next : Visibility = switch (c.visibility) {
+    case (#Public)  #Private;
+    case (#Private) #Public;
+  };
+
+  let c2 : Child = {
+    id = c.id;
+    owner = c.owner;
+    created_at = c.created_at;
+    note = c.note;
+    status = c.status;
+    visibility = next;
+  };
+
+  updateChild(c2);
+  next
+};
+
+
 }

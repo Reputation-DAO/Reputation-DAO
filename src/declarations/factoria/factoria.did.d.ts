@@ -8,10 +8,14 @@ export interface Child {
   'owner' : Principal,
   'note' : string,
   'created_at' : bigint,
+  'visibility' : Visibility,
 }
 export type Status = { 'Active' : null } |
   { 'Archived' : null };
+export type Visibility = { 'Private' : null } |
+  { 'Public' : null };
 export interface _SERVICE {
+  'adminDrainChild' : ActorMethod<[Principal, bigint], bigint>,
   'adminSetPool' : ActorMethod<[Array<Principal>], string>,
   'archiveChild' : ActorMethod<[Principal], string>,
   'childHealth' : ActorMethod<
@@ -52,6 +56,7 @@ export interface _SERVICE {
   'setDefaultChildWasm' : ActorMethod<[Uint8Array | number[]], undefined>,
   'startChild' : ActorMethod<[Principal], undefined>,
   'stopChild' : ActorMethod<[Principal], undefined>,
+  'toggleVisibility' : ActorMethod<[Principal], Visibility>,
   'topUpChild' : ActorMethod<
     [Principal, bigint],
     { 'ok' : bigint } |

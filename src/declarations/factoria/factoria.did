@@ -1,3 +1,8 @@
+type Visibility = 
+ variant {
+   Private;
+   Public;
+ };
 type Status = 
  variant {
    Active;
@@ -10,8 +15,10 @@ type Child =
    note: text;
    owner: principal;
    status: Status;
+   visibility: Visibility;
  };
 service : {
+  adminDrainChild: (canister_id: principal, minRemain: nat) -> (nat);
   adminSetPool: (newPool: vec principal) -> (text);
   /// Archive a child back to pool.
   archiveChild: (canister_id: principal) -> (text);
@@ -53,6 +60,7 @@ service : {
   setDefaultChildWasm: (w: blob) -> ();
   startChild: (canister_id: principal) -> ();
   stopChild: (canister_id: principal) -> ();
+  toggleVisibility: (canister_id: principal) -> (Visibility);
   /// Send `amount` cycles to a child’s `wallet_receive`, and let the child log it.
   topUpChild: (canister_id: principal, amount: nat) ->
    (variant {

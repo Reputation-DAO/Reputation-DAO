@@ -459,10 +459,7 @@ const CreateOrgDialog: React.FC<{
               </SelectContent>
             </Select>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm">Public Visibility (UI only)</span>
-            <Switch checked={isPublic} onCheckedChange={setIsPublic} />
-          </div>
+          
           <Button onClick={handleCreate} disabled={!name.trim() || creating} className="w-full">
             {creating ? "Creating..." : "Create"}
           </Button>
@@ -675,99 +672,114 @@ const OrgSelector: React.FC = () => {
   }, [isConnected, principal]);
 
   const fetchOwned = async () => {
-    if (!factoria || !principalText) return;
-    setLoadingOwned(true);
-    try {
-      const owner = Principal.fromText(principalText);
-      const children = await factoria.listByOwner(owner);
+  if (!factoria || !principalText) return;
+  setLoadingOwned(true);
+  try {
+    const owner = Principal.fromText(principalText);
+    const childIds = await factoria.listByOwner(owner); // [Principal]
 
-      const rows: OrgRecord[] = [];
-      for (const childPrincipal of children) {
-        const childIdText = childPrincipal.toText();
-        const childRecordOpt = await factoria.getChild(childPrincipal);
-        if (childRecordOpt.length === 0) continue;
-        const [childRecord] = childRecordOpt;
+    // 1) getChild for all IDs concurrently
+    const childRecords = await Promise.all(
+      childIds.map(async (pid) => {
+        const recOpt = await factoria.getChild(pid);
+        return recOpt.length ? { pid, rec: recOpt[0] } : null;
+      })
+    );
 
-        let users: string | undefined;
-        let cycles: string | undefined;
-        let txCount: string | undefined;
-        let paused: boolean | undefined;
-        let isStopped = false;
-
+    // 2) health only for Active children (concurrent)
+    const healthResults = await Promise.all(
+      childRecords.map(async (entry) => {
+        if (!entry) return null;
+        const { pid, rec } = entry;
+        const status = toStatus(rec.status);
+        if (status !== "Active") return { id: pid.toText(), health: null, isStopped: true };
         try {
-          const healthOpt = await factoria.childHealth(childPrincipal);
-          if (healthOpt.length > 0) {
-            const [health] = healthOpt;
-            users = natToStr(health.users);
-            cycles = natToStr(health.cycles);
-            txCount = natToStr(health.txCount);
-            paused = health.paused;
-          } else {
-            isStopped = true;
-          }
-        } catch (error) {
-          console.warn("Failed to fetch child health", error);
-          isStopped = true;
+          const hOpt = await factoria.childHealth(pid);
+          return hOpt.length
+            ? { id: pid.toText(), health: hOpt[0], isStopped: false }
+            : { id: pid.toText(), health: null, isStopped: true };
+        } catch {
+          return { id: pid.toText(), health: null, isStopped: true };
         }
+      })
+    );
 
-        rows.push({
-          id: childIdText,
-          name: childRecord.note?.trim() ? childRecord.note : childIdText,
-          canisterId: childIdText,
-          status: toStatus(childRecord.status),
-          createdAt: Number(childRecord.created_at ?? 0n),
+    const healthMap = new Map(healthResults.filter(Boolean).map(h => [h!.id, h!]));
+
+    const rows: OrgRecord[] = childRecords
+      .filter((e): e is { pid: Principal; rec: FactoryChild } => !!e)
+      .map(({ pid, rec }) => {
+        const id = pid.toText();
+        const status = toStatus(rec.status);
+
+        const hv = healthMap.get(id);
+        const users  = hv?.health ? hv.health.users.toString()  : undefined;
+        const cycles = hv?.health ? hv.health.cycles.toString() : undefined;
+        const tx     = hv?.health ? hv.health.txCount.toString(): undefined;
+        const paused = hv?.health ? hv.health.paused : undefined;
+        const isStopped = hv?.isStopped ?? (status !== "Active");
+
+        return {
+          id,
+          name: rec.note?.trim() ? rec.note : id,
+          canisterId: id,
+          status,
+          createdAt: Number(rec.created_at ?? 0n),
           users,
           cycles,
-          txCount,
+          txCount: tx,
           paused,
           plan: "Free",
-          publicVisibility: true,
+          publicVisibility: "Public" in rec.visibility, // reflect backend
           isStopped,
-        });
-      }
-      setOwned(rows);
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "Failed to fetch owned organizations.";
-      toast.error(message);
-    } finally {
-      setLoadingOwned(false);
-    }
-  };
+        } satisfies OrgRecord;
+      });
 
-  const fetchPublic = async () => {
-    if (!factoria) return;
-    setLoadingPublic(true);
-    try {
-      const allChildren = await factoria.listChildren();
-      const mine = new Set(owned.map((o) => o.id));
+    setOwned(rows);
+  } catch (e: unknown) {
+    toast.error(e instanceof Error ? e.message : "Failed to fetch owned organizations.");
+  } finally {
+    setLoadingOwned(false);
+  }
+};
 
-      const rows: OrgRecord[] = allChildren
-        .map((child): OrgRecord | null => {
-          const idText = child.id.toText();
-          const status = toStatus(child.status);
-          if (status !== "Active" || mine.has(idText)) return null;
+const fetchPublic = async () => {
+  if (!factoria) return;
+  setLoadingPublic(true);
+  try {
+    const allChildren = await factoria.listChildren(); // [Child]
+    const mine = new Set(owned.map((o) => o.id));
 
-          return {
-            id: idText,
-            name: child.note?.trim() ? child.note : idText,
-            canisterId: idText,
-            status,
-            createdAt: Number(child.created_at ?? 0n),
-            publicVisibility: true,
-            plan: "Free",
-            isStopped: false,
-          } satisfies OrgRecord;
-        })
-        .filter((org): org is OrgRecord => org !== null);
+    const rows: OrgRecord[] = allChildren
+      .map((child): OrgRecord | null => {
+        const idText = child.id.toText();
+        const status = toStatus(child.status);
+        const isPublic = "Public" in child.visibility;
 
-      setPublicOrgs(rows);
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "Failed to fetch public organizations.";
-      toast.error(message);
-    } finally {
-      setLoadingPublic(false);
-    }
-  };
+        // Only Active + Public, and not mine
+        if (status !== "Active" || !isPublic || mine.has(idText)) return null;
+
+        return {
+          id: idText,
+          name: child.note?.trim() ? child.note : idText,
+          canisterId: idText,
+          status,
+          createdAt: Number(child.created_at ?? 0n),
+          publicVisibility: true,
+          plan: "Free",
+          isStopped: false, // not checking health here (faster)
+        };
+      })
+      .filter((org): org is OrgRecord => org !== null);
+
+    setPublicOrgs(rows);
+  } catch (e: unknown) {
+    toast.error(e instanceof Error ? e.message : "Failed to fetch public organizations.");
+  } finally {
+    setLoadingPublic(false);
+  }
+};
+
 
   useEffect(() => {
     fetchOwned();
@@ -850,7 +862,7 @@ const OrgSelector: React.FC = () => {
       try {
         await factoria.archiveChild(id);
       } catch {
-        await factoria.deleteChild(id);
+        toast.error("canister already deleted")
       }
       toast.success(`Removed ${deleteOrg.name}.`);
       setDeleteOpen(false);
