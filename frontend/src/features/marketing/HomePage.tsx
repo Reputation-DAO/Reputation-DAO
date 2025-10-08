@@ -9,7 +9,7 @@ import TechnicalSection from "@/components/sections/TechnicalSection";
 import ResourcesSection from "@/components/sections/ResourcesSection";
 import FAQSection from "@/components/sections/FAQSection";
 
-const Home = () => {
+const HomePage = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
@@ -28,4 +28,4 @@ const Home = () => {
   );
 };
 
-export default Home;
+export default HomePage;

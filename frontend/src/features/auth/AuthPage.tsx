@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Wallet, Shield, Zap, ArrowRight, CheckCircle } from "lucide-react";
 import Navigation from "@/components/ui/navigation";
-import { useAuth } from "../contexts/AuthContext";
-import { useRole } from "../contexts/RoleContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRole } from "@/contexts/RoleContext";
 
 const WalletOption = ({ icon: Icon, name, description, isRecommended, isConnected, onConnect, isLoading }: {
   icon: any;
@@ -59,7 +59,7 @@ const WalletOption = ({ icon: Icon, name, description, isRecommended, isConnecte
   </Card>
 );
 
-const Auth = () => {
+const AuthPage = () => {
   const navigate = useNavigate();
   const { 
     isAuthenticated, 
@@ -247,4 +247,4 @@ const Auth = () => {
   );
 };
 
-export default Auth;
+export default AuthPage;

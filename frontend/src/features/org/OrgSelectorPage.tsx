@@ -597,7 +597,7 @@ const TopUpDialog = ({
 };
 
 // ---------------- Main ----------------
-const OrgSelector: React.FC = () => {
+const OrgSelectorPage: React.FC = () => {
   const navigate = useNavigate();
   const { isConnected, principal } = usePlugConnection({ autoCheck: true });
 
@@ -1093,4 +1093,4 @@ const fetchPublic = async () => {
   );
 };
 
-export default OrgSelector;
+export default OrgSelectorPage;

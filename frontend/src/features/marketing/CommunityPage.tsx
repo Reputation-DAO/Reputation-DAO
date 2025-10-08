@@ -147,7 +147,7 @@ const highlights = [
   },
 ];
 
-const Community = () => {
+const CommunityPage = () => {
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -453,4 +453,4 @@ const Community = () => {
   );
 };
 
-export default Community;
+export default CommunityPage;

@@ -83,7 +83,7 @@ const getTransactionTypeBgClass = (type: TxKind) => {
   }
 };
 
-const TransactionLog: React.FC = () => {
+const TransactionLogPage: React.FC = () => {
   const navigate = useNavigate();
   const { cid } = useParams<{ cid: string }>();
   const { userRole, currentPrincipal, userName: roleUserName, loading: roleLoading } = useRole();
@@ -560,4 +560,4 @@ function InnerTransactionLog(props: any) {
   );
 }
 
-export default TransactionLog;
+export default TransactionLogPage;

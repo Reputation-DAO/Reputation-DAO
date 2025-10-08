@@ -53,7 +53,7 @@ interface DecayEvent {
   timestamp: Date;
 }
 
-const DecaySystem = () => {
+const DecaySystemPage = () => {
   const navigate = useNavigate();
   const { cid } = useParams<{ cid: string }>();
   const { isAdmin, currentPrincipal, userRole, userName, loading: roleLoading } = useRole();
@@ -663,4 +663,4 @@ function InnerDecaySystem(props: any) {
   );
 }
 
-export default DecaySystem;
+export default DecaySystemPage;

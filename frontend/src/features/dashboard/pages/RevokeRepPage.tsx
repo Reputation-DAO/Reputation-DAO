@@ -67,7 +67,7 @@ const revocationCategories = [
   "Other"
 ];
 
-const RevokeRep: React.FC = () => {
+const RevokeRepPage: React.FC = () => {
   const navigate = useNavigate();
   const { cid } = useParams<{ cid: string }>();
 
@@ -627,4 +627,4 @@ function InnerRevokeRep(props: InnerRevokeRepProps) {
   );
 }
 
-export default RevokeRep;
+export default RevokeRepPage;

@@ -165,7 +165,7 @@ const MemberItem = ({ member }: { member: Member }) => (
   </div>
 );
 
-const Dashboard = () => {
+const DashboardPage = () => {
   const navigate = useNavigate();
   const { cid } = useParams<{ cid: string }>();
   const { userRole, loading: roleLoading, currentPrincipal, isAdmin, isAwarder } = useRole();
@@ -606,4 +606,4 @@ function QuickActionsSection({ cid, canAward, isAdmin }: { cid: string; canAward
   );
 }
 
-export default Dashboard;
+export default DashboardPage;

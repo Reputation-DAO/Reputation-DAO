@@ -103,7 +103,7 @@ const estimateReadingTime = (text?: string) => {
   return `${mins} min read`;
 };
 
-export default function PostViewer() {
+export default function PostViewerPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);

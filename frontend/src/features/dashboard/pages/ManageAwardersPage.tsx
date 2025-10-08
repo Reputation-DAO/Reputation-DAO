@@ -72,7 +72,7 @@ const RoleIcon = ({ role }: { role: string }) => {
   }
 };
 
-const ManageAwarders: React.FC = () => {
+const ManageAwardersPage: React.FC = () => {
   const navigate = useNavigate();
   const { cid } = useParams<{ cid: string }>();
 
@@ -589,4 +589,4 @@ function InnerManageAwarders(props: InnerManageAwardersProps) {
   );
 }
 
-export default ManageAwarders;
+export default ManageAwardersPage;

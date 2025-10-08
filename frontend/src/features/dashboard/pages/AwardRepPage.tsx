@@ -67,7 +67,7 @@ const categories = [
   "Other",
 ];
 
-const AwardRep = () => {
+const AwardRepPage = () => {
   const navigate = useNavigate();
   const { cid } = useParams<{ cid: string }>();
   const { userRole, currentPrincipal, isAdmin, isAwarder, loading: roleLoading } = useRole();
@@ -594,4 +594,4 @@ function InnerAwardRep(props: InnerAwardRepProps) {
   );
 }
 
-export default AwardRep;
+export default AwardRepPage;

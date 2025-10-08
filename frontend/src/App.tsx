@@ -8,21 +8,18 @@ import { RouteProvider } from "./contexts/RouteContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
-// pages
-import Home from "./pages/Home";
-import Blog from "./pages/Blog";
-import Community from "./pages/Community";
-import Auth from "./pages/Auth";
-import OrgSelector from "./pages/OrgSelector";
-import Dashboard from "./features/dashboard";
-import AwardRep from "./pages/AwardRep";
-import RevokeRep from "./pages/RevokeRep";
-import ManageAwarders from "./pages/ManageAwarders";
-import ViewBalances from "./pages/ViewBalances";
-import TransactionLog from "./pages/TransactionLog";
-import DecaySystem from "./pages/DecaySystem";
-import NotFound from "./pages/NotFound";
-import PostViewer from "./pages/PostViewer";
+import AuthPage from "@/features/auth";
+import { HomePage, BlogPage, CommunityPage, PostViewerPage } from "@/features/marketing";
+import OrgSelectorPage from "@/features/org";
+import DashboardPage, {
+  AwardRepPage,
+  RevokeRepPage,
+  ManageAwardersPage,
+  ViewBalancesPage,
+  TransactionLogPage,
+  DecaySystemPage,
+} from "@/features/dashboard";
+import { NotFoundPage } from "@/features/common";
 
 // docs layout + sections
 import DocsLayout from "@/components/layout/DocsLayout";
@@ -49,11 +46,11 @@ const App = () => (
                 <SonnerToaster />
                 <Routes>
                   {/* Marketing / top-level */}
-                  <Route path="/" element={<Home />} />
-                  <Route path="/blog" element={<Blog />} />
-                  <Route path="/posts/:id" element={<PostViewer />} />
-                  <Route path="/community" element={<Community />} />
-                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/blog" element={<BlogPage />} />
+                  <Route path="/posts/:id" element={<PostViewerPage />} />
+                  <Route path="/community" element={<CommunityPage />} />
+                  <Route path="/auth" element={<AuthPage />} />
 
                   {/* Docs (all enclosed by DocsLayout) */}
                   <Route path="/docs" element={<DocsLayout />}>
@@ -68,17 +65,17 @@ const App = () => (
                   </Route>
 
                   {/* App flows */}
-                  <Route path="/org-selector" element={<OrgSelector />} />
-                  <Route path="/dashboard/home/:cid" element={<Dashboard />} />
-                  <Route path="/dashboard/award-rep/:cid" element={<AwardRep />} />
-                  <Route path="/dashboard/revoke-rep/:cid" element={<RevokeRep />} />
-                  <Route path="/dashboard/manage-awarders/:cid" element={<ManageAwarders />} />
-                  <Route path="/dashboard/view-balances/:cid" element={<ViewBalances />} />
-                  <Route path="/dashboard/transaction-log/:cid" element={<TransactionLog />} />
-                  <Route path="/dashboard/decay-system/:cid" element={<DecaySystem />} />
+                  <Route path="/org-selector" element={<OrgSelectorPage />} />
+                  <Route path="/dashboard/home/:cid" element={<DashboardPage />} />
+                  <Route path="/dashboard/award-rep/:cid" element={<AwardRepPage />} />
+                  <Route path="/dashboard/revoke-rep/:cid" element={<RevokeRepPage />} />
+                  <Route path="/dashboard/manage-awarders/:cid" element={<ManageAwardersPage />} />
+                  <Route path="/dashboard/view-balances/:cid" element={<ViewBalancesPage />} />
+                  <Route path="/dashboard/transaction-log/:cid" element={<TransactionLogPage />} />
+                  <Route path="/dashboard/decay-system/:cid" element={<DecaySystemPage />} />
 
                   {/* Catch-all */}
-                  <Route path="*" element={<NotFound />} />
+                  <Route path="*" element={<NotFoundPage />} />
                 </Routes>
               </TooltipProvider>
             </RoleProvider>

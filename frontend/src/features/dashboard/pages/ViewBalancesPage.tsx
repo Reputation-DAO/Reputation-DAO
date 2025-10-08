@@ -69,7 +69,7 @@ const RoleIcon = ({ role }: { role: string }) => {
   }
 };
 
-const ViewBalances: React.FC = () => {
+const ViewBalancesPage: React.FC = () => {
   const navigate = useNavigate();
   const { cid } = useParams<{ cid: string }>();
 
@@ -752,4 +752,4 @@ function InnerViewBalances(props: InnerViewBalancesProps) {
   );
 }
 
-export default ViewBalances;
+export default ViewBalancesPage;

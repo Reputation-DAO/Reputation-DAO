@@ -63,7 +63,7 @@ const normalizePost = (post: BackendPost): BlogPost => {
 
 const postKey = (post: BlogPost) => post.idText || post.title;
 
-const Blog = () => {
+const BlogPage = () => {
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState<BlogPost[]>([]);
 
@@ -317,4 +317,4 @@ const Blog = () => {
   );
 };
 
-export default Blog;
+export default BlogPage;
