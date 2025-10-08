@@ -1661,6 +1661,28 @@ const fetchPublic = async () => {
   const processedCount = processedRecords.length;
   const highlight = highlightOrg?.org ?? null;
   const highlightCycles = highlightOrg?.cycles ?? 0n;
+  const heroCallouts = useMemo(
+    () => [
+      {
+        icon: Settings,
+        title: "Operational workspaces",
+        detail: owned.length
+          ? `${owned.length} organization${owned.length === 1 ? "" : "s"} under your control`
+          : "No organizations created yet",
+      },
+      {
+        icon: Coins,
+        title: "Cycle coverage",
+        detail: `${formatCycles(totalCycles)} pooled cycles across owned orgs`,
+      },
+      {
+        icon: Globe,
+        title: "Discovery feed",
+        detail: `${discoverCount} public organization${discoverCount === 1 ? "" : "s"} ready to join`,
+      },
+    ],
+    [owned.length, totalCycles, discoverCount]
+  );
 
   const renderList = (
     records: OrgRecord[],
@@ -1871,6 +1893,20 @@ const fetchPublic = async () => {
                     <CheckCircle2 className="mr-1 h-3 w-3" />
                     {overviewCount} indexed
                   </Badge>
+                </div>
+
+                <div className="grid gap-3 rounded-2xl border border-border bg-muted/60 p-4 sm:grid-cols-3">
+                  {heroCallouts.map(({ icon: Icon, title, detail }) => (
+                    <div key={title} className="flex items-start gap-3 rounded-xl border border-border/60 bg-background/60 p-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary">
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-foreground">{title}</p>
+                        <p className="text-xs text-muted-foreground">{detail}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </Card>
