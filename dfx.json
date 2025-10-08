@@ -15,14 +15,12 @@
       "type": "assets",
       "source": ["frontend/dist"],
       "id": "37le5-2yaaa-aaaam-qdwhq-cai"
-
     },
     "blog_backend": {
       "type": "motoko",
       "main": "src/blog_backend/main.mo",
-      "id":"oy2j4-syaaa-aaaam-qdvxq-cai"
+      "id": "oy2j4-syaaa-aaaam-qdvxq-cai"
     }
-
   },
   "dfx": "0.27.0",
   "networks": {
@@ -31,16 +29,15 @@
       "type": "ephemeral"
     },
     "ic": {
+      "type": "persistent",
       "providers": [
+        "https://icp-api.io/",
         "https://ic0.app/"
-      ],
-      "type": "persistent"
+      ]
     }
   },
   "defaults": {
-    "build": {
-      "packtool": ""
-    }
+    "build": { "packtool": "" }
   },
   "version": 1
 }
