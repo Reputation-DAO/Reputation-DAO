@@ -1,30 +1,33 @@
 import { Button } from "@/components/ui/button";
 import { Play, ArrowRight, Zap, Shield, Network } from "lucide-react";
 import { Link } from "react-router-dom";
-import heroBackground from "/assets/bgimage.png";
+import LiquidEther from "../../../@/components/LiquidEther";
 
 const HeroSection = () => {
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
-      {/* Background Image */}
-      <div 
-        className="absolute inset-0 z-0"
-        style={{
-          backgroundImage: `url(${heroBackground})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat'
-        }}
-      >
-        <div className="absolute inset-0 bg-gradient-to-br from-background/90 to-background/70" />
-      </div>
-      
-      {/* Animated Background Elements */}
-      <div className="absolute inset-0 z-1">
-        <div className="absolute top-20 left-10 w-20 h-20 bg-primary/10 rounded-full animate-float" />
-        <div className="absolute top-40 right-20 w-16 h-16 bg-primary-glow/10 rounded-full animate-float" style={{ animationDelay: '2s' }} />
-        <div className="absolute bottom-40 left-20 w-12 h-12 bg-primary/5 rounded-full animate-float" style={{ animationDelay: '4s' }} />
-        <div className="absolute top-1/2 right-1/3 w-8 h-8 bg-primary-glow/20 rounded-full animate-float" style={{ animationDelay: '1s' }} />
+      {/* Liquid Ether Background */}
+      <div className="absolute inset-0 z-0">
+        <LiquidEther
+          colors={['#3b82f6', '#60a5fa', '#93c5fd', '#dbeafe']}
+          mouseForce={20}
+          cursorSize={100}
+          isViscous={false}
+          viscous={20}
+          iterationsViscous={32}
+          iterationsPoisson={32}
+          dt={0.014}
+          BFECC={true}
+          resolution={0.5}
+          isBounce={false}
+          autoDemo={true}
+          autoSpeed={0.5}
+          autoIntensity={3}
+          takeoverDuration={0.1}
+          autoResumeDelay={1000}
+          autoRampDuration={0.3}
+        />
+        <div className="absolute inset-0 bg-background/40" />
       </div>
 
       {/* Main Content */}
