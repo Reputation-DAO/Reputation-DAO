@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
@@ -171,6 +172,64 @@ const formatTimestamp = (value?: number) => {
   return dateFormatter.format(new Date(normalized));
 };
 
+type AccentTheme = {
+  cardBorder: string;
+  hoverBorder: string;
+  shadow: string;
+  overlay: string;
+  icon: string;
+  badge: string;
+  cta: string;
+  outline: string;
+};
+
+const accentThemes: AccentTheme[] = [
+  {
+    cardBorder: "border-primary/30",
+    hoverBorder: "hover:border-primary/50",
+    shadow: "hover:shadow-lg hover:shadow-primary/20",
+    overlay: "radial-gradient(120% 120% at 0% 0%, rgba(59,130,246,0.10), transparent 65%)",
+    icon: "bg-primary/10 text-primary ring-1 ring-primary/20",
+    badge: "border-primary/40 text-primary",
+    cta: "from-primary via-primary/90 to-primary text-primary-foreground shadow-[0_20px_40px_-30px_rgba(59,130,246,0.45)]",
+    outline: "border-primary/40 bg-primary/10 text-primary hover:border-primary/60 hover:bg-primary/15 hover:text-primary",
+  },
+  {
+    cardBorder: "border-primary/25",
+    hoverBorder: "hover:border-primary/45",
+    shadow: "hover:shadow-lg hover:shadow-primary/15",
+    overlay: "radial-gradient(120% 120% at 0% 0%, rgba(37,99,235,0.08), transparent 65%)",
+    icon: "bg-primary/12 text-primary ring-1 ring-primary/18",
+    badge: "border-primary/35 text-primary",
+    cta: "from-primary/95 via-primary to-primary/95 text-primary-foreground shadow-[0_20px_36px_-28px_rgba(37,99,235,0.4)]",
+    outline: "border-primary/35 bg-primary/8 text-primary hover:border-primary/55 hover:bg-primary/12",
+  },
+  {
+    cardBorder: "border-primary/35",
+    hoverBorder: "hover:border-primary/55",
+    shadow: "hover:shadow-lg hover:shadow-primary/18",
+    overlay: "radial-gradient(120% 120% at 0% 0%, rgba(14,116,244,0.12), transparent 65%)",
+    icon: "bg-primary/14 text-primary ring-1 ring-primary/18",
+    badge: "border-primary/35 text-primary",
+    cta: "from-primary/90 via-primary to-primary/90 text-primary-foreground shadow-[0_22px_44px_-32px_rgba(14,116,244,0.42)]",
+    outline: "border-primary/40 bg-primary/8 text-primary hover:border-primary/60 hover:bg-primary/12",
+  },
+];
+
+const hashString = (value: string) => {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash << 5) - hash + value.charCodeAt(i);
+    hash |= 0;
+  }
+  return hash;
+};
+
+const getAccentTheme = (seed: string) => {
+  const theme = accentThemes[Math.abs(hashString(seed)) % accentThemes.length];
+  return theme ?? accentThemes[0];
+};
+
 // ---------------- Wallet Badge ----------------
 const WalletDisplay = () => {
   const { isConnected, principal } = usePlugConnection({ autoCheck: true });
@@ -234,26 +293,38 @@ const OwnedCard: React.FC<{
   const paused = Boolean(org.paused);
   const lowReserve = cycles > 0n && cycles < MIN_FACTORY_CYCLES;
   const statusLabel = isArchived ? "Archived" : isStopped ? "Stopped" : "Active";
+  const accent = getAccentTheme(org.id);
   const statusClasses = cn(
     "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide",
-    isArchived && "border-slate-700/80 bg-slate-900/80 text-slate-300",
-    !isArchived && isStopped && "border-amber-500/50 bg-amber-500/10 text-amber-200",
-    !isArchived && !isStopped && "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+    isArchived && "border-muted-foreground/30 bg-muted text-muted-foreground",
+    !isArchived && isStopped && "border-amber-400/50 bg-amber-400/10 text-amber-600 dark:text-amber-200",
+    !isArchived && !isStopped && "border-emerald-400/50 bg-emerald-400/10 text-emerald-600 dark:text-emerald-200"
   );
 
   return (
-    <Card className="group relative overflow-hidden border border-slate-800/70 bg-slate-950/80 shadow-[0_20px_45px_-28px_rgba(15,23,42,0.9)] transition-all duration-500 hover:-translate-y-1 hover:border-primary/60 hover:shadow-[0_35px_65px_-35px_rgba(14,165,233,0.45)]">
+    <Card
+      className={cn(
+        "group relative overflow-hidden border border-border/60 bg-card shadow-sm transition-all duration-500 hover:-translate-y-1",
+        accent.cardBorder,
+        accent.hoverBorder,
+        accent.shadow
+      )}
+    >
       <div
         className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
         style={{
-          background:
-            "radial-gradient(120% 120% at 0% 0%, rgba(14,165,233,0.18), transparent 60%)",
+          background: accent.overlay,
         }}
       />
       <div className="relative space-y-6 p-6">
         <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/30 backdrop-blur-sm">
+            <div
+              className={cn(
+                "flex h-12 w-12 items-center justify-center rounded-xl backdrop-blur-sm",
+                accent.icon
+              )}
+            >
               <Building className="h-6 w-6" />
             </div>
             <div className="space-y-3">
@@ -268,10 +339,10 @@ const OwnedCard: React.FC<{
                 <Badge
                   variant="outline"
                   className={cn(
-                    "border-slate-700/80 bg-slate-900/60 text-[11px]",
+                    "border-border/60 bg-muted text-[11px]",
                     org.publicVisibility
-                      ? "border-emerald-500/40 text-emerald-200"
-                      : "border-slate-700/80 text-slate-300"
+                      ? "border-emerald-500/40 text-emerald-600 dark:text-emerald-200"
+                      : "text-muted-foreground"
                   )}
                 >
                   {org.publicVisibility ? "Public" : "Private"}
@@ -279,7 +350,7 @@ const OwnedCard: React.FC<{
                 {org.plan && (
                   <Badge
                     variant="outline"
-                    className="border-slate-700/80 bg-slate-900/60 text-[11px] uppercase tracking-wide"
+                    className="border-border/60 bg-muted text-[11px] uppercase tracking-wide text-muted-foreground"
                   >
                     {org.plan}
                   </Badge>
@@ -287,7 +358,7 @@ const OwnedCard: React.FC<{
                 {paused && (
                   <Badge
                     variant="outline"
-                    className="border-amber-400/40 bg-amber-500/10 text-[11px] text-amber-200"
+                    className="border-sky-500/30 bg-sky-500/10 text-[11px] text-sky-100"
                   >
                     Paused
                   </Badge>
@@ -331,7 +402,10 @@ const OwnedCard: React.FC<{
           <div className="flex flex-col items-end gap-2">
             <Badge
               variant="outline"
-              className="inline-flex items-center gap-1 border-amber-500/30 bg-amber-500/10 text-[11px] uppercase tracking-wide text-amber-200"
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-[11px] uppercase tracking-wide",
+                accent.badge
+              )}
             >
               <Crown className="h-3.5 w-3.5" />
               Owner
@@ -340,7 +414,7 @@ const OwnedCard: React.FC<{
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
+          <div className="rounded-xl border border-border/60 bg-muted/50 p-4">
             <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
               Cycle Reserve
             </div>
@@ -349,17 +423,17 @@ const OwnedCard: React.FC<{
               <span className="text-xs font-medium uppercase text-muted-foreground">cycles</span>
             </div>
             <div className="mt-4 space-y-2">
-              <Progress value={cyclePercent} className="h-1.5 bg-slate-800/90" />
+              <Progress value={cyclePercent} className="h-1.5 bg-muted" />
               {lowReserve && (
-                <div className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] font-medium text-amber-200">
+                <div className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary">
                   <ShieldAlert className="h-3.5 w-3.5" />
-                  Low reserve - top up recommended
+                  Low reserve - review funding
                 </div>
               )}
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
+          <div className="rounded-xl border border-border/60 bg-muted/50 p-4">
             <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
               Members
             </div>
@@ -372,7 +446,7 @@ const OwnedCard: React.FC<{
             </p>
           </div>
 
-          <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
+          <div className="rounded-xl border border-border/60 bg-muted/50 p-4">
             <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
               Transactions
             </div>
@@ -388,9 +462,13 @@ const OwnedCard: React.FC<{
 
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <Button
+            variant="hero"
             size="lg"
             onClick={onManage}
-            className="h-11 min-w-[180px] rounded-xl bg-primary text-primary-foreground shadow-[0_18px_25px_-18px_rgba(14,165,233,0.65)] transition-transform hover:-translate-y-[1px]"
+            className={cn(
+              "h-11 min-w-[180px] rounded-xl transition-transform hover:-translate-y-[1px]",
+              accent.cta
+            )}
           >
             <Settings className="mr-2 h-4 w-4" />
             Open Workspace
@@ -403,7 +481,7 @@ const OwnedCard: React.FC<{
                   <Button
                     variant="outline"
                     size="icon"
-                    className="h-10 w-10 rounded-full border-slate-800/70 bg-slate-950/60 text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+                    className={cn("h-10 w-10 rounded-full transition-colors", accent.outline)}
                     onClick={onTopUp}
                   >
                     <Coins className="h-4 w-4" />
@@ -419,7 +497,7 @@ const OwnedCard: React.FC<{
                   <Button
                     variant="outline"
                     size="icon"
-                    className="h-10 w-10 rounded-full border-slate-800/70 bg-slate-950/60 text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+                    className={cn("h-10 w-10 rounded-full transition-colors", accent.outline)}
                     onClick={onTogglePower}
                   >
                     <Power className="h-4 w-4" />
@@ -437,7 +515,7 @@ const OwnedCard: React.FC<{
                   <Button
                     variant="outline"
                     size="icon"
-                    className="h-10 w-10 rounded-full border-slate-800/70 bg-slate-950/60 text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+                    className={cn("h-10 w-10 rounded-full transition-colors", accent.outline)}
                     onClick={onEdit}
                   >
                     <Pencil className="h-4 w-4" />
@@ -475,21 +553,33 @@ const PublicCard = ({ org, onJoin }: { org: OrgRecord; onJoin: () => void }) => 
   const cycleLabel = formatCycles(org.cycles);
   const userLabel = formatNumericString(org.users);
   const planLabel = org.plan || "Free";
+  const accent = getAccentTheme(org.id);
 
   return (
-    <Card className="group relative overflow-hidden border border-slate-800/60 bg-slate-950/60 backdrop-blur transition-all duration-500 hover:-translate-y-1 hover:border-primary/50 hover:shadow-[0_28px_45px_-32px_rgba(14,165,233,0.6)]">
+    <Card
+      className={cn(
+        "group relative overflow-hidden border border-border/60 bg-card transition-all duration-500 hover:-translate-y-1 hover:shadow-lg",
+        accent.cardBorder,
+        accent.hoverBorder,
+        accent.shadow
+      )}
+    >
       <div
         className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
         style={{
-          background:
-            "radial-gradient(100% 120% at 100% 0%, rgba(59,130,246,0.15), transparent 65%)",
+          background: accent.overlay,
         }}
       />
       <div className="relative space-y-5 p-6">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-3">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/30">
+              <div
+                className={cn(
+                  "flex h-10 w-10 items-center justify-center rounded-lg",
+                  accent.icon
+                )}
+              >
                 <Building className="h-5 w-5" />
               </div>
               <div className="min-w-0">
@@ -530,13 +620,16 @@ const PublicCard = ({ org, onJoin }: { org: OrgRecord; onJoin: () => void }) => 
           <div className="flex flex-col items-end gap-2">
             <Badge
               variant="outline"
-              className="border-primary/40 bg-primary/10 text-[11px] uppercase tracking-wide text-primary"
+              className={cn(
+                "rounded-full bg-muted px-3 py-1 text-[11px] uppercase tracking-wide",
+                accent.badge
+              )}
             >
               Public
             </Badge>
             <Badge
               variant="outline"
-              className="border-slate-700/70 bg-slate-900/70 text-[11px] uppercase tracking-wide text-slate-300"
+              className="rounded-full border-border/60 bg-muted px-3 py-1 text-[11px] uppercase tracking-wide text-muted-foreground"
             >
               {planLabel}
             </Badge>
@@ -544,18 +637,32 @@ const PublicCard = ({ org, onJoin }: { org: OrgRecord; onJoin: () => void }) => 
         </div>
 
         <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground/80">
-          <div className="rounded-lg border border-slate-800/70 bg-slate-900/60 px-3 py-2">
+          <div
+            className={cn(
+              "rounded-lg border border-border/60 bg-muted/50 px-3 py-2",
+              accent.cardBorder
+            )}
+          >
             <div className="text-[11px] font-semibold uppercase tracking-[0.18em]">Members</div>
             <div className="mt-1 text-lg font-semibold text-foreground">{userLabel}</div>
           </div>
-          <div className="rounded-lg border border-slate-800/70 bg-slate-900/60 px-3 py-2">
+          <div
+            className={cn(
+              "rounded-lg border border-border/60 bg-muted/50 px-3 py-2",
+              accent.cardBorder
+            )}
+          >
             <div className="text-[11px] font-semibold uppercase tracking-[0.18em]">Cycles</div>
             <div className="mt-1 text-lg font-semibold text-foreground">{cycleLabel}</div>
           </div>
         </div>
 
         <Button
-          className="h-11 w-full rounded-xl bg-gradient-to-r from-primary/90 via-primary to-primary/90 text-primary-foreground shadow-[0_18px_30px_-22px_rgba(59,130,246,0.65)] transition-transform hover:-translate-y-[1px]"
+          variant="hero"
+          className={cn(
+            "h-11 w-full rounded-xl transition-transform hover:-translate-y-[1px]",
+            accent.cta
+          )}
           onClick={onJoin}
         >
           Enter workspace
@@ -563,6 +670,194 @@ const PublicCard = ({ org, onJoin }: { org: OrgRecord; onJoin: () => void }) => 
         </Button>
       </div>
     </Card>
+  );
+};
+
+const LowReservePanel = ({
+  alerts,
+  onTopUp,
+  onOpenWorkspace,
+}: {
+  alerts: OrgRecord[];
+  onTopUp: (org: OrgRecord) => void;
+  onOpenWorkspace: (org: OrgRecord) => void;
+}) => {
+  if (!alerts.length) return null;
+
+  const sorted = [...alerts].sort(
+    (a, b) => Number(parseCycles(a.cycles) - parseCycles(b.cycles))
+  );
+  const totalCycles = sorted.reduce((acc, org) => acc + parseCycles(org.cycles), 0n);
+  const averageCycles =
+    sorted.length > 0 ? totalCycles / BigInt(sorted.length) : 0n;
+  const lowest = sorted[0];
+  const highest = sorted[sorted.length - 1];
+
+  const toPercent = (value?: string | bigint) => {
+    const cycles = parseCycles(value);
+    if (cycles <= 0n) return 0;
+    return Math.min(100, Number((cycles * 100n) / MAX_FACTORY_CYCLES));
+  };
+
+  return (
+    <section className="mx-auto max-w-7xl px-6 pb-12">
+      <Card className="overflow-hidden border border-border/70 bg-card shadow-sm">
+        <div className="border-b border-border/60 bg-muted/60 px-6 py-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-3">
+              <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-primary">
+                Reserve monitor
+              </div>
+              <h3 className="text-xl font-semibold text-foreground">
+                Cycle coverage flagged for intervention
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                {sorted.length} active organization{sorted.length > 1 ? "s" : ""} fell below the 0.9T
+                buffer. Refill promptly to keep workflows responsive.
+              </p>
+            </div>
+            <Badge
+              variant="outline"
+              className="rounded-full border-primary/30 bg-primary/10 px-4 py-1.5 text-xs font-medium text-primary"
+            >
+              Continuous scan enabled
+            </Badge>
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-border/60 bg-muted/50 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground/70">
+                Active alerts
+              </p>
+              <div className="mt-2 text-2xl font-semibold text-foreground">{sorted.length}</div>
+              <p className="mt-1 text-xs text-muted-foreground/70">Below 0.9T reserve</p>
+            </div>
+            <div className="rounded-lg border border-border/60 bg-muted/50 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground/70">
+                Lowest reserve
+              </p>
+              <div className="mt-2 text-2xl font-semibold text-foreground">
+                {formatCycles(lowest.cycles)}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground/70">{lowest.name}</p>
+            </div>
+            <div className="rounded-lg border border-border/60 bg-muted/50 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground/70">
+                Average reserve
+              </p>
+              <div className="mt-2 text-2xl font-semibold text-foreground">
+                {formatCycles(averageCycles)}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground/70">
+                Highest flagged: {formatCycles(highest.cycles)}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 py-6">
+          <ScrollArea className="max-h-[340px] rounded-2xl border border-border/60 bg-card/60">
+            <div className="divide-y divide-border/70">
+              {sorted.map((org) => {
+                const accent = getAccentTheme(org.id);
+                const cycles = parseCycles(org.cycles);
+                const cyclePercent = toPercent(org.cycles);
+                const idShort = `${org.id.slice(0, 6)}...${org.id.slice(-6)}`;
+
+                return (
+                  <div
+                    key={org.id}
+                    className="grid gap-4 px-5 py-5 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)] md:items-center"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-foreground md:text-base">
+                            {org.name}
+                          </p>
+                          <p className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground/65">
+                            {idShort}
+                          </p>
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                          "rounded-full bg-muted px-3 py-1 text-[11px] uppercase tracking-wide",
+                            accent.badge
+                          )}
+                        >
+                          {formatCycles(org.cycles)} cycles
+                        </Badge>
+                      </div>
+                      <div className="space-y-2 rounded-xl border border-sky-500/25 bg-sky-500/5 p-3">
+                        <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-100/70">
+                          <span>Reserve capacity</span>
+                          <span>{cyclePercent}%</span>
+                        </div>
+                        <Progress value={cyclePercent} className="h-1.5 bg-sky-500/20" />
+                        <p className="text-xs text-sky-100/60">
+                          {cycles.toString()} / {MAX_FACTORY_CYCLES.toString()} cycles
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 text-xs text-muted-foreground/80">
+                      <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted px-3 py-2">
+                        <span className="uppercase tracking-[0.22em] text-[10px] text-muted-foreground/60">
+                          Status
+                        </span>
+                        <span className="font-medium text-foreground">
+                          {org.status === "Active" && !org.isStopped ? "Active" : "Unavailable"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted px-3 py-2">
+                        <span className="uppercase tracking-[0.22em] text-[10px] text-muted-foreground/60">
+                          Plan
+                        </span>
+                        <span className="font-medium text-foreground">{org.plan ?? "Free"}</span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted px-3 py-2">
+                        <span className="uppercase tracking-[0.22em] text-[10px] text-muted-foreground/60">
+                          Visibility
+                        </span>
+                        <span className="font-medium text-foreground">
+                          {org.publicVisibility ? "Public" : "Private"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <Button
+                        variant="hero"
+                        className={cn(
+                          "h-10 flex-1 rounded-xl text-sm font-semibold transition-transform hover:-translate-y-[1px] md:flex-none md:px-6",
+                          accent.cta
+                        )}
+                        onClick={() => onTopUp(org)}
+                      >
+                        <Coins className="h-4 w-4" />
+                        Top up
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "h-10 flex-1 rounded-xl border text-sm font-semibold md:flex-none md:px-6",
+                          accent.outline
+                        )}
+                        onClick={() => onOpenWorkspace(org)}
+                      >
+                        <Settings className="h-4 w-4" />
+                        Open
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </ScrollArea>
+        </div>
+      </Card>
+    </section>
   );
 };
 
@@ -581,8 +876,8 @@ const StatCard = ({
 }) => (
   <Card
     className={cn(
-      "relative overflow-hidden border border-slate-800/70 bg-slate-950/70 p-5 shadow-[0_18px_35px_-28px_rgba(15,23,42,0.8)] transition-all duration-500 hover:-translate-y-[1px]",
-      tone === "accent" && "border-primary/50 bg-primary/10 hover:border-primary/70"
+      "relative overflow-hidden border border-border bg-card p-5 shadow-sm transition-all duration-500 hover:-translate-y-[1px]",
+      tone === "accent" && "border-primary/40 bg-primary/5"
     )}
   >
     <div className="flex items-center justify-between gap-6">
@@ -595,8 +890,8 @@ const StatCard = ({
       </div>
       <div
         className={cn(
-          "flex h-11 w-11 items-center justify-center rounded-xl border border-slate-800/80 bg-slate-900/70 text-muted-foreground",
-          tone === "accent" && "border-primary/50 bg-primary/20 text-primary"
+          "flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-muted text-muted-foreground",
+          tone === "accent" && "border-primary/30 bg-primary/10 text-primary"
         )}
       >
         <Icon className="h-5 w-5" />
@@ -621,23 +916,23 @@ const LoadingCards = ({
     {Array.from({ length: count }).map((_, idx) => (
       <Card
         key={idx}
-        className="border border-slate-800/70 bg-slate-950/70 p-6 shadow-[0_18px_35px_-28px_rgba(15,23,42,0.8)]"
+        className="border border-border bg-card/80 p-6 shadow-sm"
       >
         <div className="space-y-5">
           <div className="flex items-start gap-3">
-            <Skeleton className="h-12 w-12 rounded-xl bg-slate-800/70" />
+            <Skeleton className="h-12 w-12 rounded-xl bg-muted" />
             <div className="flex-1 space-y-2">
-              <Skeleton className="h-4 w-2/3 bg-slate-800/70" />
-              <Skeleton className="h-3 w-1/2 bg-slate-800/60" />
+              <Skeleton className="h-4 w-2/3 bg-muted" />
+              <Skeleton className="h-3 w-1/2 bg-muted/70" />
             </div>
           </div>
-          <Skeleton className="h-24 w-full rounded-xl bg-slate-800/60" />
+          <Skeleton className="h-24 w-full rounded-xl bg-muted/70" />
           <div className="grid grid-cols-3 gap-3">
-            <Skeleton className="h-14 rounded-lg bg-slate-800/60" />
-            <Skeleton className="h-14 rounded-lg bg-slate-800/60" />
-            <Skeleton className="h-14 rounded-lg bg-slate-800/60" />
+            <Skeleton className="h-14 rounded-lg bg-muted/70" />
+            <Skeleton className="h-14 rounded-lg bg-muted/70" />
+            <Skeleton className="h-14 rounded-lg bg-muted/70" />
           </div>
-          <Skeleton className="h-10 w-full rounded-lg bg-slate-800/60" />
+          <Skeleton className="h-10 w-full rounded-lg bg-muted/70" />
         </div>
       </Card>
     ))}
@@ -655,8 +950,8 @@ const EmptyState = ({
   action?: ReactNode;
   icon?: LucideIcon;
 }) => (
-  <Card className="border border-slate-800/70 bg-slate-950/70 p-12 text-center shadow-[0_22px_48px_-30px_rgba(15,23,42,0.85)]">
-    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-slate-800/70 bg-slate-900/70 text-muted-foreground">
+<Card className="border border-border bg-card p-12 text-center shadow-lg">
+  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-border bg-muted text-muted-foreground">
       <Icon className="h-7 w-7" />
     </div>
     <h3 className="mt-6 text-xl font-semibold text-foreground">{title}</h3>
@@ -712,8 +1007,8 @@ const CreateOrgDialog: React.FC<{
           className={cn(
             "flex items-center gap-2 rounded-xl px-5 py-2.5 font-medium shadow-[0_18px_30px_-25px_rgba(59,130,246,0.75)] transition-transform hover:-translate-y-[1px]",
             triggerVariant === "default" && "border-transparent bg-gradient-to-r from-primary/90 via-primary to-primary/90 text-primary-foreground",
-            triggerVariant === "outline" && "border-slate-700/80 bg-slate-950/70 text-foreground hover:border-primary/40 hover:bg-primary/10 hover:text-primary",
-            triggerVariant === "secondary" && "border-transparent bg-slate-900/70 text-foreground hover:border-primary/40 hover:bg-primary/10 hover:text-primary",
+            triggerVariant === "outline" && "border-border bg-background text-foreground hover:border-primary/40 hover:bg-primary/10 hover:text-primary",
+            triggerVariant === "secondary" && "border-transparent bg-muted text-foreground hover:border-primary/40 hover:bg-primary/10 hover:text-primary",
             triggerClassName
           )}
         >
@@ -733,19 +1028,19 @@ const CreateOrgDialog: React.FC<{
         </DialogHeader>
 
         <div className="space-y-6">
-          <div className="rounded-xl border border-slate-800/70 bg-slate-950/70 p-4 text-xs text-muted-foreground/80">
+          <div className="rounded-xl border border-border bg-muted/60 p-4 text-xs text-muted-foreground/80">
             <div className="flex items-center gap-2 text-muted-foreground">
               <Sparkles className="h-4 w-4 text-primary" />
               <span>Deployment typically completes in under 15 seconds.</span>
             </div>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              <div className="rounded-lg border border-slate-800/70 bg-slate-900/70 px-3 py-2">
+              <div className="rounded-lg border border-border/60 bg-background px-3 py-2">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/60">
                   Minimum
                 </div>
                 <div className="mt-1 text-sm font-semibold text-foreground">0.9T cycles</div>
               </div>
-              <div className="rounded-lg border border-slate-800/70 bg-slate-900/70 px-3 py-2">
+              <div className="rounded-lg border border-border/60 bg-background px-3 py-2">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/60">
                   Maximum
                 </div>
@@ -780,7 +1075,7 @@ const CreateOrgDialog: React.FC<{
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Plan (UI only)</label>
               <Select value={plan} onValueChange={(value) => setPlan(value as Plan)}>
-                <SelectTrigger className="border-slate-800/70 bg-slate-950/60">
+                <SelectTrigger className="border border-border bg-background">
                   <SelectValue placeholder="Choose plan" />
                 </SelectTrigger>
                 <SelectContent>
@@ -791,7 +1086,7 @@ const CreateOrgDialog: React.FC<{
               </Select>
             </div>
 
-            <div className="rounded-xl border border-slate-800/70 bg-slate-950/70 p-4">
+            <div className="rounded-xl border border-border bg-muted/60 p-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-foreground">Public visibility</span>
                 <Switch checked={isPublic} onCheckedChange={setIsPublic} />
@@ -1340,24 +1635,26 @@ const fetchPublic = async () => {
     [owned]
   );
 
-  const lowReserveCount = useMemo(
+  const lowReserveOrgs = useMemo(
     () =>
       owned.filter((org) => {
         const cycleValue = parseCycles(org.cycles);
         return cycleValue > 0n && cycleValue < MIN_FACTORY_CYCLES;
-      }).length,
+      }),
     [owned]
   );
 
-  const highlightOrg = useMemo(() => {
-    if (!owned.length) return null;
+  const lowReserveCount = lowReserveOrgs.length;
 
-    return owned.reduce<{ org: OrgRecord; cycles: bigint } | null>((acc, org) => {
+  const highlightOrg = useMemo(() => {
+    if (!lowReserveOrgs.length) return null;
+
+    return lowReserveOrgs.reduce<{ org: OrgRecord; cycles: bigint } | null>((acc, org) => {
       const cycles = parseCycles(org.cycles);
       if (!acc) return { org, cycles };
       return cycles < acc.cycles ? { org, cycles } : acc;
     }, null);
-  }, [owned]);
+  }, [lowReserveOrgs]);
 
   const overviewCount = overviewRecords.length;
   const discoverCount = discoverRecords.length;
@@ -1454,10 +1751,10 @@ const fetchPublic = async () => {
 
   if (connecting) {
     return (
-      <div className="relative min-h-screen bg-slate-950 text-foreground">
+      <div className="relative min-h-screen bg-background text-foreground">
         <Navigation />
         <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-6">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full border border-slate-800/70 bg-slate-900/70">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full border border-border bg-muted/80">
             <div className="h-7 w-7 animate-spin rounded-full border-2 border-primary border-r-transparent" />
           </div>
           <div className="text-center">
@@ -1473,11 +1770,11 @@ const fetchPublic = async () => {
 
   if (!principalText) {
     return (
-      <div className="relative min-h-screen bg-slate-950 text-foreground">
+      <div className="relative min-h-screen bg-background text-foreground">
         <Navigation />
         <div className="flex min-h-screen flex-col items-center justify-center px-6">
-          <Card className="max-w-lg border border-slate-800/70 bg-slate-950/80 p-10 text-center shadow-[0_24px_48px_-32px_rgba(15,23,42,0.85)]">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-slate-800/70 bg-slate-900/70 text-muted-foreground">
+          <Card className="max-w-lg border border-border bg-card p-10 text-center shadow-lg">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-border bg-muted text-muted-foreground">
               <Power className="h-7 w-7" />
             </div>
             <h2 className="mt-6 text-2xl font-semibold text-foreground">Connect your Plug wallet</h2>
@@ -1502,13 +1799,13 @@ const fetchPublic = async () => {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-slate-950 text-foreground">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.12),_transparent_55%)]" />
+    <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.12),_transparent_65%)] dark:bg-[radial-gradient(circle_at_top,_rgba(37,99,235,0.22),_transparent_65%)]" />
       <Navigation />
       <div className="relative z-10">
         <header className="mx-auto max-w-7xl px-6 pb-12 pt-28">
           <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
-            <Card className="relative overflow-hidden border border-slate-800/70 bg-slate-950/80 p-8 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.9)]">
+            <Card className="relative overflow-hidden border border-border bg-card p-8 shadow-lg">
               <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
               <div className="space-y-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
@@ -1527,16 +1824,16 @@ const fetchPublic = async () => {
                 </div>
 
                 {highlight && (
-                  <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100 shadow-[0_20px_40px_-30px_rgba(245,158,11,0.45)]">
+                  <div className="rounded-2xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary shadow-[0_18px_42px_-30px_rgba(59,130,246,0.32)] dark:text-primary-foreground">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-amber-200">
+                      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-primary/80">
                         <ShieldAlert className="h-4 w-4" />
-                        Low reserve alert
+                        Reserve attention needed
                       </div>
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-8 rounded-full border-amber-400/60 bg-amber-500/10 px-3 text-xs text-amber-100 hover:border-amber-300 hover:text-amber-50"
+                        className="h-8 rounded-full border-primary/30 bg-primary/10 px-3 text-xs text-primary hover:border-primary/50 hover:text-primary dark:text-primary-foreground"
                         onClick={() => {
                           setTopUpOrg(highlight);
                           setTopUpOpen(true);
@@ -1546,8 +1843,8 @@ const fetchPublic = async () => {
                         Top up now
                       </Button>
                     </div>
-                    <p className="mt-2 text-xs text-amber-100/80">
-                      {highlight.name} is running at {formatCycles(highlightCycles)} cycles.
+                    <p className="mt-2 text-xs text-primary/70 dark:text-primary-foreground/80">
+                      Lowest reserve: {highlight.name} at {formatCycles(highlightCycles)} cycles out of {lowReserveCount} alert{lowReserveCount > 1 ? "s" : ""}.
                     </p>
                   </div>
                 )}
@@ -1561,7 +1858,7 @@ const fetchPublic = async () => {
                   <Button
                     variant="outline"
                     size="lg"
-                    className="rounded-xl border-slate-800/70 bg-slate-950/70 px-5 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+                    className="rounded-xl border border-border bg-background px-5 py-2.5 text-sm font-medium text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
                     onClick={handleRefresh}
                   >
                     <RefreshCw className="mr-2 h-4 w-4" />
@@ -1569,7 +1866,7 @@ const fetchPublic = async () => {
                   </Button>
                   <Badge
                     variant="outline"
-                    className="rounded-full border-slate-800/70 bg-slate-950/70 px-3 py-1 text-xs text-muted-foreground"
+                    className="rounded-full border border-border bg-background px-3 py-1 text-xs text-muted-foreground"
                   >
                     <CheckCircle2 className="mr-1 h-3 w-3" />
                     {overviewCount} indexed
@@ -1606,7 +1903,17 @@ const fetchPublic = async () => {
               />
             </div>
           </div>
-        </header>
+    </header>
+
+        <LowReservePanel
+          alerts={lowReserveOrgs}
+          onTopUp={(org) => {
+            setTopUpOrg(org);
+            setTopUpOpen(true);
+            setOwnershipView("owned");
+          }}
+          onOpenWorkspace={(org) => navigate(`/dashboard/home/${org.canisterId}`)}
+        />
 
         <main className="mx-auto max-w-7xl px-6 pb-24">
           <Tabs
@@ -1614,9 +1921,9 @@ const fetchPublic = async () => {
             onValueChange={(value) => setOwnershipView(value as typeof ownershipView)}
             className="w-full"
           >
-            <div className="rounded-3xl border border-slate-800/70 bg-slate-950/70 p-6 shadow-[0_26px_52px_-36px_rgba(15,23,42,0.85)]">
+            <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <TabsList className="flex w-full gap-2 rounded-full border border-slate-800/70 bg-slate-900/60 p-1 lg:w-auto">
+                <TabsList className="flex w-full gap-2 rounded-full border border-border bg-muted/70 p-1 lg:w-auto">
                   <TabsTrigger
                     value="overview"
                     className="rounded-full px-4 py-2 text-sm font-medium text-muted-foreground data-[state=active]:bg-primary/15 data-[state=active]:text-primary"
@@ -1644,12 +1951,12 @@ const fetchPublic = async () => {
                       value={searchTerm}
                       onChange={(event) => setSearchTerm(event.target.value)}
                       placeholder="Search by organization or canister ID"
-                      className="h-11 rounded-full border-slate-800/70 bg-slate-950/70 pl-9 pr-4 text-sm"
+                      className="h-11 rounded-full border border-border bg-background pl-9 pr-4 text-sm shadow-sm"
                     />
                   </div>
 
                   <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}>
-                    <SelectTrigger className="h-11 w-[150px] rounded-full border-slate-800/70 bg-slate-950/70 text-sm">
+                    <SelectTrigger className="h-11 w-[150px] rounded-full border border-border bg-background text-sm">
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1661,7 +1968,7 @@ const fetchPublic = async () => {
                   </Select>
 
                   <Select value={planFilter} onValueChange={(value) => setPlanFilter(value as Plan | "all")}>
-                    <SelectTrigger className="h-11 w-[140px] rounded-full border-slate-800/70 bg-slate-950/70 text-sm">
+                    <SelectTrigger className="h-11 w-[140px] rounded-full border border-border bg-background text-sm">
                       <SelectValue placeholder="Plan" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1673,7 +1980,7 @@ const fetchPublic = async () => {
                   </Select>
 
                   <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as typeof sortOrder)}>
-                    <SelectTrigger className="h-11 w-[150px] rounded-full border-slate-800/70 bg-slate-950/70 text-sm">
+                    <SelectTrigger className="h-11 w-[150px] rounded-full border border-border bg-background text-sm">
                       <SelectValue placeholder="Sort" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1685,16 +1992,16 @@ const fetchPublic = async () => {
 
                   <TooltipProvider>
                     <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className={cn(
-                            "h-10 w-10 rounded-full border-slate-800/70 bg-slate-950/70 text-muted-foreground transition-colors",
-                            viewMode === "grid" && "border-primary/40 bg-primary/10 text-primary"
-                          )}
-                          onClick={() => setViewMode("grid")}
-                        >
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className={cn(
+                          "h-10 w-10 rounded-full border border-border bg-background text-muted-foreground transition-colors",
+                          viewMode === "grid" && "border-primary/40 bg-primary/10 text-primary"
+                        )}
+                        onClick={() => setViewMode("grid")}
+                      >
                           <LayoutGrid className="h-4 w-4" />
                         </Button>
                       </TooltipTrigger>
@@ -1704,16 +2011,16 @@ const fetchPublic = async () => {
 
                   <TooltipProvider>
                     <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className={cn(
-                            "h-10 w-10 rounded-full border-slate-800/70 bg-slate-950/70 text-muted-foreground transition-colors",
-                            viewMode === "list" && "border-primary/40 bg-primary/10 text-primary"
-                          )}
-                          onClick={() => setViewMode("list")}
-                        >
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className={cn(
+                          "h-10 w-10 rounded-full border border-border bg-background text-muted-foreground transition-colors",
+                          viewMode === "list" && "border-primary/40 bg-primary/10 text-primary"
+                        )}
+                        onClick={() => setViewMode("list")}
+                      >
                           <List className="h-4 w-4" />
                         </Button>
                       </TooltipTrigger>
@@ -1723,7 +2030,7 @@ const fetchPublic = async () => {
 
                   <Badge
                     variant="outline"
-                    className="rounded-full border-slate-800/70 bg-slate-950/70 px-3 py-1 text-xs text-muted-foreground"
+                    className="rounded-full border border-border bg-background px-3 py-1 text-xs text-muted-foreground"
                   >
                     {processedCount} results
                   </Badge>
