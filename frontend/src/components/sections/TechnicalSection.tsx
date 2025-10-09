@@ -68,8 +68,8 @@ const tooling = [
 
 const TechnicalSection = () => {
   return (
-    <section className="relative z-10 py-24 md:py-28">
-      <div className="mx-auto flex max-w-6xl flex-col gap-14 rounded-[32px] border border-border/80 bg-card/70 px-4 py-12 shadow-md backdrop-blur-sm sm:px-8 lg:px-12">
+    <section className="relative z-10 py-6 md:py-7">
+      <div className="mx-auto flex max-w-6xl flex-col gap-14 rounded-[16px] border border-border/80 bg-card/70 px-4 py-12 shadow-md backdrop-blur-sm sm:px-8 lg:px-12">
         <motion.div
           className="mx-auto max-w-3xl text-center"
           initial="hidden"
@@ -99,9 +99,9 @@ const TechnicalSection = () => {
             custom={0.1}
             variants={fadeUp}
           >
-            <Card className="flex flex-col overflow-hidden rounded-3xl border-2 border-border bg-background/70 shadow-lg shadow-primary/5">
+            <Card className="flex flex-col overflow-hidden rounded-[12px] border-2 border-border bg-background/70 shadow-lg shadow-primary/5">
               <CardContent className="flex flex-1 flex-col space-y-5 p-6 sm:p-8">
-                <Badge className="bg-primary/90 text-primary-foreground">
+                <Badge className="w-fit bg-primary/90 text-primary-foreground">
                   Trust by design
                 </Badge>
                 <h3 className="text-2xl font-semibold text-foreground sm:text-3xl">
@@ -112,7 +112,7 @@ const TechnicalSection = () => {
                   integration lightweight. Light or dark theme, the components
                   remain neutral and accessible.
                 </p>
-                <div className="rounded-xl border border-dashed border-primary/25 bg-muted/40 px-4 py-4 text-sm text-muted-foreground">
+                <div className="rounded-[6px] border border-dashed border-primary/25 bg-muted/40 px-4 py-4 text-sm text-muted-foreground">
                   <p className="font-medium text-foreground">
                     Ready for production
                   </p>
@@ -153,7 +153,7 @@ const TechnicalSection = () => {
               </CardContent>
             </Card>
 
-            <Card className="flex flex-col overflow-hidden rounded-3xl border-2 border-border bg-background/70 shadow-lg shadow-primary/5">
+            <Card className="flex flex-col overflow-hidden rounded-[12px] border-2 border-border bg-background/70 shadow-lg shadow-primary/5">
               <CardContent className="flex flex-1 flex-col space-y-5 p-6 sm:p-8">
                 <p className="text-sm font-semibold uppercase tracking-wide text-primary">
                   Tooling
@@ -164,9 +164,9 @@ const TechnicalSection = () => {
                     return (
                       <div
                         key={tool.title}
-                        className="flex items-start gap-3 rounded-lg bg-muted/40 px-4 py-3 text-sm text-muted-foreground"
+                        className="flex items-start gap-3 rounded-[4px] bg-muted/40 px-4 py-3 text-sm text-muted-foreground"
                       >
-                        <span className="mt-1 inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                        <span className="mt-1 inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[6px] bg-primary/10 text-primary">
                           <Icon className="h-4 w-4" />
                         </span>
                         <div>
@@ -197,9 +197,9 @@ const TechnicalSection = () => {
                   custom={0.15 + index * 0.05}
                   variants={fadeUp}
                 >
-                  <Card className="flex flex-col overflow-hidden rounded-3xl border-2 border-border bg-background/70 shadow-lg shadow-primary/5">
+                  <Card className="flex flex-col overflow-hidden rounded-[12px] border-2 border-border bg-background/70 shadow-lg shadow-primary/5">
                     <CardContent className="flex flex-col gap-4 p-6 sm:flex-row sm:items-start sm:gap-6">
-                      <span className="inline-flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <span className="inline-flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-[6px] bg-primary/10 text-primary">
                         <Icon className="h-6 w-6" />
                       </span>
                       <div className="space-y-2">

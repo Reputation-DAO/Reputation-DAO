@@ -75,8 +75,8 @@ const integrations = [
 
 const UseCasesSection = () => {
   return (
-    <section className="relative z-10 py-24 md:py-28">
-      <div className="mx-auto flex max-w-6xl flex-col gap-14 rounded-[32px] border border-border/80 bg-card/70 px-4 py-12 shadow-md backdrop-blur-sm sm:px-8 lg:px-12">
+    <section className="relative z-10 py-6 md:py-7">
+      <div className="mx-auto flex max-w-6xl flex-col gap-14 rounded-[16px] border border-border/80 bg-card/70 px-4 py-12 shadow-md backdrop-blur-sm sm:px-8 lg:px-12">
         <motion.div
           className="mx-auto max-w-3xl text-center"
           initial="hidden"
@@ -154,7 +154,7 @@ const UseCasesSection = () => {
                 custom={0.15 + index * 0.05}
                 variants={fadeUp}
               >
-                <Card className="flex h-full flex-col overflow-hidden rounded-3xl border-2 border-border bg-background/70 shadow-lg shadow-primary/5">
+                <Card className="flex h-full flex-col overflow-hidden rounded-[12px] border-2 border-border bg-background/70 shadow-lg shadow-primary/5">
                   <CardContent className="flex h-full flex-col space-y-6 p-6 sm:p-8">
                     <div className="space-y-3">
                       <Badge className="w-fit bg-primary text-primary-foreground">
@@ -168,7 +168,7 @@ const UseCasesSection = () => {
                       {useCase.highlights.map((highlight) => (
                         <div
                           key={highlight}
-                          className="flex items-start gap-3 rounded-lg bg-muted/40 px-4 py-3 text-sm text-muted-foreground"
+                          className="flex items-start gap-3 rounded-[4px] bg-muted/40 px-4 py-3 text-sm text-muted-foreground"
                         >
                           <span className="mt-1 inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                             <ArrowRight className="h-3 w-3" />
@@ -183,16 +183,16 @@ const UseCasesSection = () => {
                   </CardContent>
                 </Card>
 
-                <Card className="flex h-full flex-col overflow-hidden rounded-3xl border-2 border-border bg-background/70 shadow-lg shadow-primary/5">
+                <Card className="flex h-full flex-col overflow-hidden rounded-[12px] border-2 border-border bg-background/70 shadow-lg shadow-primary/5">
                   <CardContent className="flex h-full flex-col gap-6 p-6 sm:p-8">
-                    <div className="overflow-hidden rounded-xl border border-border bg-muted/40">
+                    <div className="overflow-hidden rounded-[6px] border border-border bg-muted/40">
                       <img
                         src={useCase.image}
                         alt={useCase.title}
                         className="h-56 w-full object-cover"
                       />
                     </div>
-                    <div className="rounded-xl border border-dashed border-primary/25 bg-muted/40 px-4 py-4 text-sm text-muted-foreground">
+                    <div className="rounded-[6px] border border-dashed border-primary/25 bg-muted/40 px-4 py-4 text-sm text-muted-foreground">
                       <p className="font-medium text-foreground">
                         Activation blueprint
                       </p>
@@ -210,7 +210,7 @@ const UseCasesSection = () => {
         </Tabs>
 
         <motion.div
-          className="rounded-2xl border-2 border-border bg-background/70 px-6 py-8 shadow-lg shadow-primary/5"
+          className="rounded-[8px] border-2 border-border bg-background/70 px-6 py-8 shadow-lg shadow-primary/5"
           initial="hidden"
           whileInView="show"
           viewport={{ once: true, amount: 0.4 }}

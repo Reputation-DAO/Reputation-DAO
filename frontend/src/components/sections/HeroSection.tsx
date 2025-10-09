@@ -35,13 +35,13 @@ const HeroSection = () => {
         <div className="animate-fade-in-up">
           {/* Floating Icons */}
           <div className="flex justify-center gap-8 mb-8">
-            <div className="glass-card p-4 rounded-2xl animate-float">
+            <div className="glass-card p-4 rounded-[8px] animate-float">
               <Shield className="w-8 h-8 text-primary" />
             </div>
-            <div className="glass-card p-4 rounded-2xl animate-float" style={{ animationDelay: '1s' }}>
+            <div className="glass-card p-4 rounded-[8px] animate-float" style={{ animationDelay: '1s' }}>
               <Zap className="w-8 h-8 text-primary-glow" />
             </div>
-            <div className="glass-card p-4 rounded-2xl animate-float" style={{ animationDelay: '2s' }}>
+            <div className="glass-card p-4 rounded-[8px] animate-float" style={{ animationDelay: '2s' }}>
               <Network className="w-8 h-8 text-primary" />
             </div>
           </div>

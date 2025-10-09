@@ -51,7 +51,7 @@ const proofPoints = [
 const ProblemSolutionSection = () => {
   return (
     <section className="relative z-10 py-24 md:py-28">
-      <div className="mx-auto flex max-w-6xl flex-col gap-14 rounded-[32px] border border-border/70 bg-card/70 px-4 py-12 shadow-xl backdrop-blur-sm sm:px-8 lg:px-12">
+      <div className="mx-auto flex max-w-6xl flex-col gap-14 rounded-[16px] border border-border/70 bg-card/70 px-4 py-12 shadow-xl backdrop-blur-sm sm:px-8 lg:px-12">
         <motion.div
           className="mx-auto max-w-3xl text-center"
           initial="hidden"
@@ -83,13 +83,13 @@ const ProblemSolutionSection = () => {
             custom={0.1}
             variants={fadeUp}
           >
-            <Card className="flex h-full flex-1 flex-col overflow-hidden rounded-3xl border-2 border-border bg-background/70 shadow-xl">
+            <Card className="flex h-full flex-1 flex-col overflow-hidden rounded-[12px] border-2 border-border bg-background/70 shadow-xl">
               <CardHeader className="flex flex-col gap-3 pb-0">
                 <Badge variant="destructive" className="w-fit">
                   Status quo
                 </Badge>
                 <CardTitle className="flex items-center gap-3 text-2xl font-semibold text-foreground">
-                  <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-destructive/15 text-destructive">
+                  <span className="inline-flex h-11 w-11 items-center justify-center rounded-[6px] bg-destructive/15 text-destructive">
                     <AlertTriangle className="h-5 w-5" />
                   </span>
                   Centralized reputation
@@ -108,7 +108,7 @@ const ProblemSolutionSection = () => {
                   {problemSignals.map((signal) => (
                     <div
                       key={signal}
-                      className="flex items-start gap-3 rounded-lg bg-muted/30 px-3.5 py-2.5 text-sm text-muted-foreground"
+                      className="flex items-start gap-3 rounded-[4px] bg-muted/30 px-3.5 py-2.5 text-sm text-muted-foreground"
                     >
                       <span className="mt-0.5 text-destructive">•</span>
                       <span className="leading-snug">{signal}</span>
@@ -128,11 +128,11 @@ const ProblemSolutionSection = () => {
             custom={0.2}
             variants={fadeUp}
           >
-            <Card className="flex h-full flex-1 flex-col overflow-hidden rounded-3xl border-2 border-primary/60 bg-background/70 shadow-xl">
+            <Card className="flex h-full flex-1 flex-col overflow-hidden rounded-[12px] border-2 border-primary/60 bg-background/70 shadow-xl">
               <CardHeader className="flex flex-col gap-3 pb-0">
                 <Badge className="w-fit bg-primary/90 text-primary-foreground">Reputation DAO</Badge>
                 <CardTitle className="flex items-center gap-3 text-2xl font-semibold text-foreground">
-                  <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-primary/15 text-primary">
+                  <span className="inline-flex h-11 w-11 items-center justify-center rounded-[6px] bg-primary/15 text-primary">
                     <ShieldCheck className="h-5 w-5" />
                   </span>
                   A verifiable trust fabric
@@ -149,7 +149,7 @@ const ProblemSolutionSection = () => {
                   {solutionHighlights.map((highlight) => (
                     <div
                       key={highlight.title}
-                      className="rounded-xl border border-primary/40 bg-primary/5 px-4 py-3.5 sm:py-4"
+                      className="rounded-[6px] border border-primary/40 bg-primary/5 px-4 py-3.5 sm:py-4"
                     >
                       <h3 className="text-base font-semibold text-foreground">{highlight.title}</h3>
                       <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground/90">
@@ -165,7 +165,7 @@ const ProblemSolutionSection = () => {
 
         {/* Proof points */}
         <motion.div
-          className="grid gap-4 rounded-2xl border-2 border-border bg-background/70 px-6 py-6 shadow-lg sm:grid-cols-3"
+          className="grid gap-4 rounded-[8px] border-2 border-border bg-background/70 px-6 py-6 shadow-lg sm:grid-cols-3"
           initial="hidden"
           whileInView="show"
           viewport={{ once: true, amount: 0.45 }}

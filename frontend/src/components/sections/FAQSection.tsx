@@ -55,8 +55,8 @@ const faqs = [
 
 const FAQSection = () => {
   return (
-    <section className="relative z-10 py-24 md:py-28">
-      <div className="mx-auto max-w-5xl rounded-[32px] border border-border/80 bg-card/70 px-4 py-12 shadow-md backdrop-blur-sm sm:px-8 lg:px-12">
+    <section className="relative z-10 py-6 md:py-7">
+      <div className="mx-auto max-w-6xl rounded-[16px] border border-border/80 bg-card/70 px-4 py-12 shadow-md backdrop-blur-sm sm:px-8 lg:px-12">
         <motion.div
           className="mx-auto max-w-3xl text-center"
           initial="hidden"
@@ -82,7 +82,7 @@ const FAQSection = () => {
         </motion.div>
 
         <motion.div
-          className="mt-16 space-y-4 rounded-2xl border-2 border-border bg-background/70 p-6 shadow-lg shadow-primary/5 sm:p-8"
+          className="mt-16 space-y-4 rounded-[8px] border-2 border-border bg-background/70 p-6 shadow-lg shadow-primary/5 sm:p-8"
           initial="hidden"
           whileInView="show"
           viewport={{ once: true, amount: 0.45 }}
@@ -120,10 +120,10 @@ const FAQSection = () => {
           custom={0.25}
           variants={fadeUp}
         >
-          <Card className="rounded-3xl border-2 border-border bg-background/70 shadow-lg shadow-primary/5">
+          <Card className="rounded-[12px] border-2 border-border bg-background/70 shadow-lg shadow-primary/5">
             <CardContent className="flex flex-col gap-6 p-8 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-4">
-                <span className="inline-flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+                <span className="inline-flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-[8px] bg-primary/15 text-primary">
                   <HelpCircle className="h-6 w-6" />
                 </span>
                 <div>

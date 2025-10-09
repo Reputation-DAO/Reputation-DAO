@@ -56,8 +56,8 @@ const benefits = [
 
 const BenefitsSection = () => {
   return (
-    <section className="relative z-10 py-24 md:py-28">
-      <div className="mx-auto flex max-w-6xl flex-col gap-14 rounded-[32px] border border-border/80 bg-card/70 px-4 py-12 shadow-md backdrop-blur-sm sm:px-8 lg:px-12">
+    <section className="relative z-10 py-6 md:py-7">
+      <div className="mx-auto flex max-w-6xl flex-col gap-14 rounded-[16px] border border-border/80 bg-card/70 px-4 py-12 shadow-md backdrop-blur-sm sm:px-8 lg:px-12">
         <motion.div
           className="mx-auto max-w-3xl text-center"
           initial="hidden"
@@ -92,9 +92,9 @@ const BenefitsSection = () => {
                 custom={0.05 + index * 0.05}
                 variants={fadeUp}
               >
-                <Card className="flex h-full flex-col overflow-hidden rounded-3xl border-2 border-border bg-background/70 shadow-lg shadow-primary/5 transition hover:-translate-y-1 hover:shadow-lg">
+                <Card className="flex h-full flex-col overflow-hidden rounded-[12px] border-2 border-border bg-background/70 shadow-lg shadow-primary/5 transition hover:-translate-y-1 hover:shadow-lg">
                   <CardContent className="flex flex-1 flex-col space-y-4 p-6">
-                    <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <span className="inline-flex h-12 w-12 items-center justify-center rounded-[6px] bg-primary/10 text-primary">
                       <Icon className="h-6 w-6" />
                     </span>
                     <h3 className="text-xl font-semibold text-foreground">
@@ -111,7 +111,7 @@ const BenefitsSection = () => {
         </div>
 
         <motion.div
-          className="flex flex-col items-center justify-between gap-4 rounded-2xl border-2 border-border bg-background/70 px-6 py-8 text-center shadow-lg shadow-primary/5 sm:flex-row sm:text-left"
+          className="flex flex-col items-center justify-between gap-4 rounded-[8px] border-2 border-border bg-background/70 px-6 py-8 text-center shadow-lg shadow-primary/5 sm:flex-row sm:text-left"
           initial="hidden"
           whileInView="show"
           viewport={{ once: true, amount: 0.4 }}

@@ -66,8 +66,8 @@ const stats = [
 
 const HowItWorksSection = () => {
   return (
-    <section className="relative z-10 py-24 md:py-28">
-      <div className="mx-auto flex max-w-6xl flex-col gap-14 rounded-[32px] border border-border/70 bg-card/70 px-4 py-12 shadow-xl backdrop-blur-sm sm:px-8 lg:px-12">
+    <section className="relative z-10 py-6 md:py-7">
+      <div className="mx-auto flex max-w-6xl flex-col gap-14 rounded-[16px] border border-border/70 bg-card/70 px-4 py-12 shadow-xl backdrop-blur-sm sm:px-8 lg:px-12">
         <motion.div
           className="mx-auto max-w-3xl text-center"
           initial="hidden"
@@ -102,10 +102,10 @@ const HowItWorksSection = () => {
                   custom={0.1 + index * 0.08}
                   variants={fadeUp}
                 >
-                  <Card className="flex h-full flex-col overflow-hidden rounded-3xl border-2 border-border bg-background/70 shadow-xl">
+                  <Card className="flex h-full flex-col overflow-hidden rounded-[12px] border-2 border-border bg-background/70 shadow-xl">
                     <CardContent className="flex flex-1 flex-col gap-5 p-6 md:flex-row md:items-start md:gap-8">
                       <div className="flex flex-col items-center gap-3 md:w-44">
-                        <div className="inline-flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                        <div className="inline-flex h-14 w-14 items-center justify-center rounded-[6px] bg-primary/10 text-primary">
                           <Icon className="h-6 w-6" />
                         </div>
                         <div className="text-center md:text-left">
@@ -125,7 +125,7 @@ const HowItWorksSection = () => {
                           {step.details.map((detail) => (
                             <li
                               key={detail}
-                              className="flex items-start gap-3 rounded-lg bg-muted/30 px-4 py-3 text-sm text-muted-foreground"
+                              className="flex items-start gap-3 rounded-[4px] bg-muted/30 px-4 py-3 text-sm text-muted-foreground"
                             >
                               <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary" />
                               <span>{detail}</span>
@@ -148,7 +148,7 @@ const HowItWorksSection = () => {
             custom={0.2}
             variants={fadeUp}
           >
-            <Card className="flex flex-col overflow-hidden rounded-3xl border-2 border-border bg-background/70 shadow-xl lg:flex-1">
+            <Card className="flex flex-col overflow-hidden rounded-[12px] border-2 border-border bg-background/70 shadow-xl lg:flex-1">
               <CardContent className="flex flex-1 flex-col space-y-5 p-6">
                 <Badge variant="secondary" className="px-3 py-1">
                   Builder tools
@@ -161,7 +161,7 @@ const HowItWorksSection = () => {
                   consuming reputation instantly. Opt into advanced orchestration
                   only when you need it.
                 </p>
-                <div className="rounded-xl border border-dashed border-primary/30 bg-muted/30 px-4 py-4 text-sm text-muted-foreground">
+                <div className="rounded-[6px] border border-dashed border-primary/30 bg-muted/30 px-4 py-4 text-sm text-muted-foreground">
                   <p className="font-medium text-foreground">
                     Popular automations
                   </p>
@@ -202,7 +202,7 @@ const HowItWorksSection = () => {
               </CardContent>
             </Card>
 
-            <Card className="rounded-3xl border-2 border-border bg-background/70 shadow-xl">
+            <Card className="rounded-[12px] border-2 border-border bg-background/70 shadow-xl">
               <CardContent className="flex flex-col gap-4 p-6">
                 <p className="text-sm font-semibold uppercase tracking-wide text-primary">
                   Built for production
@@ -213,9 +213,9 @@ const HowItWorksSection = () => {
                     return (
                       <div
                         key={stat.title}
-                        className="flex items-start gap-3 rounded-lg bg-muted/30 px-4 py-3 text-sm text-muted-foreground"
+                        className="flex items-start gap-3 rounded-[4px] bg-muted/30 px-4 py-3 text-sm text-muted-foreground"
                       >
-                        <span className="mt-1 inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                        <span className="mt-1 inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[6px] bg-primary/10 text-primary">
                           <Icon className="h-4 w-4" />
                         </span>
                         <div>
