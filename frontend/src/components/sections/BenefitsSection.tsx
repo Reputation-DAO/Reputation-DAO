@@ -1,90 +1,152 @@
-import { Shield, Globe, Link, Clock, TrendingUp, Zap } from "lucide-react";
+import { motion } from "framer-motion";
+import { Clock, Globe, Link, Shield, TrendingUp, Zap } from "lucide-react";
+import { Link as RouterLink } from "react-router-dom";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 24 },
+  show: (delay: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.5, delay, ease: [0.21, 0.82, 0.27, 1] },
+  }),
+};
+
+const benefits = [
+  {
+    title: "Tamper-proof history",
+    description:
+      "Reputational data is immutably stored on-chain. No hidden switches, no single points of failure.",
+    icon: Shield,
+  },
+  {
+    title: "Decentralized ownership",
+    description:
+      "Communities govern the reputation rails they rely on. Scores remain with the people who earned them.",
+    icon: Globe,
+  },
+  {
+    title: "Portable by default",
+    description:
+      "SDKs and APIs let you surface the same trust signals across products, chains, and governance tools.",
+    icon: Link,
+  },
+  {
+    title: "Permanent memory",
+    description:
+      "Attestations never disappear. Future contributors can audit how today’s leaders built trust.",
+    icon: Clock,
+  },
+  {
+    title: "Merit-first economics",
+    description:
+      "Soulbound credentials keep bots and reputation marketplaces out of the system for good.",
+    icon: TrendingUp,
+  },
+  {
+    title: "Ecosystem-ready",
+    description:
+      "Drop-in contracts and API hooks accelerate governance, incentive, and identity flows without extra glue work.",
+    icon: Zap,
+  },
+];
 
 const BenefitsSection = () => {
-  const benefits = [
-    {
-      title: "Immutable",
-      description: "Built on blockchain, your reputation cannot be tampered with or erased. Every action you take remains secure and transparent.",
-      icon: Shield,
-      gradient: "from-blue-500 to-blue-600"
-    },
-    {
-      title: "Decentralized", 
-      description: "No single entity controls your reputation. Ownership stays with the user, aligned with web3 principles of freedom and transparency.",
-      icon: Globe,
-      gradient: "from-emerald-500 to-emerald-600"
-    },
-    {
-      title: "Interoperable",
-      description: "Your reputation seamlessly integrates across platforms, enhancing trust and consistency wherever you participate.",
-      icon: Link,
-      gradient: "from-purple-500 to-purple-600"
-    },
-    {
-      title: "Permanent",
-      description: "Once earned, your reputation is permanently recorded on-chain, providing a lasting record of your contributions.",
-      icon: Clock,
-      gradient: "from-orange-500 to-orange-600"
-    },
-    {
-      title: "Earnable",
-      description: "Reputation isn't given — it's earned. Every action, contribution, or endorsement boosts your on-chain identity.",
-      icon: TrendingUp,
-      gradient: "from-pink-500 to-pink-600"
-    },
-    {
-      title: "Synergistic",
-      description: "Works alongside DAOs, platforms, and ecosystems to supercharge governance, rewards, and trust without extra friction.",
-      icon: Zap,
-      gradient: "from-primary to-primary-glow"
-    }
-  ];
-
   return (
-    <section className="py-24 bg-gradient-to-b from-secondary/20 to-background">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl sm:text-5xl font-bold mb-4 bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent">
-            Why Reputation DAO?
+    <section className="py-24 md:py-28">
+      <div className="mx-auto flex max-w-6xl flex-col gap-14 rounded-[32px] border border-border/80 bg-card/70 px-4 py-12 shadow-md backdrop-blur-sm sm:px-8 lg:px-12">
+        <motion.div
+          className="mx-auto max-w-3xl text-center"
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, amount: 0.45 }}
+          custom={0}
+          variants={fadeUp}
+        >
+          <Badge variant="secondary" className="mb-4 px-4 py-2 uppercase tracking-wide">
+            Why builders choose us
+          </Badge>
+          <h2 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
+            A reputation layer that feels native in any theme
           </h2>
-          <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-            Experience the power of decentralized reputation with these core benefits
+          <p className="mt-4 text-base leading-relaxed text-muted-foreground sm:text-lg">
+            Designed to look and feel at home in light or dark mode. Neutral
+            surfaces, adaptive borders, and purposeful accents keep the focus on
+            your product.
           </p>
-        </div>
-        
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+        </motion.div>
+
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {benefits.map((benefit, index) => {
-            const IconComponent = benefit.icon;
+            const Icon = benefit.icon;
+
             return (
-              <div 
-                key={benefit.title} 
-                className="glass-card p-8 hover-lift group"
-                style={{ animationDelay: `${index * 100}ms` }}
+              <motion.div
+                key={benefit.title}
+                initial="hidden"
+                whileInView="show"
+                viewport={{ once: true, amount: 0.45 }}
+                custom={0.05 + index * 0.05}
+                variants={fadeUp}
               >
-                <div className="relative">
-                  {/* Icon with gradient background */}
-                  <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${benefit.gradient} flex items-center justify-center mb-6 group-hover:animate-pulse-glow transition-all duration-300`}>
-                    <IconComponent className="w-8 h-8 text-white" />
-                  </div>
-                  
-                  <h3 className="text-2xl font-bold mb-4 text-foreground group-hover:text-primary transition-colors duration-300">
-                    {benefit.title}
-                  </h3>
-                  
-                  <p className="text-muted-foreground leading-relaxed">
-                    {benefit.description}
-                  </p>
-                  
-                  {/* Hover decoration */}
-                  <div className="absolute -inset-2 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl -z-10" />
-                </div>
-              </div>
+                <Card className="flex h-full flex-col overflow-hidden rounded-3xl border-2 border-border bg-background/70 shadow-lg shadow-primary/5 transition hover:-translate-y-1 hover:shadow-lg">
+                  <CardContent className="flex flex-1 flex-col space-y-4 p-6">
+                    <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <Icon className="h-6 w-6" />
+                    </span>
+                    <h3 className="text-xl font-semibold text-foreground">
+                      {benefit.title}
+                    </h3>
+                    <p className="text-sm leading-relaxed text-muted-foreground">
+                      {benefit.description}
+                    </p>
+                  </CardContent>
+                </Card>
+              </motion.div>
             );
           })}
         </div>
-        
-        {/* Bottom CTA */}
-        
+
+        <motion.div
+          className="flex flex-col items-center justify-between gap-4 rounded-2xl border-2 border-border bg-background/70 px-6 py-8 text-center shadow-lg shadow-primary/5 sm:flex-row sm:text-left"
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, amount: 0.4 }}
+          custom={0.3}
+          variants={fadeUp}
+        >
+          <div>
+            <p className="text-lg font-semibold text-foreground">
+              Ready to see it in your product?
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Jump into the beta or explore the docs to start embedding
+              Reputation DAO today.
+            </p>
+          </div>
+          <div className="flex flex-wrap justify-center gap-3">
+            <Button asChild size="lg">
+              <RouterLink to="/auth">Join the beta</RouterLink>
+            </Button>
+            <Button
+              asChild
+              variant="outline"
+              size="lg"
+              className="border-primary/40 text-primary hover:bg-primary/10"
+            >
+              <a
+                href="https://docs.google.com/document/d/1e03vreMKph3KPX-g8-jlbIAlD8D3PvA8VXPbZNIrT-0/edit?tab=t.0"
+                target="_blank"
+                rel="noreferrer"
+              >
+                View roadmap
+              </a>
+            </Button>
+          </div>
+        </motion.div>
       </div>
     </section>
   );

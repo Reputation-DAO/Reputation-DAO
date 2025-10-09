@@ -1,111 +1,217 @@
+import { motion } from "framer-motion";
+import { ArrowRight, Sparkles } from "lucide-react";
+import { Link as RouterLink } from "react-router-dom";
+
 import governanceIcon from "@/assets/governance.png";
 import defiIcon from "@/assets/defi.png";
 import identityIcon from "@/assets/defi.png";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 24 },
+  show: (delay: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.5, delay, ease: [0.21, 0.82, 0.27, 1] },
+  }),
+};
+
+const useCases = [
+  {
+    id: "governance",
+    title: "DAOs & Governance",
+    description:
+      "Replace token-weighted voting with contribution-weighted trust. Keep decisions in the hands of proven builders.",
+    image: governanceIcon,
+    highlights: [
+      "Dynamic voting weight tied to on-chain reputation",
+      "Delegate dashboards with transparent contributions",
+      "Immediate visibility into governance risk",
+    ],
+    ctaLabel: "Launch a reputation DAO",
+  },
+  {
+    id: "defi",
+    title: "DeFi & Protocols",
+    description:
+      "Bootstrap trust for credit markets, LP incentives, and protocol risk scoring without centralized gatekeepers.",
+    image: defiIcon,
+    highlights: [
+      "Under-collateralized lending based on verified signals",
+      "Programmatic risk tiers for capital efficiency",
+      "Sybil-resistant rewards and loyalty programs",
+    ],
+    ctaLabel: "Design a trust layer",
+  },
+  {
+    id: "identity",
+    title: "Social & Identity",
+    description:
+      "Empower communities, creators, and marketplaces with portable credentials that unlock curated experiences.",
+    image: identityIcon,
+    highlights: [
+      "Soulbound badges that travel across platforms",
+      "Invite-only spaces guided by verified reputation",
+      "Proof-of-contribution discovery feeds",
+    ],
+    ctaLabel: "Curate your community",
+  },
+];
+
+const integrations = [
+  "Wallets",
+  "Smart contracts",
+  "APIs",
+  "Automation",
+  "Dashboards",
+  "Analytics",
+];
 
 const UseCasesSection = () => {
-  const useCases = [
-    {
-      title: "DAOs & Governance",
-      description: "Fair voting power based on earned reputation, not token wealth. Protect governance integrity.",
-      image: governanceIcon,
-      features: ["Merit-based voting", "Prevent governance attacks", "Fair decision making", "Community-driven"]
-    },
-    {
-      title: "DeFi & Protocols", 
-      description: "Establish trust layers on-chain for credit scoring, under-collateralized loans, and more.",
-      image: defiIcon,
-      features: ["Credit scoring", "Under-collateralized loans", "Risk assessment", "Trust verification"]
-    },
-    {
-      title: "Social & Identity",
-      description: "Portable, proof-based identity for creators, contributors, and communities.",
-      image: identityIcon,
-      features: ["Portable identity", "Creator verification", "Community trust", "Social proof"]
-    }
-  ];
-
   return (
-    <section className="py-24 relative overflow-hidden">
-      {/* Background decoration */}
-      <div className="absolute inset-0 bg-gradient-to-r from-primary-light/10 to-transparent" />
-      
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl sm:text-5xl font-bold mb-4 bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent">
-            Where Reputation DAO Fits
+    <section className="py-24 md:py-28">
+      <div className="mx-auto flex max-w-6xl flex-col gap-14 rounded-[32px] border border-border/80 bg-card/70 px-4 py-12 shadow-md backdrop-blur-sm sm:px-8 lg:px-12">
+        <motion.div
+          className="mx-auto max-w-3xl text-center"
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, amount: 0.45 }}
+          custom={0}
+          variants={fadeUp}
+        >
+          <Badge variant="secondary" className="mb-4 px-4 py-2 uppercase tracking-wide">
+            <Sparkles className="mr-2 h-3.5 w-3.5" />
+            Where it fits
+          </Badge>
+          <h2 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
+            Drop reputation into any product surface
           </h2>
-          <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-            Transforming trust across the decentralized ecosystem
+          <p className="mt-4 text-base leading-relaxed text-muted-foreground sm:text-lg">
+            The UI is neutral enough to blend with your brand in light and dark
+            themes, while the primitives stay powerful under the hood.
           </p>
-        </div>
-        
-        <div className="grid lg:grid-cols-3 gap-8">
+        </motion.div>
+
+        <Tabs defaultValue="governance" className="space-y-10">
+          <motion.div
+            className="flex flex-wrap justify-center gap-3"
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.4 }}
+            custom={0.1}
+            variants={fadeUp}
+          >
+            <TabsList className="flex w-full max-w-3xl flex-wrap justify-center gap-2 rounded-full border-2 border-border bg-background/70 p-2 shadow-lg shadow-primary/5">
+              {useCases.map((useCase) => (
+                <TabsTrigger
+                  key={useCase.id}
+                  value={useCase.id}
+                  className="flex-1 rounded-full border border-transparent px-4 py-2 text-sm font-semibold transition data-[state=active]:border-primary/60 data-[state=active]:bg-primary/10 data-[state=active]:text-primary sm:flex-none"
+                >
+                  {useCase.title}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </motion.div>
+
           {useCases.map((useCase, index) => (
-            <div 
-              key={useCase.title} 
-              className="glass-card p-8 hover-lift group"
-              style={{ animationDelay: `${index * 200}ms` }}
-            >
-              {/* Image */}
-              <div className="w-full h-48 mb-6 rounded-2xl overflow-hidden bg-gradient-to-br from-primary/5 to-primary-glow/5">
-                <img 
-                  src={useCase.image} 
-                  alt={useCase.title}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                />
-              </div>
-              
-              <h3 className="text-2xl font-bold mb-4 text-foreground group-hover:text-primary transition-colors duration-300">
-                {useCase.title}
-              </h3>
-              
-              <p className="text-muted-foreground mb-6 leading-relaxed">
-                {useCase.description}
-              </p>
-              
-              {/* Features list */}
-              <div className="space-y-2">
-                {useCase.features.map((feature, featureIndex) => (
-                  <div key={featureIndex} className="flex items-center gap-3">
-                    <div className="w-2 h-2 bg-primary rounded-full group-hover:animate-pulse" />
-                    <span className="text-sm text-muted-foreground">{feature}</span>
-                  </div>
-                ))}
-              </div>
-              
-              {/* Call to action */}
-              <div className="mt-6 pt-6 border-t border-border/50">
-                <button className="text-primary font-semibold hover:underline transition-all duration-300 group-hover:text-primary-glow">
-                  Learn More →
-                </button>
-              </div>
-            </div>
+            <TabsContent key={useCase.id} value={useCase.id} className="mt-0">
+              <motion.div
+                className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr]"
+                initial="hidden"
+                whileInView="show"
+                viewport={{ once: true, amount: 0.45 }}
+                custom={0.15 + index * 0.05}
+                variants={fadeUp}
+              >
+                <Card className="flex h-full flex-col overflow-hidden rounded-3xl border-2 border-border bg-background/70 shadow-lg shadow-primary/5">
+                  <CardContent className="flex h-full flex-col space-y-6 p-6 sm:p-8">
+                    <div className="space-y-3">
+                      <Badge className="w-fit bg-primary/90 text-primary-foreground">
+                        {useCase.title}
+                      </Badge>
+                      <h3 className="text-2xl font-semibold text-foreground sm:text-3xl">
+                        {useCase.description}
+                      </h3>
+                    </div>
+                    <div className="grid gap-3">
+                      {useCase.highlights.map((highlight) => (
+                        <div
+                          key={highlight}
+                          className="flex items-start gap-3 rounded-lg bg-muted/40 px-4 py-3 text-sm text-muted-foreground"
+                        >
+                          <span className="mt-1 inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                            <ArrowRight className="h-3 w-3" />
+                          </span>
+                          <span>{highlight}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <Button asChild size="lg" className="mt-auto w-full sm:w-auto">
+                      <RouterLink to="/auth">{useCase.ctaLabel}</RouterLink>
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                <Card className="flex h-full flex-col overflow-hidden rounded-3xl border-2 border-border bg-background/70 shadow-lg shadow-primary/5">
+                  <CardContent className="flex h-full flex-col gap-6 p-6 sm:p-8">
+                    <div className="overflow-hidden rounded-xl border border-border bg-muted/40">
+                      <img
+                        src={useCase.image}
+                        alt={useCase.title}
+                        className="h-56 w-full object-cover"
+                      />
+                    </div>
+                    <div className="rounded-xl border border-dashed border-primary/25 bg-muted/40 px-4 py-4 text-sm text-muted-foreground">
+                      <p className="font-medium text-foreground">
+                        Activation blueprint
+                      </p>
+                      <p className="mt-2 leading-relaxed">
+                        Start with ready-made flows, dashboards, and monitoring
+                        checks tailored for {useCase.title.toLowerCase()} teams.
+                      </p>
+                    </div>
+                    <div className="grow" />
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </TabsContent>
           ))}
-        </div>
-        
-        {/* Integration showcase */}
-        <div className="mt-20">
-          <div className="glass-card p-10 text-center">
-            <h3 className="text-3xl font-bold mb-6 text-foreground">
-              Seamless Integration
-            </h3>
-            <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
-              Built for interoperability, Reputation DAO works with your existing infrastructure 
-              and favorite platforms across the decentralized web.
-            </p>
-            <div className="flex flex-wrap justify-center gap-4">
-              {['Web3 Wallets', 'Smart Contracts', 'DApps', 'APIs', 'SDKs'].map((integration, index) => (
-                <div 
-                  key={integration} 
-                  className="px-6 py-3 bg-primary/10 text-primary rounded-full text-sm font-medium hover:bg-primary/20 transition-colors duration-300"
-                  style={{ animationDelay: `${index * 100}ms` }}
+        </Tabs>
+
+        <motion.div
+          className="rounded-2xl border-2 border-border bg-background/70 px-6 py-8 shadow-lg shadow-primary/5"
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, amount: 0.4 }}
+          custom={0.25}
+          variants={fadeUp}
+        >
+          <div className="flex flex-col gap-6 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
+            <div>
+              <p className="text-lg font-semibold text-foreground">
+                Integrates with the tools you already use
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Compose reputation with your existing wallets, data pipelines,
+                and ops automation without breaking visual consistency.
+              </p>
+            </div>
+            <div className="flex flex-wrap justify-center gap-2 sm:max-w-md">
+              {integrations.map((integration) => (
+                <span
+                  key={integration}
+                  className="rounded-full border border-border/70 bg-muted/40 px-4 py-1.5 text-xs font-semibold text-muted-foreground"
                 >
                   {integration}
-                </div>
+                </span>
               ))}
             </div>
           </div>
-        </div>
+        </motion.div>
       </div>
     </section>
   );

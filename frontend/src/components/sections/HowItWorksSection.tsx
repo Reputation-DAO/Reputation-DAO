@@ -1,89 +1,236 @@
-import { Trophy, UserCheck, Unlock } from "lucide-react";
+import { motion } from "framer-motion";
+import { Trophy, UserCheck, Unlock, Gauge, Compass } from "lucide-react";
+import { Link } from "react-router-dom";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 28 },
+  show: (delay: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.55, delay, ease: [0.21, 0.82, 0.27, 1] },
+  }),
+};
+
+const steps = [
+  {
+    number: "01",
+    title: "Earn reputation",
+    description:
+      "Submit proposals, review code, lead initiatives, or host events. Every validated action mints a soulbound attestation.",
+    icon: Trophy,
+    details: [
+      "Use integrations for GitHub, governance, or custom attestations",
+      "Reviewers add contextual metadata so contributions stay meaningful",
+    ],
+  },
+  {
+    number: "02",
+    title: "Anchor identity",
+    description:
+      "Reputation is tied to your identity, not your wallet. Attestations travel with you across DAOs, protocols, and products.",
+    icon: UserCheck,
+    details: [
+      "Selective disclosure lets you prove what matters in each context",
+      "Zero-knowledge ready for privacy-preserving experiences",
+    ],
+  },
+  {
+    number: "03",
+    title: "Unlock opportunities",
+    description:
+      "Automate governance, incentives, and access using reputation-aware smart contracts or simple API calls.",
+    icon: Unlock,
+    details: [
+      "Gated communities with verifiable membership criteria",
+      "Dynamic rewards that respond to long-term participation",
+    ],
+  },
+];
+
+const stats = [
+  {
+    icon: Gauge,
+    title: "Under 60s",
+    description: "Average time to mint a new attestation on-chain.",
+  },
+  {
+    icon: Compass,
+    title: "Any stack",
+    description: "SDKs for ICP, EVM, browsers, and server-side workloads.",
+  },
+];
 
 const HowItWorksSection = () => {
-  const steps = [
-    {
-      number: "1",
-      title: "Earn Reputation",
-      description: "Contribute to communities and real-world projects. Every meaningful action — whether it's sharing knowledge, building tools, or helping others — is permanently and transparently recorded on-chain as proof of your contribution.",
-      icon: Trophy,
-      color: "from-primary to-primary-glow"
-    },
-    {
-      number: "2", 
-      title: "Soulbound Identity",
-      description: "Your reputation is soulbound — uniquely tied to your identity. It cannot be transferred, bought, or sold, ensuring it reflects only your verifiable efforts and interactions across trusted networks.",
-      icon: UserCheck,
-      color: "from-primary-glow to-primary"
-    },
-    {
-      number: "3",
-      title: "Unlock Opportunities", 
-      description: "Leverage your on-chain reputation to unlock high-trust environments: gain access to exclusive DAOs, governance roles, gated communities, and projects that require credible contributors.",
-      icon: Unlock,
-      color: "from-primary to-primary-glow"
-    }
-  ];
-
   return (
-    <section className="py-24 relative overflow-hidden">
-      {/* Background decoration */}
-      <div className="absolute inset-0 bg-gradient-to-br from-primary-light/20 to-transparent" />
-      
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl sm:text-5xl font-bold mb-4 bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent">
-            How It Works
+    <section className="py-24 md:py-28">
+      <div className="mx-auto flex max-w-6xl flex-col gap-14 rounded-[32px] border border-border/70 bg-background px-4 py-12 shadow-xl sm:px-8 lg:px-12">
+        <motion.div
+          className="mx-auto max-w-3xl text-center"
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, amount: 0.45 }}
+          custom={0}
+          variants={fadeUp}
+        >
+          <Badge variant="secondary" className="mb-4 px-4 py-2 uppercase tracking-wide">
+            Step-by-step
+          </Badge>
+          <h2 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
+            Three simple layers to build unstoppable reputation
           </h2>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            A simple three-step process to build your decentralized reputation
+          <p className="mt-4 text-lg leading-relaxed text-muted-foreground/90">
+            Bring contributors into the flow, anchor their work on-chain, and
+            automate access to the experiences they unlock.
           </p>
-        </div>
-        
-        <div className="grid md:grid-cols-3 gap-8 lg:gap-12">
-          {steps.map((step, index) => {
-            const IconComponent = step.icon;
-            return (
-              <div 
-                key={step.number} 
-                className="relative group"
-                style={{ animationDelay: `${index * 200}ms` }}
-              >
-                {/* Connection line */}
-                {index < steps.length - 1 && (
-                  <div className="hidden md:block absolute top-20 left-full w-full h-0.5 bg-gradient-to-r from-primary/30 to-transparent transform translate-x-6 z-0" />
-                )}
-                
-                <div className="glass-card p-8 text-center hover-lift relative z-10 h-full">
-                  {/* Step number */}
-                  <div className={`w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br ${step.color} flex items-center justify-center text-white text-2xl font-bold animate-pulse-glow`}>
-                    {step.number}
-                  </div>
-                  
-                  {/* Icon */}
-                  <div className="w-12 h-12 mx-auto mb-4 text-primary animate-float">
-                    <IconComponent className="w-full h-full" />
-                  </div>
-                  
-                  <h3 className="text-2xl font-bold mb-4 text-foreground">
-                    {step.title}
-                  </h3>
-                  
-                  <p className="text-muted-foreground leading-relaxed">
-                    {step.description}
+        </motion.div>
+
+        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-stretch">
+          <div className="flex flex-col gap-6">
+            {steps.map((step, index) => {
+              const Icon = step.icon;
+
+              return (
+                <motion.div
+                  key={step.number}
+                  initial="hidden"
+                  whileInView="show"
+                  viewport={{ once: true, amount: 0.45 }}
+                  custom={0.1 + index * 0.08}
+                  variants={fadeUp}
+                >
+                  <Card className="flex h-full flex-col overflow-hidden rounded-3xl border-2 border-border bg-background shadow-xl">
+                    <CardContent className="flex flex-1 flex-col gap-5 p-6 md:flex-row md:items-start md:gap-8">
+                      <div className="flex flex-col items-center gap-3 md:w-44">
+                        <div className="inline-flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                          <Icon className="h-6 w-6" />
+                        </div>
+                        <div className="text-center md:text-left">
+                          <Badge className="mb-1 bg-primary/90 text-primary-foreground">
+                            {step.number}
+                          </Badge>
+                          <p className="text-lg font-semibold text-foreground">
+                            {step.title}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex-1 space-y-4">
+                        <p className="text-base leading-relaxed text-muted-foreground/90">
+                          {step.description}
+                        </p>
+                        <ul className="space-y-3">
+                          {step.details.map((detail) => (
+                            <li
+                              key={detail}
+                              className="flex items-start gap-3 rounded-lg bg-muted/30 px-4 py-3 text-sm text-muted-foreground"
+                            >
+                              <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary" />
+                              <span>{detail}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              );
+            })}
+          </div>
+
+          <motion.div
+            className="flex flex-col gap-6 lg:h-full lg:justify-between"
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.4 }}
+            custom={0.2}
+            variants={fadeUp}
+          >
+            <Card className="flex flex-col overflow-hidden rounded-3xl border-2 border-border bg-background shadow-xl lg:flex-1">
+              <CardContent className="flex flex-1 flex-col space-y-5 p-6">
+                <Badge variant="secondary" className="px-3 py-1">
+                  Builder tools
+                </Badge>
+                <h3 className="text-2xl font-semibold text-foreground">
+                  Integrate reputation without rethinking your stack
+                </h3>
+                <p className="text-base leading-relaxed text-muted-foreground/90">
+                  Use our SDKs, REST API, or drop-in smart contracts to start
+                  consuming reputation instantly. Opt into advanced orchestration
+                  only when you need it.
+                </p>
+                <div className="rounded-xl border border-dashed border-primary/30 bg-muted/30 px-4 py-4 text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground">
+                    Popular automations
                   </p>
-                  
-                  {/* Hover effect decoration */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl" />
+                  <ul className="mt-3 space-y-2">
+                    <li className="flex items-start gap-2">
+                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
+                      <span>Merit-weighted voting and proposals</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
+                      <span>Token rewards tied to verified milestones</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
+                      <span>Invite flows gated by proven expertise</span>
+                    </li>
+                  </ul>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-        
-        {/* Call to action */}
-        <div className="text-center mt-16">
-          
+                <div className="flex flex-wrap gap-3">
+                  <Link to="/auth">
+                    <Button size="lg">Start building</Button>
+                  </Link>
+                  <a
+                    href="https://docs.google.com/document/d/1e03vreMKph3KPX-g8-jlbIAlD8D3PvA8VXPbZNIrT-0/edit?tab=t.0"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex"
+                  >
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      className="border-primary/40 text-primary hover:bg-primary/10"
+                    >
+                      Browse docs
+                    </Button>
+                  </a>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-3xl border-2 border-border bg-background shadow-xl">
+              <CardContent className="flex flex-col gap-4 p-6">
+                <p className="text-sm font-semibold uppercase tracking-wide text-primary">
+                  Built for production
+                </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {stats.map((stat) => {
+                    const Icon = stat.icon;
+                    return (
+                      <div
+                        key={stat.title}
+                        className="flex items-start gap-3 rounded-lg bg-muted/30 px-4 py-3 text-sm text-muted-foreground"
+                      >
+                        <span className="mt-1 inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                          <Icon className="h-4 w-4" />
+                        </span>
+                        <div>
+                          <p className="font-medium text-foreground">
+                            {stat.title}
+                          </p>
+                          <p className="leading-relaxed">{stat.description}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
         </div>
       </div>
     </section>

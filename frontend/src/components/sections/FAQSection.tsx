@@ -1,92 +1,171 @@
-import { useState } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
+import { HelpCircle, MessageCircle, Sparkles } from "lucide-react";
+import { Link as RouterLink } from "react-router-dom";
+
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 28 },
+  show: (delay: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.65,
+      delay,
+      ease: [0.21, 0.82, 0.27, 1],
+    },
+  }),
+};
+
+const faqs = [
+  {
+    question: "How is Reputation DAO different from typical reputation systems?",
+    answer:
+      "Reputation DAO is a decentralized, tamper-proof reputation layer built on ICP. Rather than trusting opaque, platform-owned scoring, every action is cryptographically verified, stored on-chain, and owned by the contributor who earned it.",
+  },
+  {
+    question: "Can my reputation be transferred or sold?",
+    answer:
+      "No. Reputation is soulbound to your identity. It cannot be traded, loaned, or abstracted away, which keeps ecosystems Sybil-resistant and ensures incentives stay aligned with authentic contribution.",
+  },
+  {
+    question: "What platforms can integrate Reputation DAO?",
+    answer:
+      "Any DAO, DeFi protocol, marketplace, or Web2 community can tap into our SDKs and APIs. Reputation signals travel with the user, letting you gate access, automate incentives, or weight governance in any environment.",
+  },
+  {
+    question: "Is Reputation DAO open-source?",
+    answer:
+      "Yes. The core contracts, scoring logic, and SDKs are open-source under a permissive license. Audit, extend, or fork the stack to fit the exact needs of your ecosystem.",
+  },
+  {
+    question: "How does Reputation DAO handle privacy?",
+    answer:
+      "Selective disclosure and zero-knowledge friendly architecture let users prove what matters without exposing their entire history. Sensitive data stays minimized while trust signals stay verifiable.",
+  },
+  {
+    question: "Can developers extend or build on top of Reputation DAO?",
+    answer:
+      "Absolutely. Compose new scoring modules, custom roles, and integrations. Reputation DAO is deliberately modular so teams can build bespoke trust layers without reinventing infrastructure.",
+  },
+];
 
 const FAQSection = () => {
-  const [openIndex, setOpenIndex] = useState<number | null>(0);
-
-  const faqs = [
-    {
-      question: "How is Reputation DAO different from typical reputation systems?",
-      answer: "Reputation DAO is a decentralized, tamper-proof reputation layer built on the Internet Computer (ICP). Unlike traditional systems owned and controlled by centralized platforms, Reputation DAO ensures full transparency, censorship resistance, and verifiability. Users have cryptographic ownership of their reputation, and data is stored on-chain, not in opaque silos. No entity can modify, delete, or fabricate your reputation—only actions tied to your identity can affect it."
-    },
-    {
-      question: "Can my reputation be transferred or sold?",
-      answer: "No. Reputation within the DAO is soulbound, meaning it is intrinsically linked to your identity and cannot be transferred, sold, or manipulated for profit. This design prevents reputation farming, identity leasing, or reputation marketplaces, ensuring the integrity and authenticity of each individual's social proof. It reinforces accountability and resists Sybil attacks."
-    },
-    {
-      question: "What platforms can integrate Reputation DAO?",
-      answer: "Reputation DAO is designed to be modular and interoperable. Any decentralized or centralized platform—whether it's a DAO, DeFi protocol, decentralized marketplace, NFT platform, or even a Web2 site—can integrate the Reputation DAO protocol. The system provides APIs and SDKs that make integration seamless, allowing platforms to query user reputation scores and tailor access, trust levels, or benefits accordingly."
-    },
-    {
-      question: "Is Reputation DAO open-source?",
-      answer: "Yes. Reputation DAO is fully open-source under a permissive license, ensuring anyone can audit, contribute, or fork the protocol. The smart contracts, governance logic, scoring algorithms, and SDKs are all publicly available. Transparency is foundational to the project—it allows developers, users, and the broader ecosystem to verify that the protocol behaves exactly as described."
-    },
-    {
-      question: "How does Reputation DAO handle privacy?",
-      answer: "Reputation DAO balances transparency with user privacy through cryptographic methods such as zero-knowledge proofs and selective disclosure. While the scoring logic is public, sensitive user data is minimized or anonymized. Users can prove certain aspects of their reputation without revealing their full history. Future versions may include more advanced privacy-preserving mechanisms like ZK-SNARKs."
-    },
-    {
-      question: "Can developers extend or build on top of Reputation DAO?",
-      answer: "Absolutely. Reputation DAO is designed with extensibility in mind. Developers can create modules that plug into the core protocol, define custom scoring rules, or build new interfaces using the open APIs. You can also fork the core logic to suit your ecosystem's unique needs. Whether you're building a gated community, a credit system, or a merit-based rewards platform, the primitives are composable and developer-friendly."
-    }
-  ];
-
-  const toggleFAQ = (index: number) => {
-    setOpenIndex(openIndex === index ? null : index);
-  };
-
   return (
-    <section className="py-24 bg-gradient-to-b from-secondary/20 to-background">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl sm:text-5xl font-bold mb-4 bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent">
-            Frequently Asked Questions
+    <section className="py-24 md:py-28">
+      <div className="mx-auto max-w-5xl rounded-[32px] border border-border/80 bg-card/70 px-4 py-12 shadow-md backdrop-blur-sm sm:px-8 lg:px-12">
+        <motion.div
+          className="mx-auto max-w-3xl text-center"
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, amount: 0.5 }}
+          custom={0}
+          variants={fadeUp}
+        >
+          <Badge variant="secondary" className="mb-5 px-4 py-2 uppercase tracking-wide">
+            <Sparkles className="mr-2 h-3.5 w-3.5" />
+            Frequently asked questions
+          </Badge>
+          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground">
+            Clarity around{" "}
+            <span className="bg-gradient-to-r from-primary via-primary-glow to-primary-foreground bg-clip-text text-transparent">
+              decentralized reputation
+            </span>
           </h2>
-          <p className="text-xl text-muted-foreground">
-            Everything you need to know about Reputation DAO
+          <p className="mt-5 text-lg leading-relaxed text-muted-foreground">
+            Everything you need to know before stitching Reputation DAO into
+            your governance, incentive, or community flows.
           </p>
-        </div>
-        
-        <div className="space-y-4">
-          {faqs.map((faq, index) => (
-            <div 
-              key={index} 
-              className="glass-card overflow-hidden hover:shadow-[var(--shadow-glow)] transition-all duration-300"
-              style={{ animationDelay: `${index * 100}ms` }}
-            >
-              <button
-                onClick={() => toggleFAQ(index)}
-                className="w-full p-6 text-left flex items-center justify-between hover:bg-primary/5 transition-colors duration-300"
+        </motion.div>
+
+        <motion.div
+          className="mt-16 space-y-4 rounded-2xl border-2 border-border bg-background/70 p-6 shadow-lg shadow-primary/5 sm:p-8"
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, amount: 0.45 }}
+          custom={0.15}
+          variants={fadeUp}
+        >
+          <Accordion type="single" collapsible defaultValue={faqs[0]?.question}>
+            {faqs.map((faq, index) => (
+              <AccordionItem
+                key={faq.question}
+                value={faq.question}
+                className="border-b border-primary/10 last:border-b-0"
               >
-                <h3 className="text-lg font-semibold text-foreground pr-4">
-                  {faq.question}
-                </h3>
-                <div className="flex-shrink-0">
-                  {openIndex === index ? (
-                    <ChevronUp className="w-5 h-5 text-primary" />
-                  ) : (
-                    <ChevronDown className="w-5 h-5 text-muted-foreground" />
-                  )}
-                </div>
-              </button>
-              
-              <div className={cn(
-                "overflow-hidden transition-all duration-300",
-                openIndex === index ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
-              )}>
-                <div className="p-6 pt-0 border-t border-border/50">
-                  <p className="text-muted-foreground leading-relaxed">
-                    {faq.answer}
+                <AccordionTrigger className="text-left text-lg font-semibold text-foreground transition hover:text-primary data-[state=open]:text-primary">
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <span>{faq.question}</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="text-base leading-relaxed text-muted-foreground">
+                  {faq.answer}
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </motion.div>
+
+        <motion.div
+          className="mt-12"
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, amount: 0.45 }}
+          custom={0.25}
+          variants={fadeUp}
+        >
+          <Card className="rounded-3xl border-2 border-border bg-background/70 shadow-lg shadow-primary/5">
+            <CardContent className="flex flex-col gap-6 p-8 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-4">
+                <span className="inline-flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+                  <HelpCircle className="h-6 w-6" />
+                </span>
+                <div>
+                  <h3 className="text-xl font-semibold text-foreground">
+                    Still have a question?
+                  </h3>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    Drop into the community or connect with the core contributors
+                    for architectural reviews, integration audits, or roadmap
+                    alignment.
                   </p>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-        
-        {/* Contact section */}
-        
+              <div className="flex w-full flex-wrap gap-3">
+                <Button
+                  size="lg"
+                  className="flex-1 min-w-[200px] shadow-[0_18px_45px_-35px_rgba(24,90,219,0.95)]"
+                  asChild
+                >
+                  <RouterLink to="/marketing/community">
+                    <MessageCircle className="mr-2 h-4 w-4" />
+                    Talk to us
+                  </RouterLink>
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="flex-1 min-w-[200px] border-primary/40 text-primary hover:bg-primary/10"
+                  asChild
+                >
+                  <a
+                    href="https://docs.google.com/document/d/1e03vreMKph3KPX-g8-jlbIAlD8D3PvA8VXPbZNIrT-0/edit?tab=t.0"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Browse resources
+                  </a>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
     </section>
   );

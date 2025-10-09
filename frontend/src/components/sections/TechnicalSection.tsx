@@ -1,147 +1,220 @@
-import { Server, Shield, Eye, Globe, Code } from "lucide-react";
+import { motion } from "framer-motion";
+import { Code, Database, Eye, Globe, Server, Shield } from "lucide-react";
+import { Link as RouterLink } from "react-router-dom";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 24 },
+  show: (delay: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.5, delay, ease: [0.21, 0.82, 0.27, 1] },
+  }),
+};
+
+const pillars = [
+  {
+    title: "Powered by ICP",
+    description:
+      "Canister smart contracts provide web-speed execution, predictable storage, and censorship resistance for reputation data.",
+    icon: Server,
+  },
+  {
+    title: "Soulbound identity",
+    description:
+      "Attestations are cryptographically tied to contributors. Reputation cannot be sold, lent, or inflated with bots.",
+    icon: Shield,
+  },
+  {
+    title: "Open & auditable",
+    description:
+      "Every write is transparent and verifiable. Observability hooks stream changes into analytics or governance dashboards.",
+    icon: Eye,
+  },
+  {
+    title: "Interoperable",
+    description:
+      "SDKs and APIs work across ICP, EVM, and Web2 stacks so you can surface reputation wherever it matters.",
+    icon: Globe,
+  },
+  {
+    title: "Programmable",
+    description:
+      "Compose governance, incentives, and access guardrails with reusable reputation modules or custom contracts.",
+    icon: Code,
+  },
+];
+
+const tooling = [
+  {
+    title: "CLI & templates",
+    description: "Spin up canisters, dashboards, and CI pipelines in minutes.",
+    icon: Code,
+  },
+  {
+    title: "Data APIs",
+    description: "Query attestations and trust graphs via REST or GraphQL.",
+    icon: Database,
+  },
+  {
+    title: "Reference contracts",
+    description: "Drop-in modules for governance, access control, and rewards.",
+    icon: Shield,
+  },
+];
 
 const TechnicalSection = () => {
-  const technicalPoints = [
-    {
-      number: "01",
-      title: "Powered by ICP",
-      description: "Harnessing the next-generation Internet Computer Protocol for limitless scalability, near-instant execution, and censorship resistance — built for the future of decentralized reputation. The protocol ensures data permanence, blazing-fast interactions, and eliminates the need for centralized cloud providers, making the infrastructure truly sovereign.",
-      icon: Server,
-      accent: "from-blue-500 to-blue-600"
-    },
-    {
-      number: "02", 
-      title: "Soulbound & Permanent",
-      description: "Your reputation is non-transferable, cryptographically bound to your identity. Immutable, fraud-proof, and forever tied to your contributions — not your wallet. This ensures that reputation remains a true reflection of behavior over time, immune to gaming, trading, or artificial inflation.",
-      icon: Shield,
-      accent: "from-emerald-500 to-emerald-600"
-    },
-    {
-      number: "03",
-      title: "Fully Open. Verifiable. On-Chain.",
-      description: "Every action is transparently stored on-chain. Auditable by anyone, trustless by design. No hidden algorithms, no opaque scores — just pure, provable data. The system enables public access to reputation logs, creating a transparent meritocracy across decentralized communities and platforms.",
-      icon: Eye,
-      accent: "from-purple-500 to-purple-600"
-    },
-    {
-      number: "04",
-      title: "Interoperable by Default",
-      description: "Designed to integrate seamlessly across protocols, platforms, and ecosystems — enabling your reputation to travel with you anywhere on the decentralized web. From DAOs to marketplaces, your identity becomes a trusted passport, streamlining access and building bridges between siloed systems.",
-      icon: Globe,
-      accent: "from-orange-500 to-orange-600"
-    },
-    {
-      number: "05",
-      title: "Programmable Reputation Logic",
-      description: "Reputation becomes a building block for automation. Smart contracts can read, verify, and act on trust signals without relying on third-party intermediaries. This paves the way for fully autonomous governance, access control, and rewards systems that adapt in real time to provable trust data.",
-      icon: Code,
-      accent: "from-primary to-primary-glow"
-    }
-  ];
-
   return (
-    <section className="py-24 bg-gradient-to-b from-background to-secondary/20">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl sm:text-5xl font-bold mb-4 bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent">
-            Technical Overview
+    <section className="py-24 md:py-28">
+      <div className="mx-auto flex max-w-6xl flex-col gap-14 rounded-[32px] border border-border/80 bg-card/70 px-4 py-12 shadow-md backdrop-blur-sm sm:px-8 lg:px-12">
+        <motion.div
+          className="mx-auto max-w-3xl text-center"
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, amount: 0.45 }}
+          custom={0}
+          variants={fadeUp}
+        >
+          <Badge variant="secondary" className="mb-4 px-4 py-2 uppercase tracking-wide">
+            Architecture
+          </Badge>
+          <h2 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
+            Built to stay resilient in any environment
           </h2>
-          <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-            Built on cutting-edge blockchain technology for the future of trust
+          <p className="mt-4 text-base leading-relaxed text-muted-foreground sm:text-lg">
+            Reputation DAO keeps the visuals light and adaptable, while the
+            infrastructure underneath stays unstoppable.
           </p>
-        </div>
-        
-        <div className="space-y-12">
-          {technicalPoints.map((point, index) => {
-            const IconComponent = point.icon;
-            const isEven = index % 2 === 0;
-            
-            return (
-              <div 
-                key={point.number}
-                className={`flex flex-col lg:flex-row gap-8 lg:gap-12 items-center ${isEven ? '' : 'lg:flex-row-reverse'}`}
-                style={{ animationDelay: `${index * 200}ms` }}
-              >
-                {/* Content */}
-                <div className="flex-1 space-y-6">
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${point.accent} flex items-center justify-center`}>
-                      <span className="text-white font-bold text-lg">{point.number}</span>
-                    </div>
-                    <div className="w-px h-8 bg-gradient-to-b from-primary/30 to-transparent" />
-                    <h3 className="text-2xl lg:text-3xl font-bold text-foreground">
-                      {point.title}
-                    </h3>
-                  </div>
-                  
-                  <p className="text-lg text-muted-foreground leading-relaxed">
-                    {point.description}
+        </motion.div>
+
+        <div className="grid gap-8 lg:grid-cols-[1fr_1fr]">
+          <motion.div
+            className="space-y-6"
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.45 }}
+            custom={0.1}
+            variants={fadeUp}
+          >
+            <Card className="flex flex-col overflow-hidden rounded-3xl border-2 border-border bg-background/70 shadow-lg shadow-primary/5">
+              <CardContent className="flex flex-1 flex-col space-y-5 p-6 sm:p-8">
+                <Badge className="bg-primary/90 text-primary-foreground">
+                  Trust by design
+                </Badge>
+                <h3 className="text-2xl font-semibold text-foreground sm:text-3xl">
+                  Secure primitives, flexible surface area
+                </h3>
+                <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">
+                  Critical logic stays on-chain, while SDKs and API layers keep
+                  integration lightweight. Light or dark theme, the components
+                  remain neutral and accessible.
+                </p>
+                <div className="rounded-xl border border-dashed border-primary/25 bg-muted/40 px-4 py-4 text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground">
+                    Ready for production
                   </p>
+                  <ul className="mt-3 space-y-2">
+                    <li className="flex items-start gap-2">
+                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
+                      <span>Deterministic upgrades with verified build artifacts</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
+                      <span>Shardable storage to meet long-term growth</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
+                      <span>ZK-friendly architecture for privacy-preserving proofs</span>
+                    </li>
+                  </ul>
                 </div>
-                
-                {/* Visual */}
-                <div className="flex-1 max-w-md">
-                  <div className="glass-card p-12 text-center hover-lift group">
-                    <div className={`w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br ${point.accent} flex items-center justify-center group-hover:animate-pulse-glow`}>
-                      <IconComponent className="w-12 h-12 text-white" />
-                    </div>
-                    
-                    <div className="space-y-3">
-                      <div className="h-2 bg-primary/20 rounded-full">
-                        <div 
-                          className="h-2 bg-gradient-to-r from-primary to-primary-glow rounded-full transition-all duration-1000"
-                          style={{ width: `${90 - index * 10}%` }}
-                        />
+                <div className="flex flex-wrap gap-3">
+                  <Button asChild size="lg">
+                    <RouterLink to="/auth">Provision a canister</RouterLink>
+                  </Button>
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="lg"
+                    className="border-primary/40 text-primary hover:bg-primary/10"
+                  >
+                    <a
+                      href="https://docs.google.com/document/d/1e03vreMKph3KPX-g8-jlbIAlD8D3PvA8VXPbZNIrT-0/edit?tab=t.0"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Read the spec
+                    </a>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="flex flex-col overflow-hidden rounded-3xl border-2 border-border bg-background/70 shadow-lg shadow-primary/5">
+              <CardContent className="flex flex-1 flex-col space-y-5 p-6 sm:p-8">
+                <p className="text-sm font-semibold uppercase tracking-wide text-primary">
+                  Tooling
+                </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {tooling.map((tool) => {
+                    const Icon = tool.icon;
+                    return (
+                      <div
+                        key={tool.title}
+                        className="flex items-start gap-3 rounded-lg bg-muted/40 px-4 py-3 text-sm text-muted-foreground"
+                      >
+                        <span className="mt-1 inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                          <Icon className="h-4 w-4" />
+                        </span>
+                        <div>
+                          <p className="font-medium text-foreground">
+                            {tool.title}
+                          </p>
+                          <p className="mt-1 leading-relaxed">
+                            {tool.description}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>Security</span>
-                        <span>{90 - index * 10}%</span>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <div className="space-y-6">
+            {pillars.map((pillar, index) => {
+              const Icon = pillar.icon;
+              return (
+                <motion.div
+                  key={pillar.title}
+                  initial="hidden"
+                  whileInView="show"
+                  viewport={{ once: true, amount: 0.45 }}
+                  custom={0.15 + index * 0.05}
+                  variants={fadeUp}
+                >
+                  <Card className="flex flex-col overflow-hidden rounded-3xl border-2 border-border bg-background/70 shadow-lg shadow-primary/5">
+                    <CardContent className="flex flex-col gap-4 p-6 sm:flex-row sm:items-start sm:gap-6">
+                      <span className="inline-flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                        <Icon className="h-6 w-6" />
+                      </span>
+                      <div className="space-y-2">
+                        <h3 className="text-xl font-semibold text-foreground">
+                          {pillar.title}
+                        </h3>
+                        <p className="text-sm leading-relaxed text-muted-foreground">
+                          {pillar.description}
+                        </p>
                       </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        
-        {/* Bottom showcase */}
-        <div className="mt-20">
-          <div className="glass-card p-10 border border-primary/20">
-            <div className="text-center mb-8">
-              <h3 className="text-3xl font-bold mb-4 text-foreground">
-                Developer Ready
-              </h3>
-              <p className="text-lg text-muted-foreground">
-                Comprehensive tools and documentation to integrate Reputation DAO into your project
-              </p>
-            </div>
-            
-            <div className="grid md:grid-cols-3 gap-6">
-              <div className="text-center">
-                <div className="w-16 h-16 mx-auto mb-4 bg-primary/10 rounded-2xl flex items-center justify-center">
-                  <Code className="w-8 h-8 text-primary" />
-                </div>
-                <h4 className="font-semibold mb-2">APIs & SDKs</h4>
-                <p className="text-sm text-muted-foreground">Easy integration with comprehensive documentation</p>
-              </div>
-              
-              <div className="text-center">
-                <div className="w-16 h-16 mx-auto mb-4 bg-primary/10 rounded-2xl flex items-center justify-center">
-                  <Globe className="w-8 h-8 text-primary" />
-                </div>
-                <h4 className="font-semibold mb-2">Cross-Platform</h4>
-                <p className="text-sm text-muted-foreground">Works across all major blockchain platforms</p>
-              </div>
-              
-              <div className="text-center">
-                <div className="w-16 h-16 mx-auto mb-4 bg-primary/10 rounded-2xl flex items-center justify-center">
-                  <Shield className="w-8 h-8 text-primary" />
-                </div>
-                <h4 className="font-semibold mb-2">Enterprise Grade</h4>
-                <p className="text-sm text-muted-foreground">Battle-tested security and reliability</p>
-              </div>
-            </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              );
+            })}
           </div>
         </div>
       </div>
