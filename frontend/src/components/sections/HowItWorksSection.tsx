@@ -66,8 +66,8 @@ const stats = [
 
 const HowItWorksSection = () => {
   return (
-    <section className="py-24 md:py-28">
-      <div className="mx-auto flex max-w-6xl flex-col gap-14 rounded-[32px] border border-border/70 bg-background px-4 py-12 shadow-xl sm:px-8 lg:px-12">
+    <section className="relative z-10 py-24 md:py-28">
+      <div className="mx-auto flex max-w-6xl flex-col gap-14 rounded-[32px] border border-border/70 bg-card/70 px-4 py-12 shadow-xl backdrop-blur-sm sm:px-8 lg:px-12">
         <motion.div
           className="mx-auto max-w-3xl text-center"
           initial="hidden"
@@ -102,7 +102,7 @@ const HowItWorksSection = () => {
                   custom={0.1 + index * 0.08}
                   variants={fadeUp}
                 >
-                  <Card className="flex h-full flex-col overflow-hidden rounded-3xl border-2 border-border bg-background shadow-xl">
+                  <Card className="flex h-full flex-col overflow-hidden rounded-3xl border-2 border-border bg-background/70 shadow-xl">
                     <CardContent className="flex flex-1 flex-col gap-5 p-6 md:flex-row md:items-start md:gap-8">
                       <div className="flex flex-col items-center gap-3 md:w-44">
                         <div className="inline-flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -148,7 +148,7 @@ const HowItWorksSection = () => {
             custom={0.2}
             variants={fadeUp}
           >
-            <Card className="flex flex-col overflow-hidden rounded-3xl border-2 border-border bg-background shadow-xl lg:flex-1">
+            <Card className="flex flex-col overflow-hidden rounded-3xl border-2 border-border bg-background/70 shadow-xl lg:flex-1">
               <CardContent className="flex flex-1 flex-col space-y-5 p-6">
                 <Badge variant="secondary" className="px-3 py-1">
                   Builder tools
@@ -202,7 +202,7 @@ const HowItWorksSection = () => {
               </CardContent>
             </Card>
 
-            <Card className="rounded-3xl border-2 border-border bg-background shadow-xl">
+            <Card className="rounded-3xl border-2 border-border bg-background/70 shadow-xl">
               <CardContent className="flex flex-col gap-4 p-6">
                 <p className="text-sm font-semibold uppercase tracking-wide text-primary">
                   Built for production

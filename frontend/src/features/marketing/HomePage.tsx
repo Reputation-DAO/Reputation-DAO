@@ -11,9 +11,11 @@ import FAQSection from "@/components/sections/FAQSection";
 
 const HomePage = () => {
   return (
-    <div className="min-h-screen bg-background">
-      <Navigation />
-      <main>
+    <div className="relative min-h-screen">
+      <div className="relative z-20">
+        <Navigation />
+      </div>
+      <main className="relative z-10">
         <HeroSection />
         <ProblemSolutionSection />
         <HowItWorksSection />
@@ -23,7 +25,9 @@ const HomePage = () => {
         <ResourcesSection />
         <FAQSection />
       </main>
-      <Footer />
+      <div className="relative z-10">
+        <Footer />
+      </div>
     </div>
   );
 };

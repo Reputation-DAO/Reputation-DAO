@@ -75,7 +75,7 @@ const integrations = [
 
 const UseCasesSection = () => {
   return (
-    <section className="py-24 md:py-28">
+    <section className="relative z-10 py-24 md:py-28">
       <div className="mx-auto flex max-w-6xl flex-col gap-14 rounded-[32px] border border-border/80 bg-card/70 px-4 py-12 shadow-md backdrop-blur-sm sm:px-8 lg:px-12">
         <motion.div
           className="mx-auto max-w-3xl text-center"

@@ -50,8 +50,8 @@ const proofPoints = [
 
 const ProblemSolutionSection = () => {
   return (
-    <section className="py-24 md:py-28">
-      <div className="mx-auto flex max-w-6xl flex-col gap-14 rounded-[32px] border border-border/70 bg-background px-4 py-12 shadow-xl sm:px-8 lg:px-12">
+    <section className="relative z-10 py-24 md:py-28">
+      <div className="mx-auto flex max-w-6xl flex-col gap-14 rounded-[32px] border border-border/70 bg-card/70 px-4 py-12 shadow-xl backdrop-blur-sm sm:px-8 lg:px-12">
         <motion.div
           className="mx-auto max-w-3xl text-center"
           initial="hidden"
@@ -83,7 +83,7 @@ const ProblemSolutionSection = () => {
             custom={0.1}
             variants={fadeUp}
           >
-            <Card className="flex h-full flex-1 flex-col overflow-hidden rounded-3xl border-2 border-border bg-background shadow-xl">
+            <Card className="flex h-full flex-1 flex-col overflow-hidden rounded-3xl border-2 border-border bg-background/70 shadow-xl">
               <CardHeader className="flex flex-col gap-3 pb-0">
                 <Badge variant="destructive" className="w-fit">
                   Status quo
@@ -128,7 +128,7 @@ const ProblemSolutionSection = () => {
             custom={0.2}
             variants={fadeUp}
           >
-            <Card className="flex h-full flex-1 flex-col overflow-hidden rounded-3xl border-2 border-primary/60 bg-background shadow-xl">
+            <Card className="flex h-full flex-1 flex-col overflow-hidden rounded-3xl border-2 border-primary/60 bg-background/70 shadow-xl">
               <CardHeader className="flex flex-col gap-3 pb-0">
                 <Badge className="w-fit bg-primary/90 text-primary-foreground">Reputation DAO</Badge>
                 <CardTitle className="flex items-center gap-3 text-2xl font-semibold text-foreground">
@@ -165,7 +165,7 @@ const ProblemSolutionSection = () => {
 
         {/* Proof points */}
         <motion.div
-          className="grid gap-4 rounded-2xl border-2 border-border bg-background px-6 py-6 shadow-lg sm:grid-cols-3"
+          className="grid gap-4 rounded-2xl border-2 border-border bg-background/70 px-6 py-6 shadow-lg sm:grid-cols-3"
           initial="hidden"
           whileInView="show"
           viewport={{ once: true, amount: 0.45 }}

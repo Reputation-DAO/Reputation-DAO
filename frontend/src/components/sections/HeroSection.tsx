@@ -7,7 +7,7 @@ const HeroSection = () => {
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
       {/* Liquid Ether Background */}
-      <div className="absolute inset-0 z-0">
+      <div className="fixed inset-0 z-0">
         <LiquidEther
           colors={['#3b82f6', '#60a5fa', '#93c5fd', '#dbeafe']}
           mouseForce={20}
@@ -27,7 +27,7 @@ const HeroSection = () => {
           autoResumeDelay={1000}
           autoRampDuration={0.3}
         />
-        <div className="absolute inset-0 bg-background/40" />
+        <div className="absolute inset-0 bg-background/50" />
       </div>
 
       {/* Main Content */}
