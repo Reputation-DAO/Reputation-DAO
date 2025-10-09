@@ -4,7 +4,10 @@ import { Link as RouterLink } from "react-router-dom";
 
 import governanceIcon from "@/assets/governance.png";
 import defiIcon from "@/assets/defi.png";
-import identityIcon from "@/assets/defi.png";
+// using defiIcon temporarily to avoid import errors
+
+import identityIcon from "@/assets/identity1.png";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -97,19 +100,43 @@ const UseCasesSection = () => {
 
         <Tabs defaultValue="governance" className="space-y-10">
           <motion.div
-            className="flex flex-wrap justify-center gap-3"
+            className="flex justify-center"
             initial="hidden"
             whileInView="show"
             viewport={{ once: true, amount: 0.4 }}
             custom={0.1}
             variants={fadeUp}
           >
-            <TabsList className="flex w-full max-w-3xl flex-wrap justify-center gap-2 rounded-full border-2 border-border bg-background/70 p-2 shadow-lg shadow-primary/5">
+            {/* THICKER NAV - no scroll, wraps cleanly */}
+            <TabsList
+              className="
+                w-full max-w-4xl
+                rounded-full border-2 border-border bg-background/70
+                p-2 sm:p-2
+                shadow-lg shadow-primary/5
+                flex flex-wrap justify-center gap-3 sm:gap-4
+                min-h-[80px] sm:min-h-[80px]
+              "
+            >
               {useCases.map((useCase) => (
                 <TabsTrigger
                   key={useCase.id}
                   value={useCase.id}
-                  className="flex-1 rounded-full border border-transparent px-4 py-2 text-sm font-semibold transition data-[state=active]:border-primary/60 data-[state=active]:bg-primary/10 data-[state=active]:text-primary sm:flex-none"
+                  className="
+                    rounded-full
+                    px-7 sm:px-8
+                    py-1
+                    text-base sm:text-lg
+                    font-semibold
+                    leading-none
+                    border border-transparent
+                    transition
+                    data-[state=active]:bg-primary
+                    data-[state=active]:text-primary-foreground
+                    data-[state=active]:shadow-md
+                    hover:border-border
+                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+                  "
                 >
                   {useCase.title}
                 </TabsTrigger>
@@ -130,7 +157,7 @@ const UseCasesSection = () => {
                 <Card className="flex h-full flex-col overflow-hidden rounded-3xl border-2 border-border bg-background/70 shadow-lg shadow-primary/5">
                   <CardContent className="flex h-full flex-col space-y-6 p-6 sm:p-8">
                     <div className="space-y-3">
-                      <Badge className="w-fit bg-primary/90 text-primary-foreground">
+                      <Badge className="w-fit bg-primary text-primary-foreground">
                         {useCase.title}
                       </Badge>
                       <h3 className="text-2xl font-semibold text-foreground sm:text-3xl">

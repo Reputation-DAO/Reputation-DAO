@@ -13,11 +13,15 @@ const fadeUp = {
   }),
 };
 
+// +3 new statements; total = 7
 const problemSignals = [
   "Opaque algorithms with no audit trail",
   "Governance capture by token whales",
   "Data loss or censorship from platform owners",
   "Reputation marketplaces and bot farming",
+  "Reputation laundering via rented accounts",
+  "Pay-to-play verification schemes",
+  "Short-term farming incentives over real merit",
 ];
 
 const solutionHighlights = [
@@ -64,12 +68,13 @@ const ProblemSolutionSection = () => {
             Centralized reputation breaks trust. Reputation DAO rebuilds it.
           </h2>
           <p className="mt-4 text-lg leading-relaxed text-muted-foreground/90">
-            Most reputation rails are black boxes. We replace them with an open,
-            verifiable fabric that communities govern together.
+            Most reputation rails are black boxes. We replace them with an open, verifiable fabric
+            that communities govern together.
           </p>
         </motion.div>
 
         <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
+          {/* PROBLEM */}
           <motion.div
             className="flex h-full"
             initial="hidden"
@@ -78,7 +83,7 @@ const ProblemSolutionSection = () => {
             custom={0.1}
             variants={fadeUp}
           >
-            <Card className="flex h-full flex-col overflow-hidden rounded-3xl border-2 border-border bg-background shadow-xl">
+            <Card className="flex h-full flex-1 flex-col overflow-hidden rounded-3xl border-2 border-border bg-background shadow-xl">
               <CardHeader className="flex flex-col gap-3 pb-0">
                 <Badge variant="destructive" className="w-fit">
                   Status quo
@@ -90,19 +95,23 @@ const ProblemSolutionSection = () => {
                   Centralized reputation
                 </CardTitle>
               </CardHeader>
-              <CardContent className="flex flex-1 flex-col space-y-6 pt-6">
+
+              {/* Tightened spacing so 7 bullets fit without scroll */}
+              <CardContent className="flex flex-1 flex-col gap-5 pt-6 sm:gap-6">
                 <p className="text-base leading-relaxed text-muted-foreground/90">
-                  Closed algorithms, mutable scores, and third-party gatekeepers
-                  erode user trust and expose communities to manipulation.
+                  Closed algorithms, mutable scores, and third-party gatekeepers erode user trust and
+                  expose communities to manipulation.
                 </p>
-                <div className="flex flex-1 flex-col justify-between space-y-3">
+
+                {/* Fixed 7-row grid ensures equal visual height */}
+                <div className="grid flex-1 grid-rows-7 gap-2.5">
                   {problemSignals.map((signal) => (
                     <div
                       key={signal}
-                      className="flex items-start gap-3 rounded-xl bg-muted/30 px-4 py-3 text-sm text-muted-foreground"
+                      className="flex items-start gap-3 rounded-lg bg-muted/30 px-3.5 py-2.5 text-sm text-muted-foreground"
                     >
                       <span className="mt-0.5 text-destructive">•</span>
-                      <span>{signal}</span>
+                      <span className="leading-snug">{signal}</span>
                     </div>
                   ))}
                 </div>
@@ -110,6 +119,7 @@ const ProblemSolutionSection = () => {
             </Card>
           </motion.div>
 
+          {/* SOLUTION */}
           <motion.div
             className="flex h-full"
             initial="hidden"
@@ -118,11 +128,9 @@ const ProblemSolutionSection = () => {
             custom={0.2}
             variants={fadeUp}
           >
-            <Card className="flex h-full flex-col overflow-hidden rounded-3xl border-2 border-primary/60 bg-background shadow-xl">
+            <Card className="flex h-full flex-1 flex-col overflow-hidden rounded-3xl border-2 border-primary/60 bg-background shadow-xl">
               <CardHeader className="flex flex-col gap-3 pb-0">
-                <Badge className="w-fit bg-primary/90 text-primary-foreground">
-                  Reputation DAO
-                </Badge>
+                <Badge className="w-fit bg-primary/90 text-primary-foreground">Reputation DAO</Badge>
                 <CardTitle className="flex items-center gap-3 text-2xl font-semibold text-foreground">
                   <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-primary/15 text-primary">
                     <ShieldCheck className="h-5 w-5" />
@@ -130,22 +138,21 @@ const ProblemSolutionSection = () => {
                   A verifiable trust fabric
                 </CardTitle>
               </CardHeader>
-              <CardContent className="flex flex-1 flex-col space-y-6 pt-6">
+
+              <CardContent className="flex flex-1 flex-col gap-5 pt-6 sm:gap-6">
                 <p className="text-base leading-relaxed text-muted-foreground/90">
-                  Reputation is earned, soulbound, and programmable. Users can
-                  audit the entire lifecycle, and builders can automate trust
-                  without re-platforming.
+                  Reputation is earned, soulbound, and programmable. Users can audit the entire lifecycle,
+                  and builders can automate trust without re-platforming.
                 </p>
-                <div className="flex flex-1 flex-col justify-between space-y-4">
+
+                <div className="grid flex-1 grid-rows-3 gap-3.5 sm:gap-4">
                   {solutionHighlights.map((highlight) => (
                     <div
                       key={highlight.title}
-                      className="space-y-2 rounded-xl border border-primary/40 bg-primary/5 px-4 py-4"
+                      className="rounded-xl border border-primary/40 bg-primary/5 px-4 py-3.5 sm:py-4"
                     >
-                      <h3 className="text-base font-semibold text-foreground">
-                        {highlight.title}
-                      </h3>
-                      <p className="text-sm leading-relaxed text-muted-foreground/90">
+                      <h3 className="text-base font-semibold text-foreground">{highlight.title}</h3>
+                      <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground/90">
                         {highlight.description}
                       </p>
                     </div>
@@ -156,6 +163,7 @@ const ProblemSolutionSection = () => {
           </motion.div>
         </div>
 
+        {/* Proof points */}
         <motion.div
           className="grid gap-4 rounded-2xl border-2 border-border bg-background px-6 py-6 shadow-lg sm:grid-cols-3"
           initial="hidden"
@@ -165,7 +173,10 @@ const ProblemSolutionSection = () => {
           variants={fadeUp}
         >
           {proofPoints.map((point) => (
-            <div key={point} className="flex items-start gap-3 text-sm leading-relaxed text-muted-foreground">
+            <div
+              key={point}
+              className="flex items-start gap-3 text-sm leading-relaxed text-muted-foreground"
+            >
               <span className="mt-0.5 inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
                 <CheckCircle className="h-3.5 w-3.5" />
               </span>
