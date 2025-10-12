@@ -55,7 +55,7 @@ const faqs = [
 
 const FAQSection = () => {
   return (
-    <section className="relative z-10 py-6 md:py-7">
+    <section id="faq" className="relative z-10 py-6 md:py-7">
       <div className="mx-auto max-w-6xl rounded-[16px] border border-border/80 bg-card/70 px-4 py-12 shadow-md backdrop-blur-sm sm:px-8 lg:px-12">
         <motion.div
           className="mx-auto max-w-3xl text-center"
