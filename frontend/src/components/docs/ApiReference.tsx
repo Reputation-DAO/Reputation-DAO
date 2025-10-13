@@ -109,7 +109,7 @@ demo().catch(console.error);`}
   Health,
 } from 'repdao';
 
-const opts: ClientOptions = { network: 'custom', host: 'https://icp0.io', identity };
+const opts: ClientOptions = { network: 'custom', host: 'https://icp-api.io', identity };
 
 await awardRep(childId, userPrincipal, 50n, 'docs sprint', opts);
 await configureDecay(childId, 500, 2_592_000, 10, 2_592_000, true, opts);

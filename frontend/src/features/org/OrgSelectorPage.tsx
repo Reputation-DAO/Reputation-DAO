@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { usePlugConnection } from "@/hooks/usePlugConnection";
+import { useAuth } from "@/contexts/AuthContext";
 import { Principal } from "@dfinity/principal";
 import { toast } from "sonner";
 
@@ -71,12 +71,12 @@ import {
   ShieldAlert,
 } from "lucide-react";
 
-// Factory actor helpers (Plug-first)
-import { makeFactoriaWithPlug, getFactoriaCanisterId } from "@/lib/canisters";
+// Factory actor helpers (Internet Identity)
+import { makeFactoriaActor, getFactoriaCanisterId } from "@/lib/canisters";
 import type {
   Child as FactoryChild,
   _SERVICE as FactoriaActor,
-} from "@/declarations/factoria/factoria.did";
+} from "../../../../src/declarations/factoria/factoria.did";
 
 // ---------------- Types ----------------
 type Plan = "Free" | "Basic" | "Pro";
@@ -232,10 +232,10 @@ const getAccentTheme = (seed: string) => {
 
 // ---------------- Wallet Badge ----------------
 const WalletDisplay = () => {
-  const { isConnected, principal } = usePlugConnection({ autoCheck: true });
-  if (!isConnected || !principal) return null;
+  const { isAuthenticated, principal } = useAuth();
+  if (!isAuthenticated || !principal) return null;
 
-  const principalStr = principal;
+  const principalStr = principal.toString();
   const shortPrincipal = `${principalStr.slice(0, 8)}...${principalStr.slice(-8)}`;
 
   return (
@@ -1250,7 +1250,7 @@ const TopUpDialog = ({
 // ---------------- Main ----------------
 const OrgSelectorPage: React.FC = () => {
   const navigate = useNavigate();
-  const { isConnected, principal } = usePlugConnection({ autoCheck: true });
+  const { isAuthenticated, principal } = useAuth();
 
   // actor + wallet
   const [factoria, setFactoria] = useState<FactoriaActor | null>(null);
@@ -1286,7 +1286,7 @@ const OrgSelectorPage: React.FC = () => {
     const connect = async () => {
       setConnecting(true);
 
-      if (!isConnected || !principal) {
+      if (!isAuthenticated || !principal) {
         if (!cancelled) {
           setFactoria(null);
           setPrincipalText(null);
@@ -1296,17 +1296,17 @@ const OrgSelectorPage: React.FC = () => {
       }
 
       try {
-        const actor = await makeFactoriaWithPlug({
+        const actor = await makeFactoriaActor({
           canisterId: getFactoriaCanisterId(),
         });
 
         if (!cancelled) {
           setFactoria(actor);
-          setPrincipalText(principal);
+          setPrincipalText(principal.toString());
         }
       } catch (error) {
         if (!cancelled) {
-          const message = error instanceof Error ? error.message : "Failed to connect Plug / Factoria.";
+          const message = error instanceof Error ? error.message : "Failed to connect Internet Identity / Factoria.";
           toast.error(message);
           setFactoria(null);
         }
@@ -1322,7 +1322,7 @@ const OrgSelectorPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [isConnected, principal]);
+  }, [isAuthenticated, principal]);
 
   const fetchOwned = async () => {
   if (!factoria || !principalText) return;
@@ -1333,7 +1333,7 @@ const OrgSelectorPage: React.FC = () => {
 
     // 1) getChild for all IDs concurrently
     const childRecords = await Promise.all(
-      childIds.map(async (pid) => {
+      childIds.map(async (pid: Principal) => {
         const recOpt = await factoria.getChild(pid);
         return recOpt.length ? { pid, rec: recOpt[0] } : null;
       })
@@ -1341,7 +1341,7 @@ const OrgSelectorPage: React.FC = () => {
 
     // 2) health only for Active children (concurrent)
     const healthResults = await Promise.all(
-      childRecords.map(async (entry) => {
+      childRecords.map(async (entry: { pid: Principal; rec: FactoryChild } | null) => {
         if (!entry) return null;
         const { pid, rec } = entry;
         const status = toStatus(rec.status);
@@ -1357,15 +1357,15 @@ const OrgSelectorPage: React.FC = () => {
       })
     );
 
-    const healthMap = new Map(healthResults.filter(Boolean).map(h => [h!.id, h!]));
+    const healthMap = new Map(healthResults.filter(Boolean).map((h: any) => [h!.id, h!]));
 
     const rows: OrgRecord[] = childRecords
       .filter((e): e is { pid: Principal; rec: FactoryChild } => !!e)
-      .map(({ pid, rec }) => {
+      .map(({ pid, rec }: { pid: Principal; rec: FactoryChild }) => {
         const id = pid.toText();
         const status = toStatus(rec.status);
 
-        const hv = healthMap.get(id);
+        const hv = healthMap.get(id) as any;
         const users  = hv?.health ? hv.health.users.toString()  : undefined;
         const cycles = hv?.health ? hv.health.cycles.toString() : undefined;
         const tx     = hv?.health ? hv.health.txCount.toString(): undefined;
@@ -1404,7 +1404,7 @@ const fetchPublic = async () => {
     const mine = new Set(owned.map((o) => o.id));
 
     const rows: OrgRecord[] = allChildren
-      .map((child): OrgRecord | null => {
+      .map((child: FactoryChild): OrgRecord | null => {
         const idText = child.id.toText();
         const status = toStatus(child.status);
         const isPublic = "Public" in child.visibility;
@@ -1630,10 +1630,11 @@ const fetchPublic = async () => {
     [owned]
   );
 
-  const totalTransactions = useMemo(
-    () => owned.reduce((acc, org) => acc + Number(org.txCount ?? "0"), 0),
-    [owned]
-  );
+  // TODO: Display transaction metrics in UI if needed
+  // const totalTransactions = useMemo(
+  //   () => owned.reduce((acc, org) => acc + Number(org.txCount ?? "0"), 0),
+  //   [owned]
+  // );
 
   const lowReserveOrgs = useMemo(
     () =>
@@ -1782,7 +1783,7 @@ const fetchPublic = async () => {
           <div className="text-center">
             <h2 className="text-lg font-semibold text-foreground">Connecting wallet</h2>
             <p className="mt-2 text-sm text-muted-foreground/80">
-              Waiting for Plug to confirm your session...
+              Waiting for Internet Identity to confirm your session...
             </p>
           </div>
         </div>
@@ -1799,19 +1800,19 @@ const fetchPublic = async () => {
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-border bg-muted text-muted-foreground">
               <Power className="h-7 w-7" />
             </div>
-            <h2 className="mt-6 text-2xl font-semibold text-foreground">Connect your Plug wallet</h2>
+            <h2 className="mt-6 text-2xl font-semibold text-foreground">Connect with Internet Identity</h2>
             <p className="mt-3 text-sm text-muted-foreground/80">
-              Authenticate with Plug to view and manage your Reputation DAO organizations.
+              Authenticate with Internet Identity to view and manage your Reputation DAO organizations.
             </p>
             <div className="mt-6 flex flex-col gap-3">
               <Button
                 className="h-11 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90"
-                onClick={() => window.open("https://plugwallet.ooo/", "_blank")}
+                onClick={() => navigate("/auth")}
               >
-                Install Plug
+                Connect Internet Identity
               </Button>
               <p className="text-[11px] text-muted-foreground/70">
-                Once installed, return to this page and connect from the browser extension.
+                You'll be redirected to the Internet Identity service for secure authentication.
               </p>
             </div>
           </Card>

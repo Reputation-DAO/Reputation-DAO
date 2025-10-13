@@ -1,12 +1,12 @@
 // src/components/layout/DashboardLayout.tsx
 import React, {
-  ReactNode,
   useCallback,
   useContext,
   useEffect,
   useMemo,
   useState,
 } from "react";
+import type { ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {

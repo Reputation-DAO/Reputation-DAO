@@ -1,10 +1,16 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { Principal } from '@dfinity/principal';
-import { ensurePlugAgent, getPlugPrincipal, isPlugConnected, disconnectPlug, PLUG_HOST } from '../utils/plug';
-import { makeChildWithPlug, type ChildActor } from '@/lib/canisters';
+import { 
+  loginWithII, 
+  logout as logoutII, 
+  isAuthenticated as checkIIAuth, 
+  getPrincipal, 
+  II_HOST 
+} from '../utils/internetIdentity';
+import { makeChildActor, type ChildActor } from '@/lib/canisters';
 
-export type AuthMethod = 'plug' | null;
+export type AuthMethod = 'ii' | null; // Changed from 'plug' to 'ii'
 
 interface AuthContextType {
   // Authentication state
@@ -14,7 +20,7 @@ interface AuthContextType {
   isLoading: boolean;
   
   // Authentication methods
-  loginWithPlug: () => Promise<void>;
+  loginWithInternetIdentity: () => Promise<void>; // Renamed from loginWithPlug
   logout: () => Promise<void>;
   
   // Connection checking
@@ -38,19 +44,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   /**
    * Check current authentication status
+   * Called on mount and after login/logout
    */
   const checkConnection = async () => {
     setIsLoading(true);
     
     try {
-      // Check Plug wallet
-      const isPlugAuth = await isPlugConnected();
-      if (isPlugAuth) {
-        const plugPrincipal = await getPlugPrincipal();
+      // Check Internet Identity authentication
+      const isIIAuth = await checkIIAuth();
+      
+      if (isIIAuth) {
+        const iiPrincipal = await getPrincipal();
         setIsAuthenticated(true);
-        setAuthMethod('plug');
-        setPrincipal(plugPrincipal);
-        console.log('✅ Authenticated with Plug:', plugPrincipal?.toString());
+        setAuthMethod('ii');
+        setPrincipal(iiPrincipal);
+        console.log('✅ Authenticated with Internet Identity:', iiPrincipal?.toString());
         setIsLoading(false);
         return;
       }
@@ -59,7 +67,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsAuthenticated(false);
       setAuthMethod(null);
       setPrincipal(null);
-      console.log('ℹ️ No authentication found');
+      console.log('ℹ️  No authentication found');
     } catch (error) {
       console.error('❌ Error checking authentication:', error);
       setIsAuthenticated(false);
@@ -71,23 +79,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   /**
-   * Login with Plug wallet
+   * Login with Internet Identity
    */
-  const loginWithPlug = async () => {
+  const loginWithInternetIdentity = async () => {
     setIsLoading(true);
     
     try {
-      // Connect with Plug
-      await ensurePlugAgent({ host: PLUG_HOST });
-      const plugPrincipal = await getPlugPrincipal();
+      // Initiate II login flow
+      const iiPrincipal = await loginWithII();
       
       setIsAuthenticated(true);
-      setAuthMethod('plug');
-      setPrincipal(plugPrincipal);
+      setAuthMethod('ii');
+      setPrincipal(iiPrincipal);
       
-      console.log('✅ Plug login successful:', plugPrincipal?.toString());
+      console.log('✅ Internet Identity login successful:', iiPrincipal.toString());
     } catch (error) {
-      console.error('❌ Plug login failed:', error);
+      console.error('❌ Internet Identity login failed:', error);
       throw error;
     } finally {
       setIsLoading(false);
@@ -101,13 +108,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsLoading(true);
     
     try {
-      if (authMethod === 'plug') {
-        await disconnectPlug();
+      if (authMethod === 'ii') {
+        await logoutII();
       }
-
+      
       setIsAuthenticated(false);
       setAuthMethod(null);
       setPrincipal(null);
+      
+      // Clear localStorage
+      localStorage.removeItem('selectedOrgId');
+      localStorage.removeItem('userRole');
+      localStorage.removeItem('userName');
       
       console.log('✅ Logout successful');
     } catch (error) {
@@ -120,18 +132,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   /**
    * Get the appropriate actor based on authentication method
+   * Uses II identity if authenticated, anonymous otherwise
    */
   const getActor = async (canisterId: string) => {
     if (!isAuthenticated) {
       throw new Error('Not authenticated. Please login first.');
     }
 
-    if (authMethod !== 'plug') {
+    if (authMethod !== 'ii') {
       throw new Error('Unsupported authentication method');
     }
 
-    await ensurePlugAgent({ host: PLUG_HOST, whitelist: [canisterId] });
-    return makeChildWithPlug({ canisterId });
+    return makeChildActor({ canisterId, host: II_HOST });
   };
 
   // Check connection on mount
@@ -144,7 +156,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     authMethod,
     principal,
     isLoading,
-    loginWithPlug,
+    loginWithInternetIdentity,
     logout,
     checkConnection,
     getActor,

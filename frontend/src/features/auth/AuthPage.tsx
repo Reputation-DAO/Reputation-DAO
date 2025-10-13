@@ -66,7 +66,7 @@ const AuthPage = () => {
     authMethod, 
     principal, 
     isLoading, 
-    loginWithPlug, 
+    loginWithInternetIdentity, 
     logout, 
     checkConnection 
   } = useAuth();
@@ -89,8 +89,8 @@ const AuthPage = () => {
   const handleWalletConnect = async (walletType: string) => {
     setIsConnecting(walletType);
     try {
-      if (walletType === "plug") {
-        await loginWithPlug();
+      if (walletType === "ii") {
+        await loginWithInternetIdentity();
       } else {
         throw new Error(`Unsupported wallet type: ${walletType}`);
       }
@@ -104,12 +104,12 @@ const AuthPage = () => {
 
   const walletOptions = [
     {
-      icon: Zap,
-      name: "Plug Wallet",
-      description: "Connect with Plug wallet for Internet Computer",
+      icon: Shield,
+      name: "Internet Identity",
+      description: "Secure authentication with Internet Computer",
       isRecommended: true,
-      isConnected: isAuthenticated && authMethod === 'plug',
-      onConnect: () => handleWalletConnect("plug")
+      isConnected: isAuthenticated && authMethod === 'ii',
+      onConnect: () => handleWalletConnect("ii")
     }
   ];
 
@@ -151,7 +151,7 @@ const AuthPage = () => {
                     </div>
                     <div>
                       <h3 className="text-lg font-semibold text-foreground">
-                        {authMethod === 'plug' ? 'Plug Wallet' : 'Internet Identity'} Connected
+                        {authMethod === 'ii' ? 'Internet Identity' : 'Internet Identity'} Connected
                       </h3>
                       <p className="text-sm text-muted-foreground font-mono">
                         {principal.toString().slice(0, 8)}...{principal.toString().slice(-8)}

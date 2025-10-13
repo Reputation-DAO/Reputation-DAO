@@ -11,7 +11,8 @@ import type { ReactNode } from 'react';
 import { Principal } from '@dfinity/principal';
 import { useLocation } from 'react-router-dom';
 
-import { makeChildWithPlug, makeFactoriaWithPlug, getFactoriaCanisterId } from '@/lib/canisters';
+import { makeChildActor, makeFactoriaActor, getFactoriaCanisterId } from '@/lib/canisters';
+import { getPrincipal } from '@/utils/internetIdentity';
 
 export type UserRole = 'admin' | 'awarder' | 'member' | 'user' | 'loading';
 
@@ -38,13 +39,12 @@ export const useRole = () => {
 
 interface RoleProviderProps { children: ReactNode; }
 
-/** Plug-first principal fetch (matches your past working version) */
+/** Get current principal from Internet Identity */
 async function getCurrentPrincipal(): Promise<Principal | null> {
-  const plug = (window as any)?.ic?.plug;
   try {
-    const p = await plug?.getPrincipal?.();
-    return p ?? null;
-  } catch {
+    return await getPrincipal();
+  } catch (error) {
+    console.error('Error getting principal:', error);
     return null;
   }
 }
@@ -122,7 +122,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
           finalUserName = `${meText.slice(0, 5)}...${meText.slice(-3)}`;
 
           try {
-            const factoria = await makeFactoriaWithPlug({
+            const factoria = await makeFactoriaActor({
               canisterId: getFactoriaCanisterId(),
             });
 
@@ -150,13 +150,9 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
 
           if (!resolvedAdmin) {
             try {
-              const child = await makeChildWithPlug({ canisterId: cid });
+              const child = await makeChildActor({ canisterId: cid });
 
-              if (typeof child.isTrustedAwarder === 'function') {
-                const ok = await child.isTrustedAwarder(Principal.fromText(meText));
-                resolvedAwarder = !!ok;
-                console.log('🛡️ child.isTrustedAwarder():', ok);
-              } else if (typeof child.getTrustedAwarders === 'function') {
+              if (typeof child.getTrustedAwarders === 'function') {
                 const awarders = await child.getTrustedAwarders();
                 const listPreview =
                   Array.isArray(awarders)

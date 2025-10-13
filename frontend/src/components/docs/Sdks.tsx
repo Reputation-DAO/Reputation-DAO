@@ -38,13 +38,13 @@ const Sdks = () => (
     <section className="mb-12">
       <h2 className="text-2xl font-semibold text-foreground mb-4">Wallet & Actor Setup</h2>
       <p className="text-muted-foreground mb-4">
-        Authentication starts in <code>AuthContext</code>, which checks Plug connectivity and exposes <code>getActor</code>. The helper <code>makeChildWithPlug</code> uses connect2ic to instantiate candid actors with the correct whitelist.
+        Authentication uses Internet Identity, which is managed in <code>AuthContext</code>. The helper <code>makeChildActor</code> instantiates candid actors with the authenticated identity.
       </p>
       <pre className="glass-card p-4 text-sm overflow-x-auto">
-{`import { makeChildWithPlug } from "@/lib/canisters";
+{`import { makeChildActor } from "@/lib/canisters";
 
-const actor = await makeChildWithPlug({
-  canisterId: process.env.VITE_REPUTATION_DAO_CANISTER_ID!,
+const actor = await makeChildActor({
+  canisterId: import.meta.env.VITE_REPUTATION_DAO_CANISTER_ID!,
 });`}
       </pre>
       <p className="text-muted-foreground mt-4">
