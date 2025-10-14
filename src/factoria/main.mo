@@ -277,43 +277,43 @@ actor ReputationFactory {
 
   type IcrcAccount = { owner : Principal; subaccount : ?Blob };
 
-type IcrcTransferArg = {
-  from_subaccount : ?Blob;
-  to              : IcrcAccount;
-  amount          : Nat;
-  fee             : ?Nat;
-  memo            : ?Blob;
-  created_at_time : ?Nat64;
-};
+  type IcrcTransferArg = {
+    from_subaccount : ?Blob;
+    to              : IcrcAccount;
+    amount          : Nat;
+    fee             : ?Nat;
+    memo            : ?Blob;
+    created_at_time : ?Nat64;
+  };
 
-type IcrcTransferError = {
-  #BadFee                  : { expected_fee : Nat };
-  #BadBurn                 : { min_burn_amount : Nat };
-  #InsufficientFunds       : { balance : Nat };
-  #TooOld                  : Null;
-  #CreatedInFuture         : { ledger_time : Nat64 };
-  #TemporarilyUnavailable  : Null;
-  #Duplicate               : { duplicate_of : Nat };
-  #GenericError            : { error_code : Nat; message : Text };
-};
+  type IcrcTransferError = {
+    #BadFee                  : { expected_fee : Nat };
+    #BadBurn                 : { min_burn_amount : Nat };
+    #InsufficientFunds       : { balance : Nat };
+    #TooOld                  : Null;
+    #CreatedInFuture         : { ledger_time : Nat64 };
+    #TemporarilyUnavailable  : Null;
+    #Duplicate               : { duplicate_of : Nat };
+    #GenericError            : { error_code : Nat; message : Text };
+  };
 
 
-type IcrcTransferResult = {
-  #Ok  : Nat;
-  #Err : IcrcTransferError;
-};
+  type IcrcTransferResult = {
+    #Ok  : Nat;
+    #Err : IcrcTransferError;
+  };
 
-let Ledger : actor {
-  icrc1_balance_of : (IcrcAccount) -> async Nat;
-  icrc1_transfer   : (IcrcTransferArg) -> async IcrcTransferResult;
-} = actor (Principal.toText(ICP_LEDGER));
+  let Ledger : actor {
+    icrc1_balance_of : (IcrcAccount) -> async Nat;
+    icrc1_transfer   : (IcrcTransferArg) -> async IcrcTransferResult;
+  } = actor (Principal.toText(ICP_LEDGER));
 
-func subaccountFor(owner : Principal) : Blob {
-  let p  = Principal.toBlob(owner);
-  let pa = Blob.toArray(p);
-  let arr = Array.tabulate<Nat8>(32, func i { if (i < pa.size()) pa[i] else 0 });
-  Blob.fromArray(arr)
-};
+  func subaccountFor(owner : Principal) : Blob {
+    let p  = Principal.toBlob(owner);
+    let pa = Blob.toArray(p);
+    let arr = Array.tabulate<Nat8>(32, func i { if (i < pa.size()) pa[i] else 0 });
+    Blob.fromArray(arr)
+  };
 
 
   let TREASURY_SUB : Blob = Blob.fromArray(Array.tabulate<Nat8>(32, func _ { 0 }));
@@ -322,62 +322,84 @@ func subaccountFor(owner : Principal) : Blob {
   let FEE_E8S   : Nat = 10_000;
 
   func icrcAccount(owner : Principal, sub : Blob) : IcrcAccount {
-    { owner = owner; subaccount = ?sub }
-  };
-
-  public query func getBasicPayInfo(owner : Principal) : async {
-    account_owner : Principal; subaccount : Blob; amount_e8s : Nat
-  } {
-    {
-      account_owner = Principal.fromActor(ReputationFactory);
-      subaccount    = subaccountFor(owner);
-      amount_e8s    = PRICE_E8S;
-    }
-  };
-
-
-
-//
-  public shared({ caller }) func activateBasicAfterPayment() : async { #ok : Text; #err : Text } {
-    let owner = caller;
-    let depSub = subaccountFor(owner);
-    let depAcc = icrcAccount(Principal.fromActor(ReputationFactory), depSub);
-
-    let bal = await Ledger.icrc1_balance_of(depAcc);
-    if (bal < PRICE_E8S) {
-      return #err ("deposit too low: have=" # Nat.toText(bal) # " need=" # Nat.toText(PRICE_E8S));
+      { owner = owner; subaccount = ?sub }
     };
 
-    let res = await Ledger.icrc1_transfer({
-      from_subaccount = ?depSub;
-      to              = icrcAccount(Principal.fromActor(ReputationFactory), TREASURY_SUB);
-      amount          = PRICE_E8S - FEE_E8S;
-      fee             = ?FEE_E8S;
-      memo            = null;
-      created_at_time = null
-    });
+  func subaccountForCid(cid : Principal) : Blob {
+    let p  = Principal.toBlob(cid);
+    let pa = Blob.toArray(p);
+    let arr = Array.tabulate<Nat8>(32, func i { if (i < pa.size()) pa[i] else 0 });
+    Blob.fromArray(arr)
+  };
 
-    switch (res) {
-    case (#Ok _) {
-        let now = nowNs();
-        var updated : Nat = 0;
-        let buf = Buffer.Buffer<Child>(store.size());
-        for (c in store.vals()) {
-          if (c.owner == owner and c.status == #Active) {
-            let expiry = if (c.expires_at > now) c.expires_at + MONTH_NS else now + MONTH_NS;
-            let c2 : Child = {
-              id = c.id; owner = c.owner; created_at = c.created_at; note = c.note;
-              status = c.status; visibility = c.visibility; plan = #Basic; expires_at = expiry
-            };
-            byId.put(c.id, c2); buf.add(c2); updated += 1;
-          } else { buf.add(c) }
+public query func getBasicPayInfoForChild(cid : Principal) : async {
+  account_owner : Principal; subaccount : Blob; amount_e8s : Nat
+} {
+  // validate child exists
+  ignore childOrTrap(cid);
+  {
+    account_owner = Principal.fromActor(ReputationFactory);
+    subaccount    = subaccountForCid(cid);
+    amount_e8s    = PRICE_E8S;
+  }
+};
+
+
+
+  public shared({ caller }) func activateBasicForChildAfterPayment(
+    cid : Principal
+  ) : async { #ok : Text; #err : Text } {
+    // Ensure the child exists
+    switch (byId.get(cid)) {
+      case null { return #err "unknown canister" };
+      case (?c0) {
+        // (Optionally) allow renewal even if archived; here we require Active.
+        if (c0.status != #Active) { return #err "not active; cannot extend" };
+
+        let depSub = subaccountForCid(cid);
+        let depAcc = icrcAccount(Principal.fromActor(ReputationFactory), depSub);
+
+        // Check subaccount balance
+        let bal = await Ledger.icrc1_balance_of(depAcc);
+        if (bal < PRICE_E8S) {
+          return #err ("deposit too low: have=" # Nat.toText(bal) # " need=" # Nat.toText(PRICE_E8S));
         };
-        store := Buffer.toArray(buf);
-        #ok (if (updated == 0) "payment swept; ready to create/activate Basic" else "payment swept; Basic extended")
-      };
-      case (#Err e) { #err ("sweep failed: " # debug_show e) }
+
+        // Sweep from the child’s subaccount to treasury
+        let res = await Ledger.icrc1_transfer({
+          from_subaccount = ?depSub;
+          to              = icrcAccount(Principal.fromActor(ReputationFactory), TREASURY_SUB);
+          amount          = PRICE_E8S - FEE_E8S;
+          fee             = ?FEE_E8S;
+          memo            = null;
+          created_at_time = null
+        });
+
+        switch (res) {
+          case (#Ok _) {
+            let now = nowNs();
+            let expiry = if (c0.expires_at > now) c0.expires_at + MONTH_NS else now + MONTH_NS;
+
+            let c1 : Child = {
+              id = c0.id; owner = c0.owner; created_at = c0.created_at; note = c0.note;
+              status = c0.status; visibility = c0.visibility; plan = #Basic; expires_at = expiry
+            };
+
+            byId.put(cid, c1);
+
+            // update stable store
+            let buf = Buffer.Buffer<Child>(store.size());
+            for (x in store.vals()) { buf.add(if (x.id == cid) c1 else x) };
+            store := Buffer.toArray(buf);
+
+            #ok "payment swept; Basic extended for child"
+          };
+          case (#Err e) { #err ("sweep failed: " # debug_show e) }
+        }
+      }
     }
   };
+
 
   // -------------------- Create / Reuse / CRUD --------------------
   public shared({ caller }) func forceAddOwnerIndex(owner: Principal, cid: Principal) : async Text {
@@ -793,14 +815,16 @@ func subaccountFor(owner : Principal) : Blob {
     let now = nowNs();
     let buf = Buffer.Buffer<Child>(store.size());
     for (c in store.vals()) {
+      let base = if (c.expires_at > now) c.expires_at else now;
       let c2 : Child = {
         id = c.id; owner = c.owner; created_at = c.created_at; note = c.note;
-        status = c.status; visibility = c.visibility; plan = plan; expires_at = now + MONTH_NS
+        status = c.status; visibility = c.visibility; plan = plan; expires_at = base + MONTH_NS
       };
       byId.put(c.id, c2); buf.add(c2);
     };
     store := Buffer.toArray(buf); "ok"
   };
+
   // Send ICP from the factory TREASURY_SUB to any ICRC-1 account (e.g., your Plug account)
 public shared({ caller }) func adminTreasuryWithdraw(
   to_owner : Principal,          // your Plug principal
