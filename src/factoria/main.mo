@@ -9,12 +9,14 @@ import TrieMap "mo:base/TrieMap";
 import Blob "mo:base/Blob";
 import Cycles "mo:base/ExperimentalCycles";
 import Debug "mo:base/Debug";
+import Array  "mo:base/Array";
+import Nat8   "mo:base/Nat8";
+import Nat32  "mo:base/Nat32";
 
 actor ReputationFactory {
 
   // -------------------- IC Management (subset) --------------------
 
-  // Persisted default child wasm (set once; survives upgrades)
   stable var wasm : ?Blob = null;
 
   public shared({ caller }) func setDefaultChildWasm(w : Blob) : async () {
@@ -43,7 +45,7 @@ actor ReputationFactory {
     mode        : InstallMode;
     canister_id : Principal;
     wasm_module : Blob;
-    arg         : Blob; // candid-encoded init/upgrade arg
+    arg         : Blob;
   };
 
   type StartStopArgs = { canister_id : Principal };
@@ -69,12 +71,17 @@ actor ReputationFactory {
       paused : Bool; cycles : Nat; users : Nat; txCount : Nat; topUpCount : Nat; decayConfigHash : Nat
     };
   };
-  // New: drain cycles back to factory when archiving
   type ChildDrain = actor { returnCyclesToFactory : (Nat) -> async Nat };
 
-  // -------------------- Registry/Pool Types --------------------
+  // -------------------- Plans & policy --------------------
   public type Status = { #Active; #Archived };
   public type Visibility = { #Public; #Private };
+  public type Plan = { #Trial; #Basic };
+
+  let ONE_T   : Nat   = 1_000_000_000_000;          // 1T cycles
+  let DAY_NS  : Nat64 = 86_400_000_000_000;         // 24h
+  let MONTH_NS: Nat64 = 30 * DAY_NS;                // 30 days
+  func dayIndex(ts : Nat64) : Nat64 = ts / DAY_NS;
 
   public type Child = {
     id         : Principal;
@@ -82,74 +89,83 @@ actor ReputationFactory {
     created_at : Nat64;
     note       : Text;
     status     : Status;
-    visibility : Visibility;   // NEW
+    visibility : Visibility;
+    plan       : Plan;
+    expires_at : Nat64;
   };
 
-
   // -------------------- Stable State --------------------
-  stable var store           : [Child] = [];                  // flat snapshot of children
-  stable var storeOwnerPairs : [(Principal, Principal)] = []; // owner -> child ids
-  stable var storePool       : [Principal] = [];              // archived pool (ids only)
+  stable var store           : [Child] = [];
+  stable var storeOwnerPairs : [(Principal, Principal)] = [];
+  stable var storePool       : [Principal] = [];
   stable var admin           : Principal = Principal.fromText("ly6rq-d4d23-63ct7-e2j6c-257jk-627xo-wwwd4-lnxm6-qt7xb-573bv-bqe");
 
-  // -------------------- Runtime Indexes (rebuilt each upgrade) --------------------
+  // Trial one-per-owner and Basic daily usage mirrors
+  stable var trialIssuedStore : [Principal] = [];
+  stable var usageStore       : [(Principal, Nat64, Nat)] = [];
+
+  // -------------------- Runtime Indexes --------------------
   var byId    = TrieMap.TrieMap<Principal, Child>(Principal.equal, Principal.hash);
   var byOwner = TrieMap.TrieMap<Principal, Buffer.Buffer<Principal>>(Principal.equal, Principal.hash);
   var pool    = Buffer.Buffer<Principal>(0);
 
+  var trialIssued = TrieMap.TrieMap<Principal, Bool>(Principal.equal, Principal.hash);
+  type UsageKey = { cid : Principal; day : Nat64 };
+  func usageHash(k : UsageKey) : Nat32 { Principal.hash(k.cid) ^ Nat32.fromNat64(k.day) };
+  func usageEq(a : UsageKey, b : UsageKey) : Bool { Principal.equal(a.cid, b.cid) and a.day == b.day };
+  var dailyUsage = TrieMap.TrieMap<UsageKey, Nat>(usageEq, usageHash);
+
   // -------------------- Upgrade hooks --------------------
   system func postupgrade() {
-    // byId
     byId := TrieMap.TrieMap<Principal, Child>(Principal.equal, Principal.hash);
     for (c in store.vals()) { byId.put(c.id, c) };
 
-    // byOwner
     byOwner := TrieMap.TrieMap<Principal, Buffer.Buffer<Principal>>(Principal.equal, Principal.hash);
     for ((o, cid) in storeOwnerPairs.vals()) {
       let buf = switch (byOwner.get(o)) { case (?b) b; case null Buffer.Buffer<Principal>(0) };
-      buf.add(cid);
-      byOwner.put(o, buf);
+      buf.add(cid); byOwner.put(o, buf);
     };
 
-    // pool
     pool := Buffer.Buffer<Principal>(storePool.size());
     for (cid in storePool.vals()) { pool.add(cid) };
+
+    trialIssued := TrieMap.TrieMap<Principal, Bool>(Principal.equal, Principal.hash);
+    for (p in trialIssuedStore.vals()) { trialIssued.put(p, true) };
+
+    dailyUsage := TrieMap.TrieMap<UsageKey, Nat>(usageEq, usageHash);
+    for ((cid, day, used) in usageStore.vals()) { dailyUsage.put({ cid; day }, used) };
   };
 
   system func preupgrade() {
-    // persist children
     let b = Buffer.Buffer<Child>(byId.size());
     for ((_, c) in byId.entries()) { b.add(c) };
     store := Buffer.toArray(b);
 
-    // persist owner pairs
     let op = Buffer.Buffer<(Principal, Principal)>(0);
     for ((o, buf) in byOwner.entries()) { for (cid in buf.vals()) { op.add((o, cid)) } };
     storeOwnerPairs := Buffer.toArray(op);
 
-    // persist pool
     storePool := Buffer.toArray(pool);
+
+    let t = Buffer.Buffer<Principal>(trialIssued.size());
+    for ((p, _) in trialIssued.entries()) { t.add(p) };
+    trialIssuedStore := Buffer.toArray(t);
+
+    let u = Buffer.Buffer<(Principal, Nat64, Nat)>(dailyUsage.size());
+    for ((k, v) in dailyUsage.entries()) { u.add((k.cid, k.day, v)) };
+    usageStore := Buffer.toArray(u);
   };
 
   // -------------------- Auth & Utils --------------------
-
   func requireAdmin(caller : Principal) : () {
     if (caller != admin) { assert false };
   };
 
   func requireOrgAdmin(caller : Principal, canister_id : Principal) : () {
-    // Allow global admin
     if (caller == admin) return;
-
-    // Allow the factory canister itself
     if (caller == Principal.fromActor(ReputationFactory)) return;
-
-    // Otherwise require the caller to be the recorded owner of that child
     switch (byId.get(canister_id)) {
-      case (?c) {
-        if (c.owner == caller) return;
-        Debug.trap("unauthorized: caller is not owner of this canister");
-      };
+      case (?c) { if (c.owner == caller) return; Debug.trap("unauthorized: caller is not owner of this canister") };
       case null Debug.trap("unauthorized: unknown canister");
     };
   };
@@ -158,8 +174,7 @@ actor ReputationFactory {
 
   func addOwnerIndex(owner : Principal, cid : Principal) {
     let buf = switch (byOwner.get(owner)) { case (?b) b; case null Buffer.Buffer<Principal>(0) };
-    buf.add(cid);
-    byOwner.put(owner, buf);
+    buf.add(cid); byOwner.put(owner, buf);
   };
 
   func removeOwnerIndex(owner : Principal, cid : Principal) {
@@ -177,21 +192,17 @@ actor ReputationFactory {
     byId.put(c.id, c);
     addOwnerIndex(c.owner, c.id);
 
-    // keep stable mirrors “live”
     let bb = Buffer.Buffer<Child>(store.size() + 1);
     for (x in store.vals()) { bb.add(x) };
-    bb.add(c);
-    store := Buffer.toArray(bb);
+    bb.add(c); store := Buffer.toArray(bb);
 
     let pairs = Buffer.Buffer<(Principal, Principal)>(storeOwnerPairs.size() + 1);
     for (xy in storeOwnerPairs.vals()) { pairs.add(xy) };
-    pairs.add((c.owner, c.id));
-    storeOwnerPairs := Buffer.toArray(pairs);
+    pairs.add((c.owner, c.id)); storeOwnerPairs := Buffer.toArray(pairs);
   };
 
   func updateChild(c : Child) {
     byId.put(c.id, c);
-    // refresh stable store
     let out = Buffer.Buffer<Child>(store.size());
     for (x in store.vals()) { out.add(if (x.id == c.id) c else x) };
     store := Buffer.toArray(out);
@@ -199,7 +210,6 @@ actor ReputationFactory {
 
   func recordOrRefresh(c : Child) {
     if (byId.get(c.id) != null) { updateChild(c) } else { recordChild(c) };
-    // ensure (owner, id) in stable pairs
     var seen = false;
     let pairs = Buffer.Buffer<(Principal, Principal)>(storeOwnerPairs.size() + 1);
     for ((o, cid) in storeOwnerPairs.vals()) {
@@ -210,44 +220,174 @@ actor ReputationFactory {
     storeOwnerPairs := Buffer.toArray(pairs);
   };
 
-  // -------------------- Admin config --------------------
-  public shared({ caller }) func setAdmin(p : Principal) : async () {
-    requireAdmin(caller);
-    admin := p;
+  func childOrTrap(cid : Principal) : Child {
+    switch (byId.get(cid)) { case (?c) c; case null Debug.trap("unknown canister") }
   };
 
+  func isTrialAllowedFor(owner : Principal) : Bool { trialIssued.get(owner) == null };
+
+  func markTrialUsed(owner : Principal) {
+    trialIssued.put(owner, true);
+    let tmp = Buffer.Buffer<Principal>(trialIssuedStore.size() + 1);
+    for (p in trialIssuedStore.vals()) { tmp.add(p) };
+    tmp.add(owner); trialIssuedStore := Buffer.toArray(tmp);
+  };
+
+  func getUsedToday(cid : Principal) : Nat {
+    let key = { cid; day = dayIndex(nowNs()) };
+    switch (dailyUsage.get(key)) { case (?n) n; case null 0 }
+  };
+
+  func addUsedToday(cid : Principal, amount : Nat) {
+    let key = { cid; day = dayIndex(nowNs()) };
+    let cur = switch (dailyUsage.get(key)) { case (?n) n; case null 0 };
+    dailyUsage.put(key, cur + amount);
+
+    // mirror to stable
+    let out = Buffer.Buffer<(Principal, Nat64, Nat)>(dailyUsage.size());
+    for ((k, v) in dailyUsage.entries()) { out.add((k.cid, k.day, v)) };
+    usageStore := Buffer.toArray(out);
+  };
+
+  func checkAndAutoArchive(cid : Principal) : async () {
+    let c = childOrTrap(cid);
+    if (c.status == #Archived) return;
+    if (nowNs() >= c.expires_at) { ignore await archiveChild(cid) };
+  };
+
+  func topUpInternalGlobal(cid: Principal, amount: Nat) : async () {
+    if (amount == 0) return;
+    let target : ChildWallet = actor (Principal.toText(cid));
+    ignore await (with cycles = amount) target.wallet_receive();
+  };
+
+
+  // -------------------- Admin config --------------------
+  public shared({ caller }) func setAdmin(p : Principal) : async () { requireAdmin(caller); admin := p };
   public query func getAdmin() : async Principal { admin };
 
   // -------------------- Vault (cycles in/out) --------------------
   public func wallet_receive() : async Nat {
     let avail = Cycles.available();
-    let accepted = Cycles.accept<system>(avail);
-    accepted
+    Cycles.accept<system>(avail)
   };
 
-  /// Send `amount` cycles to a child’s `wallet_receive`, and let the child log it.
-  public shared({ caller }) func topUpChild(canister_id : Principal, amount : Nat)
-    : async { #ok : Nat; #err : Text } {
-    requireOrgAdmin(caller, canister_id);
-    let target : ChildWallet = actor (Principal.toText(canister_id));
-    try {
-      let accepted = await (with cycles = amount) target.wallet_receive();
-      if (accepted == amount) { #ok accepted } else { #err ("accepted=" # Nat.toText(accepted)) }
-    } catch (_) { #err "transfer failed" }
+  // -------------------- Ledger (ICRC-1 ICP) + Plug deposits --------------------
+  let ICP_LEDGER : Principal = Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai");
+
+  type IcrcAccount = { owner : Principal; subaccount : ?Blob };
+
+type IcrcTransferArg = {
+  from_subaccount : ?Blob;
+  to              : IcrcAccount;
+  amount          : Nat;
+  fee             : ?Nat;
+  memo            : ?Blob;
+  created_at_time : ?Nat64;
+};
+
+type IcrcTransferError = {
+  #BadFee                  : { expected_fee : Nat };
+  #BadBurn                 : { min_burn_amount : Nat };
+  #InsufficientFunds       : { balance : Nat };
+  #TooOld                  : Null;
+  #CreatedInFuture         : { ledger_time : Nat64 };
+  #TemporarilyUnavailable  : Null;
+  #Duplicate               : { duplicate_of : Nat };
+  #GenericError            : { error_code : Nat; message : Text };
+};
+
+
+type IcrcTransferResult = {
+  #Ok  : Nat;
+  #Err : IcrcTransferError;
+};
+
+let Ledger : actor {
+  icrc1_balance_of : (IcrcAccount) -> async Nat;
+  icrc1_transfer   : (IcrcTransferArg) -> async IcrcTransferResult;
+} = actor (Principal.toText(ICP_LEDGER));
+
+func subaccountFor(owner : Principal) : Blob {
+  let p  = Principal.toBlob(owner);
+  let pa = Blob.toArray(p);
+  let arr = Array.tabulate<Nat8>(32, func i { if (i < pa.size()) pa[i] else 0 });
+  Blob.fromArray(arr)
+};
+
+
+  let TREASURY_SUB : Blob = Blob.fromArray(Array.tabulate<Nat8>(32, func _ { 0 }));
+
+  let PRICE_E8S : Nat = 1_000_000_000; // ≈ 1 ICP (tune to your $10 target)
+  let FEE_E8S   : Nat = 10_000;
+
+  func icrcAccount(owner : Principal, sub : Blob) : IcrcAccount {
+    { owner = owner; subaccount = ?sub }
+  };
+
+  public query func getBasicPayInfo(owner : Principal) : async {
+    account_owner : Principal; subaccount : Blob; amount_e8s : Nat
+  } {
+    {
+      account_owner = Principal.fromActor(ReputationFactory);
+      subaccount    = subaccountFor(owner);
+      amount_e8s    = PRICE_E8S;
+    }
+  };
+
+
+
+//
+  public shared({ caller }) func activateBasicAfterPayment() : async { #ok : Text; #err : Text } {
+    let owner = caller;
+    let depSub = subaccountFor(owner);
+    let depAcc = icrcAccount(Principal.fromActor(ReputationFactory), depSub);
+
+    let bal = await Ledger.icrc1_balance_of(depAcc);
+    if (bal < PRICE_E8S) {
+      return #err ("deposit too low: have=" # Nat.toText(bal) # " need=" # Nat.toText(PRICE_E8S));
+    };
+
+    let res = await Ledger.icrc1_transfer({
+      from_subaccount = ?depSub;
+      to              = icrcAccount(Principal.fromActor(ReputationFactory), TREASURY_SUB);
+      amount          = PRICE_E8S - FEE_E8S;
+      fee             = ?FEE_E8S;
+      memo            = null;
+      created_at_time = null
+    });
+
+    switch (res) {
+    case (#Ok _) {
+        let now = nowNs();
+        var updated : Nat = 0;
+        let buf = Buffer.Buffer<Child>(store.size());
+        for (c in store.vals()) {
+          if (c.owner == owner and c.status == #Active) {
+            let expiry = if (c.expires_at > now) c.expires_at + MONTH_NS else now + MONTH_NS;
+            let c2 : Child = {
+              id = c.id; owner = c.owner; created_at = c.created_at; note = c.note;
+              status = c.status; visibility = c.visibility; plan = #Basic; expires_at = expiry
+            };
+            byId.put(c.id, c2); buf.add(c2); updated += 1;
+          } else { buf.add(c) }
+        };
+        store := Buffer.toArray(buf);
+        #ok (if (updated == 0) "payment swept; ready to create/activate Basic" else "payment swept; Basic extended")
+      };
+      case (#Err e) { #err ("sweep failed: " # debug_show e) }
+    }
   };
 
   // -------------------- Create / Reuse / CRUD --------------------
-
   public shared({ caller }) func forceAddOwnerIndex(owner: Principal, cid: Principal) : async Text {
-    requireAdmin(caller);
-    addOwnerIndex(owner, cid);
-    "ok"
+    requireAdmin(caller); addOwnerIndex(owner, cid); "ok"
   };
 
   public shared({ caller }) func createChildForOwner(
     owner             : Principal,
     cycles_for_create : Nat,
-    controllers       : [Principal],   // optional override; empty means default
+    controllers       : [Principal],
     note              : Text
   ) : async Principal {
     requireAdmin(caller);
@@ -261,166 +401,203 @@ actor ReputationFactory {
     });
     let cid = res.canister_id;
 
-    // Child now expects TWO candid args: (owner, factory)
     let init_arg : Blob = to_candid(owner, Principal.fromActor(ReputationFactory));
 
-    await IC.install_code({
-      mode = #install;
-      canister_id = cid;
-      wasm_module = requireWasm();
-      arg = init_arg;
-    });
+    await IC.install_code({ mode = #install; canister_id = cid; wasm_module = requireWasm(); arg = init_arg });
     await IC.start_canister({ canister_id = cid });
 
     let rec : Child = {
-    id = cid; owner; created_at = nowNs(); note; status = #Active; visibility = #Public
-  };
+      id = cid; owner; created_at = nowNs(); note;
+      status = #Active; visibility = #Public; plan = #Basic; expires_at = nowNs() + MONTH_NS
+    };
     recordChild(rec);
     cid
   };
 
 
+  // --- Cycle floors & headroom (tuned for reliable reinstall) ---
+  let MIN_CREATE_FEE            : Nat = 600_000_000_000;  // 600G for fresh installs (was 500G)
+  let MIN_REINSTALL_BUFFER      : Nat = 400_000_000_000;  // 400G for re-installs (was 100G)
+  let EXTRA_REINSTALL_HEADROOM  : Nat = 200_000_000_000;  // +200G on retry if first reinstall fails
 
 
+  public shared({ caller }) func createOrReuseChildFor(
+    owner: Principal,
+    cycles_for_create: Nat,   // EXACT amount to add/attach on top (fresh) or after buffer (reuse)
+    controllers: [Principal],
+    note: Text
+  ) : async Principal {
+    let defaultCtrls = [Principal.fromActor(ReputationFactory), owner];
+    let initArg : Blob = to_candid(owner, Principal.fromActor(ReputationFactory));
 
-
-
-
-
-
-
-
-
- /// Create or reuse from pool for given owner; ensure final cycles >= cycles_for_create.
-/// If reused canister has fewer cycles than requested, top up the difference.
-public shared({ caller }) func createOrReuseChildFor(
-  owner: Principal,
-  cycles_for_create: Nat,
-  controllers: [Principal],
-  note: Text
-) : async Principal {
-
-  let defaultCtrls = [Principal.fromActor(ReputationFactory), owner];
-  // Child takes TWO candid init args: (owner, factory)
-  let initArg : Blob = to_candid(owner, Principal.fromActor(ReputationFactory));
-
-  // --- helpers ---
-  type ChildWallet = actor { wallet_receive : () -> async Nat };
-  type ChildMgmt   = actor {
-    health : () -> async { paused : Bool; cycles : Nat; users : Nat; txCount : Nat; topUpCount : Nat; decayConfigHash : Nat }
-  };
-
-  func getChildCycles(cid: Principal) : async Nat {
-    let c : ChildMgmt = actor (Principal.toText(cid));
-    // best-effort; if it fails we’ll just return 0
-    try { (await c.health()).cycles } catch (_) { 0 }
-  };
-
-  func topUpInternal(cid: Principal, amount: Nat) : async () {
-    if (amount == 0) return;
-    let target : ChildWallet = actor (Principal.toText(cid));
-    ignore await (with cycles = amount) target.wallet_receive();
-  };
-
-  func ensureCycles(cid: Principal, target: Nat) : async () {
-    if (target == 0) return;
-    let have = await getChildCycles(cid);
-    if (have < target) { await topUpInternal(cid, target - have) };
-  };
-
-  // ===== Reuse path (pool canisters are STOPPED due to archiveChild) =====
-  if (pool.size() > 0) {
-    switch (pool.removeLast()) {
-      case (?cid) {
-        // 1) Update controllers while STOPPED (matches archiveChild behavior)
-        await ensureCycles(cid, cycles_for_create);
-        await startChild(cid);
-
-        await IC.update_settings({
-          canister_id = cid;
-          settings = {
-            controllers = ?(if (controllers.size() == 0) defaultCtrls else controllers);
-            compute_allocation = null; memory_allocation = null; freezing_threshold = null;
-          }
-        });
-
-        // 2) Install code while STOPPED using #reinstall (works whether wasm existed or not)
-        await IC.install_code({
-          mode        = #reinstall;
-          canister_id = cid;
-          wasm_module = requireWasm();
-          arg         = initArg
-        });
-
-        // 3) Start and then top up to requested target (wallet_receive needs running code)
-       
-
-        // Bring balance up to cycles_for_create (front-loads user’s target after reuse)
-      
-
-        // 4) Book-keeping (Active again)
-        switch (byId.get(cid)) { case (?old) { removeOwnerIndex(old.owner, cid) }; case null {} };
-       let rec : Child = {
-    id = cid; owner; created_at = nowNs(); note; status = #Active; visibility = #Public
-  };
-        recordOrRefresh(rec);
-        addOwnerIndex(owner, cid);
-
-        // keep stable mirror of pool in sync after removal
-        storePool := Buffer.toArray(pool);
-
-        return cid;
+    type ChildWallet = actor { wallet_receive : () -> async Nat };
+    type ChildMgmt   = actor {
+      health : () -> async {
+        paused : Bool; cycles : Nat; users : Nat; txCount : Nat; topUpCount : Nat; decayConfigHash : Nat
       };
-      case null {};
-    }
+    };
+
+    func getChildCycles(cid: Principal) : async Nat {
+      let c : ChildMgmt = actor (Principal.toText(cid));
+      try { (await c.health()).cycles } catch (_) { 0 }
+    };
+
+    func topUpInternal(cid: Principal, amount: Nat) : async () {
+      if (amount == 0) return;
+      let target : ChildWallet = actor (Principal.toText(cid));
+      ignore await (with cycles = amount) target.wallet_receive();
+    };
+
+    func ensureMinForReinstall(cid: Principal) : async () {
+      let have = await getChildCycles(cid);
+      if (have < MIN_REINSTALL_BUFFER) {
+        await topUpInternal(cid, MIN_REINSTALL_BUFFER - have);
+      }
+    };
+
+    // ---------- REUSE PATH ----------
+    if (pool.size() > 0) {
+      let m = pool.removeLast();
+      switch (m) {
+        case (?cid) {
+          // Make sure we have enough to safely reinstall
+          await ensureMinForReinstall(cid);
+
+          // If caller asked to attach extra cycles, do it *after* ensuring the buffer
+          if (cycles_for_create > 0) { await topUpInternal(cid, cycles_for_create) };
+
+          await startChild(cid);
+          await IC.update_settings({
+            canister_id = cid;
+            settings = {
+              controllers = ?(if (controllers.size() == 0) defaultCtrls else controllers);
+              compute_allocation = null;
+              memory_allocation  = null;
+              freezing_threshold = null;
+            }
+          });
+
+          // Try reinstall once; if it fails (e.g., still low cycles), add headroom and retry.
+          let reinstallArg = {
+            mode = #reinstall;
+            canister_id = cid;
+            wasm_module = requireWasm();
+            arg = initArg
+          };
+
+          let reinstallOk : Bool = 
+            await (async {
+              try {
+                await IC.install_code(reinstallArg);
+                true
+              } catch (_) {
+                // add extra headroom then retry once
+                await topUpInternal(cid, EXTRA_REINSTALL_HEADROOM);
+                try {
+                  await IC.install_code(reinstallArg);
+                  true
+                } catch (_) { false }
+              }
+            });
+
+          if (not reinstallOk) {
+            // Put it back into the pool and fall back to fresh create
+            pool.add(cid);
+            storePool := Buffer.toArray(pool);
+
+            // ---------- FRESH CREATE (fallback) ----------
+            let attach = if (cycles_for_create < MIN_CREATE_FEE) MIN_CREATE_FEE else cycles_for_create;
+            let res = await (with cycles = attach) IC.create_canister({
+              settings = ?{
+                controllers = ?(if (controllers.size() == 0) defaultCtrls else controllers);
+                compute_allocation = null;
+                memory_allocation  = null;
+                freezing_threshold = null;
+              }
+            });
+            let newCid = res.canister_id;
+            await IC.install_code({ mode = #install; canister_id = newCid; wasm_module = requireWasm(); arg = initArg });
+            await IC.start_canister({ canister_id = newCid });
+
+            let recFresh : Child = {
+              id = newCid; owner; created_at = nowNs(); note;
+              status = #Active; visibility = #Public; plan = #Basic; expires_at = nowNs() + MONTH_NS
+            };
+            recordChild(recFresh);
+            return newCid;
+          };
+
+          // Reuse success — update indexes and state
+          switch (byId.get(cid)) { case (?old) { removeOwnerIndex(old.owner, cid) }; case null {} };
+          let rec : Child = {
+            id = cid; owner; created_at = nowNs(); note;
+            status = #Active; visibility = #Public; plan = #Basic; expires_at = nowNs() + MONTH_NS
+          };
+          recordOrRefresh(rec); addOwnerIndex(owner, cid);
+
+          storePool := Buffer.toArray(pool);
+          return cid;
+        };
+        case null { /* nothing in pool */ };
+      };
+    };
+
+    // ---------- FRESH CREATE ----------
+    let attach = if (cycles_for_create < MIN_CREATE_FEE) MIN_CREATE_FEE else cycles_for_create;
+
+    let res = await (with cycles = attach) IC.create_canister({
+      settings = ?{
+        controllers = ?(if (controllers.size() == 0) defaultCtrls else controllers);
+        compute_allocation = null;
+        memory_allocation  = null;
+        freezing_threshold = null;
+      }
+    });
+    let cid = res.canister_id;
+
+    await IC.install_code({ mode = #install; canister_id = cid; wasm_module = requireWasm(); arg = initArg });
+    await IC.start_canister({ canister_id = cid });
+
+    let rec : Child = {
+      id = cid; owner; created_at = nowNs(); note;
+      status = #Active; visibility = #Public; plan = #Basic; expires_at = nowNs() + MONTH_NS
+    };
+    recordChild(rec);
+    return cid;
   };
 
-  // ===== Fresh create =====
-  let res = await (with cycles = cycles_for_create) IC.create_canister({
-    settings = ?{
-      controllers = ?(if (controllers.size() == 0) defaultCtrls else controllers);
-      compute_allocation = null; memory_allocation = null; freezing_threshold = null;
-    }
-  });
-  let cid = res.canister_id;
 
-  await IC.install_code({
-    mode        = #install;
-    canister_id = cid;
-    wasm_module = requireWasm();
-    arg         = initArg
-  });
-  await IC.start_canister({ canister_id = cid });
 
-  let rec : Child = {
-    id = cid; owner; created_at = nowNs(); note; status = #Active; visibility = #Public
+  /// Public: one-time Trial (1T upfront, 30d expiry), no top-ups.
+  public shared({ caller }) func createTrialForSelf(note : Text) : async { #ok : Principal; #err : Text } {
+    let owner = caller;
+    if (not isTrialAllowedFor(owner)) { return #err "Trial already used for this owner" };
+
+    let cid = await createOrReuseChildFor(owner, 1000000000000, [], note);//1T
+    let c0 = childOrTrap(cid);
+    let c1 : Child = {
+      id = c0.id; owner = c0.owner; created_at = c0.created_at; note = c0.note;
+      status = c0.status; visibility = c0.visibility; plan = #Trial; expires_at = nowNs() + MONTH_NS
+    };
+    updateChild(c1);
+
+    ignore await topUpInternalGlobal(cid, ONE_T);
+    markTrialUsed(owner);
+    #ok cid
   };
-  recordChild(rec);
 
-  // Creation burns fees; top up delta if needed to meet requested total
-  await ensureCycles(cid, cycles_for_create);
-
-  cid
-};
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  /// Public: Basic plan (activate/extend via Plug payment).
+  public shared({ caller }) func createBasicForSelf(note : Text) : async Principal {
+    let owner = caller;
+    let cid = await createOrReuseChildFor(owner, 0, [], note);
+    let c0 = childOrTrap(cid);
+    let c1 : Child = {
+      id = c0.id; owner = c0.owner; created_at = c0.created_at; note = c0.note;
+      status = c0.status; visibility = c0.visibility; plan = #Basic; expires_at = nowNs() + MONTH_NS
+    };
+    updateChild(c1);
+    cid
+  };
 
   /// Archive a child back to pool.
   public shared({ caller }) func archiveChild(canister_id : Principal) : async Text {
@@ -428,12 +605,9 @@ public shared({ caller }) func createOrReuseChildFor(
     switch (byId.get(canister_id)) {
       case null { "Error: unknown canister" };
       case (?c) {
-        // Ask child to return cycles to the factory vault BEFORE stopping it.
         let childDrain : ChildDrain = actor (Principal.toText(canister_id));
-        // Keep ~0.1T cycles inside child as reply buffer; tune as you like.
         ignore await childDrain.returnCyclesToFactory(100_000_000_000);
 
-        
         await IC.update_settings({
           canister_id = canister_id;
           settings = {
@@ -443,13 +617,13 @@ public shared({ caller }) func createOrReuseChildFor(
         });
 
         let c2 : Child = {
-          id = canister_id;owner = c.owner; created_at = c.created_at; note = c.note; status = #Archived; visibility = c.visibility
+          id = canister_id; owner = c.owner; created_at = c.created_at; note = c.note;
+          status = #Archived; visibility = c.visibility; plan = c.plan; expires_at = c.expires_at
         };
         updateChild(c2);
 
         removeOwnerIndex(c.owner, c.id);
-        pool.add(c.id);
-        storePool := Buffer.toArray(pool);
+        pool.add(c.id); storePool := Buffer.toArray(pool);
         "Success: archived"
       }
     }
@@ -476,8 +650,7 @@ public shared({ caller }) func createOrReuseChildFor(
 
     let np = Buffer.Buffer<Principal>(0);
     for (cid in pool.vals()) { if (cid != canister_id) np.add(cid) };
-    pool := np;
-    storePool := Buffer.toArray(pool);
+    pool := np; storePool := Buffer.toArray(pool);
 
     "Success: deleted"
   };
@@ -485,69 +658,70 @@ public shared({ caller }) func createOrReuseChildFor(
   // -------------------- Lifecycle helpers --------------------
   public shared({ caller }) func upgradeChild(canister_id : Principal) : async () {
     requireOrgAdmin(caller, canister_id);
-    let child = switch (byId.get(canister_id)) { case (?c) c; case null Debug.trap("unknown child") };
+    let child = childOrTrap(canister_id);
     await IC.install_code({
-      mode = #upgrade;
-      canister_id;
-      wasm_module = requireWasm();
-      // TWO-arg candid again on upgrade
-      arg = to_candid(child.owner, Principal.fromActor(ReputationFactory));
+      mode = #upgrade; canister_id; wasm_module = requireWasm();
+      arg = to_candid(child.owner, Principal.fromActor(ReputationFactory))
     });
   };
 
-
-
-
-  // In ReputationFactory.mo
-public shared({ caller }) func reinstallChild(canister_id : Principal, owner : Principal, factory : Principal) : async () {
+  public shared({ caller }) func reinstallChild(canister_id : Principal, owner : Principal, factory : Principal) : async () {
     requireOrgAdmin(caller, canister_id);
-
-    // Encode (owner, factory) into candid Blob
     let arg : Blob = to_candid(owner, factory);
-
     await IC.stop_canister({ canister_id });
-    await IC.install_code({
-        mode        = #reinstall;
-        canister_id = canister_id;
-        wasm_module = requireWasm();
-        arg         = arg;
-    });
+    await IC.install_code({ mode = #reinstall; canister_id = canister_id; wasm_module = requireWasm(); arg });
     await IC.start_canister({ canister_id });
-};
-
-
-
-
-
-
-
-
-
+  };
 
   public shared({ caller }) func startChild(canister_id : Principal) : async () {
-    requireOrgAdmin(caller, canister_id);
-    await IC.start_canister({ canister_id = canister_id })
+    requireOrgAdmin(caller, canister_id); await IC.start_canister({ canister_id = canister_id })
   };
 
   public shared({ caller }) func stopChild(canister_id : Principal) : async () {
-    requireOrgAdmin(caller, canister_id);
-    await IC.stop_canister({ canister_id = canister_id })
+    requireOrgAdmin(caller, canister_id); await IC.stop_canister({ canister_id = canister_id })
   };
 
-  /// Book-keeping only (does not touch actual controller list).
   public shared({ caller }) func reassignOwner(canister_id : Principal, newOwner : Principal) : async Text {
     requireOrgAdmin(caller, canister_id);
     switch (byId.get(canister_id)) {
       case null { "Error: unknown canister" };
       case (?c) {
         removeOwnerIndex(c.owner, canister_id);
-
         let c2 : Child = {
-          id = canister_id ; owner = newOwner; created_at = c.created_at;note = c.note; status = c.status ; visibility = c.visibility;
+          id = canister_id; owner = newOwner; created_at = c.created_at; note = c.note;
+          status = c.status; visibility = c.visibility; plan = c.plan; expires_at = c.expires_at
         };
-        updateChild(c2);
-        addOwnerIndex(newOwner, canister_id);
+        updateChild(c2); addOwnerIndex(newOwner, canister_id);
         "Success: owner updated"
+      }
+    }
+  };
+
+  // -------------------- Policy-enforced top-ups --------------------
+  public shared({ caller }) func topUpChild(canister_id : Principal, amount : Nat)
+    : async { #ok : Nat; #err : Text } {
+    requireOrgAdmin(caller, canister_id);
+    await checkAndAutoArchive(canister_id);
+
+    let c = childOrTrap(canister_id);
+    if (c.status == #Archived) {
+      return #err "Archived: cannot top up. Renew plan or create a new child.";
+    };
+    switch (c.plan) {
+      case (#Trial) { return #err "Trial plan: top-ups are not allowed" };
+      case (#Basic) {
+        let used = getUsedToday(canister_id);
+        if (used >= ONE_T) { return #err "Daily cap reached (1T)" };
+        if (used + amount > ONE_T) {
+          return #err ("Daily cap exceeded: remaining=" # Nat.toText(ONE_T - used));
+        };
+        let target : ChildWallet = actor (Principal.toText(canister_id));
+        try {
+          let accepted = await (with cycles = amount) target.wallet_receive();
+          if (accepted != amount) { return #err ("accepted=" # Nat.toText(accepted)) };
+          addUsedToday(canister_id, amount);
+          #ok accepted
+        } catch (_) { #err "transfer failed" }
       }
     }
   };
@@ -565,71 +739,99 @@ public shared({ caller }) func reinstallChild(canister_id : Principal, owner : P
 
   public query func counts() : async { total : Nat; active : Nat; archived : Nat } {
     var a : Nat = 0; var r : Nat = 0;
-    for (c in store.vals()) {
-      switch (c.status) { case (#Active) { a += 1 }; case (#Archived) { r += 1 } }
-    };
+    for (c in store.vals()) { switch (c.status) { case (#Active) { a += 1 }; case (#Archived) { r += 1 } } };
     { total = store.size(); active = a; archived = r }
   };
 
-  /// Fetch child health straight from the child
   public shared({ caller }) func childHealth(cid : Principal)
     : async ?{ paused : Bool; cycles : Nat; users : Nat; txCount : Nat; topUpCount : Nat; decayConfigHash : Nat } {
     requireOrgAdmin(caller, cid);
-
     let c : ChildMgmt = actor (Principal.toText(cid));
     ?(await c.health())
   };
 
-  // Replace pool with an explicit list
-public shared({ caller }) func adminSetPool(newPool : [Principal]) : async Text {
-  requireAdmin(caller);
-  let b = Buffer.Buffer<Principal>(newPool.size());
-  for (cid in newPool.vals()) { b.add(cid) };
-  pool := b;
-  storePool := Buffer.toArray(pool);
-  "ok"
-};
+  public shared({ caller }) func adminSetPool(newPool : [Principal]) : async Text {
+    requireAdmin(caller);
+    let b = Buffer.Buffer<Principal>(newPool.size());
+    for (cid in newPool.vals()) { b.add(cid) };
+    pool := b; storePool := Buffer.toArray(pool); "ok"
+  };
 
-// Require admin and attempt to drain cycles from a child.
-// Returns the number of cycles that the child accepted (or 0 on error).
-public shared({ caller }) func adminDrainChild(canister_id : Principal, minRemain : Nat) : async Nat {
-  requireAdmin(caller);                           // only the global admin may call this
-  let child : ChildDrain = actor (Principal.toText(canister_id));
-  try {
-    let accepted = await child.returnCyclesToFactory(minRemain);
-    accepted
-  } catch (_) {
-    // child didn't export the method, or call failed — return 0 as "nothing drained"
-    0
+  public shared({ caller }) func adminDrainChild(canister_id : Principal, minRemain : Nat) : async Nat {
+    requireAdmin(caller);
+    let child : ChildDrain = actor (Principal.toText(canister_id));
+    try { await child.returnCyclesToFactory(minRemain) } catch (_) { 0 }
+  };
+
+  public shared({ caller }) func toggleVisibility(canister_id : Principal) : async Visibility {
+    requireOrgAdmin(caller, canister_id);
+    let c = childOrTrap(canister_id);
+    let next : Visibility = switch (c.visibility) { case (#Public) #Private; case (#Private) #Public };
+    let c2 : Child = {
+      id = c.id; owner = c.owner; created_at = c.created_at; note = c.note;
+      status = c.status; visibility = next; plan = c.plan; expires_at = c.expires_at
+    };
+    updateChild(c2); next
+  };
+
+  // -------------------- Expiry sweeper & migration --------------------
+  public shared({ caller }) func adminArchiveExpired(limit : Nat) : async Nat {
+    requireAdmin(caller);
+    var archived : Nat = 0;
+    let now = nowNs();
+    label L for (c in store.vals()) {
+      if (archived == limit) break L;
+      if (c.status == #Active and c.expires_at <= now) {
+        ignore await archiveChild(c.id); archived += 1;
+      }
+    };
+    archived
+  };
+
+  public shared({ caller }) func adminBackfillPlanDefaults(plan : Plan) : async Text {
+    requireAdmin(caller);
+    let now = nowNs();
+    let buf = Buffer.Buffer<Child>(store.size());
+    for (c in store.vals()) {
+      let c2 : Child = {
+        id = c.id; owner = c.owner; created_at = c.created_at; note = c.note;
+        status = c.status; visibility = c.visibility; plan = plan; expires_at = now + MONTH_NS
+      };
+      byId.put(c.id, c2); buf.add(c2);
+    };
+    store := Buffer.toArray(buf); "ok"
+  };
+  // Send ICP from the factory TREASURY_SUB to any ICRC-1 account (e.g., your Plug account)
+public shared({ caller }) func adminTreasuryWithdraw(
+  to_owner : Principal,          // your Plug principal
+  to_sub   : ?Blob,              // usually null for Plug
+  amount_e8s : Nat               // amount the recipient should receive, in e8s
+) : async { #ok : Nat; #err : Text } {
+  requireAdmin(caller);
+
+  // Check treasury balance first
+  let fromAcc = icrcAccount(Principal.fromActor(ReputationFactory), TREASURY_SUB);
+  let bal     = await Ledger.icrc1_balance_of(fromAcc);
+  // icrc1_transfer will debit (amount + fee) from the treasury
+  let needed  = amount_e8s + FEE_E8S;
+  if (bal < needed) {
+    return #err ("insufficient treasury: have=" # Nat.toText(bal) # " need=" # Nat.toText(needed));
+  };
+
+  // Perform transfer (recipient gets `amount_e8s`; fee is charged separately to the treasury)
+  let res = await Ledger.icrc1_transfer({
+    from_subaccount = ?TREASURY_SUB;
+    to              = { owner = to_owner; subaccount = to_sub };
+    amount          = amount_e8s;
+    fee             = ?FEE_E8S;
+    memo            = null;
+    created_at_time = null
+  });
+
+  switch (res) {
+    case (#Ok tx)  { #ok tx };                            // returns ledger tx index
+    case (#Err e)  { #err ("transfer failed: " # debug_show e) };
   }
 };
-public shared({ caller }) func toggleVisibility(
-  canister_id : Principal
-) : async Visibility {
-  requireOrgAdmin(caller, canister_id);
-
-  let c = switch (byId.get(canister_id)) {
-    case (?x) x;
-    case null Debug.trap("unknown canister");
-  };
-
-  let next : Visibility = switch (c.visibility) {
-    case (#Public)  #Private;
-    case (#Private) #Public;
-  };
-
-  let c2 : Child = {
-    id = c.id;
-    owner = c.owner;
-    created_at = c.created_at;
-    note = c.note;
-    status = c.status;
-    visibility = next;
-  };
-
-  updateChild(c2);
-  next
-};
-
 
 }
