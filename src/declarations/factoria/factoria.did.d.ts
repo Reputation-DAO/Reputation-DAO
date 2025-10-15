@@ -7,16 +7,32 @@ export interface Child {
   'status' : Status,
   'owner' : Principal,
   'note' : string,
+  'plan' : Plan,
   'created_at' : bigint,
   'visibility' : Visibility,
+  'expires_at' : bigint,
 }
+export type Plan = { 'Basic' : null } |
+  { 'Trial' : null };
 export type Status = { 'Active' : null } |
   { 'Archived' : null };
 export type Visibility = { 'Private' : null } |
   { 'Public' : null };
 export interface _SERVICE {
+  'activateBasicForChildAfterPayment' : ActorMethod<
+    [Principal],
+    { 'ok' : string } |
+      { 'err' : string }
+  >,
+  'adminArchiveExpired' : ActorMethod<[bigint], bigint>,
+  'adminBackfillPlanDefaults' : ActorMethod<[Plan], string>,
   'adminDrainChild' : ActorMethod<[Principal, bigint], bigint>,
   'adminSetPool' : ActorMethod<[Array<Principal>], string>,
+  'adminTreasuryWithdraw' : ActorMethod<
+    [Principal, [] | [Uint8Array | number[]], bigint],
+    { 'ok' : bigint } |
+      { 'err' : string }
+  >,
   'archiveChild' : ActorMethod<[Principal], string>,
   'childHealth' : ActorMethod<
     [Principal],
@@ -35,6 +51,7 @@ export interface _SERVICE {
     [],
     { 'total' : bigint, 'active' : bigint, 'archived' : bigint }
   >,
+  'createBasicForSelf' : ActorMethod<[string], Principal>,
   'createChildForOwner' : ActorMethod<
     [Principal, bigint, Array<Principal>, string],
     Principal
@@ -43,9 +60,22 @@ export interface _SERVICE {
     [Principal, bigint, Array<Principal>, string],
     Principal
   >,
+  'createTrialForSelf' : ActorMethod<
+    [string],
+    { 'ok' : Principal } |
+      { 'err' : string }
+  >,
   'deleteChild' : ActorMethod<[Principal], string>,
   'forceAddOwnerIndex' : ActorMethod<[Principal, Principal], string>,
   'getAdmin' : ActorMethod<[], Principal>,
+  'getBasicPayInfoForChild' : ActorMethod<
+    [Principal],
+    {
+      'account_owner' : Principal,
+      'subaccount' : Uint8Array | number[],
+      'amount_e8s' : bigint,
+    }
+  >,
   'getChild' : ActorMethod<[Principal], [] | [Child]>,
   'listByOwner' : ActorMethod<[Principal], Array<Principal>>,
   'listChildren' : ActorMethod<[], Array<Child>>,

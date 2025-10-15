@@ -1,5 +1,6 @@
 import { TooltipProvider } from "@/components/ui/core";
 import { Toaster, SonnerToaster } from "@/components/ui/composed";
+
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
@@ -10,7 +11,8 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 
 import AuthPage from "@/features/auth";
 import { HomePage, BlogPage, CommunityPage, PostViewerPage } from "@/features/marketing";
-import OrgSelectorPage from "@/features/org";
+import OrgSelectorPage from "@/features/orgs";
+
 import DashboardPage, {
   AwardRepPage,
   RevokeRepPage,

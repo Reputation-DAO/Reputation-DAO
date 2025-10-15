@@ -1,4 +1,5 @@
 export const idlFactory = ({ IDL }) => {
+  const Plan = IDL.Variant({ 'Basic' : IDL.Null, 'Trial' : IDL.Null });
   const Status = IDL.Variant({ 'Active' : IDL.Null, 'Archived' : IDL.Null });
   const Visibility = IDL.Variant({ 'Private' : IDL.Null, 'Public' : IDL.Null });
   const Child = IDL.Record({
@@ -6,12 +7,26 @@ export const idlFactory = ({ IDL }) => {
     'status' : Status,
     'owner' : IDL.Principal,
     'note' : IDL.Text,
+    'plan' : Plan,
     'created_at' : IDL.Nat64,
     'visibility' : Visibility,
+    'expires_at' : IDL.Nat64,
   });
   return IDL.Service({
+    'activateBasicForChildAfterPayment' : IDL.Func(
+        [IDL.Principal],
+        [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
+        [],
+      ),
+    'adminArchiveExpired' : IDL.Func([IDL.Nat], [IDL.Nat], []),
+    'adminBackfillPlanDefaults' : IDL.Func([Plan], [IDL.Text], []),
     'adminDrainChild' : IDL.Func([IDL.Principal, IDL.Nat], [IDL.Nat], []),
     'adminSetPool' : IDL.Func([IDL.Vec(IDL.Principal)], [IDL.Text], []),
+    'adminTreasuryWithdraw' : IDL.Func(
+        [IDL.Principal, IDL.Opt(IDL.Vec(IDL.Nat8)), IDL.Nat],
+        [IDL.Variant({ 'ok' : IDL.Nat, 'err' : IDL.Text })],
+        [],
+      ),
     'archiveChild' : IDL.Func([IDL.Principal], [IDL.Text], []),
     'childHealth' : IDL.Func(
         [IDL.Principal],
@@ -40,6 +55,7 @@ export const idlFactory = ({ IDL }) => {
         ],
         ['query'],
       ),
+    'createBasicForSelf' : IDL.Func([IDL.Text], [IDL.Principal], []),
     'createChildForOwner' : IDL.Func(
         [IDL.Principal, IDL.Nat, IDL.Vec(IDL.Principal), IDL.Text],
         [IDL.Principal],
@@ -50,6 +66,11 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Principal],
         [],
       ),
+    'createTrialForSelf' : IDL.Func(
+        [IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Principal, 'err' : IDL.Text })],
+        [],
+      ),
     'deleteChild' : IDL.Func([IDL.Principal], [IDL.Text], []),
     'forceAddOwnerIndex' : IDL.Func(
         [IDL.Principal, IDL.Principal],
@@ -57,6 +78,17 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'getAdmin' : IDL.Func([], [IDL.Principal], ['query']),
+    'getBasicPayInfoForChild' : IDL.Func(
+        [IDL.Principal],
+        [
+          IDL.Record({
+            'account_owner' : IDL.Principal,
+            'subaccount' : IDL.Vec(IDL.Nat8),
+            'amount_e8s' : IDL.Nat,
+          }),
+        ],
+        ['query'],
+      ),
     'getChild' : IDL.Func([IDL.Principal], [IDL.Opt(Child)], ['query']),
     'listByOwner' : IDL.Func(
         [IDL.Principal],
