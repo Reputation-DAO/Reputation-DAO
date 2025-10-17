@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import './LiquidEther.css';
 
 export interface LiquidEtherProps {
   mouseForce?: number;
