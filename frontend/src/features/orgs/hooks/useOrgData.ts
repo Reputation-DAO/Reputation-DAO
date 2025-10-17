@@ -12,7 +12,6 @@ import {
   startChild as apiStartChild,
   stopChild as apiStopChild,
   archiveChild as apiArchiveChild,
-  deleteChild as apiDeleteChild,
   topUpChild as apiTopUpChild,
   toggleVisibility as apiToggleVisibility,
   getBasicPayInfoForChild,
@@ -222,24 +221,6 @@ export function useOrgData(params: {
     [factoria, refreshAll]
   );
 
-  const deleteForever = useCallback(
-    async (childId: string) => {
-      if (!factoria) throw new Error("Actor not ready");
-      setWorking(true);
-      try {
-        const res = await apiDeleteChild(factoria, childId);
-        if (/success/i.test(res)) toast.success(res);
-        else toast.message(res);
-        await refreshAll();
-      } catch (e: any) {
-        toast.error(e?.message || "Delete failed");
-      } finally {
-        setWorking(false);
-      }
-    },
-    [factoria, refreshAll]
-  );
-
   const toggleVisibility = useCallback(
     async (childId: string) => {
       if (!factoria) throw new Error("Actor not ready");
@@ -326,7 +307,6 @@ export function useOrgData(params: {
     topUp,
     togglePower,
     archive,
-    deleteForever,
     toggleVisibility,
 
     // payments

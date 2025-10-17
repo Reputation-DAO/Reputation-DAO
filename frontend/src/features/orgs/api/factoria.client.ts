@@ -10,6 +10,15 @@ import {
 } from "../model/org.selectors";
 import type { OrgRecord } from "../model/org.types";
 
+async function withLogging(label: string, fn: () => Promise<any>) {
+  try {
+    return await fn();
+  } catch (err) {
+    console.error(`[Factoria:${label}]`, err);
+    throw err;
+  }
+}
+
 // ---------------- Reads ----------------
 
 export async function fetchOwnedOrgRecords(
@@ -17,12 +26,12 @@ export async function fetchOwnedOrgRecords(
   principalText: string
 ): Promise<OrgRecord[]> {
   const owner = Principal.fromText(principalText);
-  const childIds = await f.listByOwner(owner); // Principal[]
+  const childIds = await withLogging("listByOwner", () => f.listByOwner(owner)); // Principal[]
 
   // fetch metadata for each id
   const childRecords = await Promise.all(
     childIds.map(async (pid) => {
-      const recOpt = await f.getChild(pid); // [] | [Child]
+      const recOpt = await withLogging("getChild", () => f.getChild(pid)); // [] | [Child]
       return recOpt.length ? { pid, rec: recOpt[0] } : null;
     })
   );
@@ -37,7 +46,7 @@ export async function fetchOwnedOrgRecords(
         return { id: pid.toText(), health: null, isStopped: true };
       }
       try {
-        const hOpt = await f.childHealth(pid); // [] | [Health]
+        const hOpt = await withLogging("childHealth", () => f.childHealth(pid)); // [] | [Health]
         return hOpt.length
           ? { id: pid.toText(), health: hOpt[0], isStopped: false }
           : { id: pid.toText(), health: null, isStopped: true };
@@ -93,7 +102,7 @@ export async function fetchPublicOrgRecords(
   f: Factoria,
   mine: Set<string>
 ): Promise<OrgRecord[]> {
-  const allChildren = await f.listChildren(); // Child[]
+  const allChildren = await withLogging("listChildren", () => f.listChildren()); // Child[]
   return allChildren
     .map((child): OrgRecord | null => {
       const idText = child.id.toText();
@@ -129,7 +138,9 @@ export async function createOrReuseChildFor(
   note: string
 ) {
   const owner = Principal.fromText(ownerText);
-  const newId = await f.createOrReuseChildFor(owner, cycles, controllers, note);
+  const newId = await withLogging("createOrReuseChildFor", () =>
+    f.createOrReuseChildFor(owner, cycles, controllers, note)
+  );
   return newId.toText();
 }
 
@@ -137,7 +148,7 @@ export async function createTrialForSelf(
   f: Factoria,
   note: string
 ): Promise<{ ok?: string; err?: string }> {
-  const res = await f.createTrialForSelf(note);
+  const res = await withLogging("createTrialForSelf", () => f.createTrialForSelf(note));
   if ("ok" in res) return { ok: res.ok.toText() };
   return { err: res.err };
 }
@@ -146,7 +157,7 @@ export async function createBasicForSelf(
   f: Factoria,
   note: string
 ): Promise<string> {
-  const id = await f.createBasicForSelf(note);
+  const id = await withLogging("createBasicForSelf", () => f.createBasicForSelf(note));
   return id.toText();
 }
 
@@ -156,32 +167,28 @@ export async function topUpChild(
   amount: bigint
 ): Promise<{ ok?: bigint; err?: string }> {
   const id = Principal.fromText(childIdText);
-  const res = await f.topUpChild(id, amount); // {#ok Nat; #err Text}
+  const res = await withLogging("topUpChild", () => f.topUpChild(id, amount)); // {#ok Nat; #err Text}
   if ("ok" in res) return { ok: res.ok };
   return { err: res.err };
 }
 
 export async function startChild(f: Factoria, childIdText: string): Promise<void> {
-  await f.startChild(Principal.fromText(childIdText));
+  await withLogging("startChild", () => f.startChild(Principal.fromText(childIdText)));
 }
 
 export async function stopChild(f: Factoria, childIdText: string): Promise<void> {
-  await f.stopChild(Principal.fromText(childIdText));
+  await withLogging("stopChild", () => f.stopChild(Principal.fromText(childIdText)));
 }
 
 export async function archiveChild(f: Factoria, childIdText: string): Promise<string> {
-  return await f.archiveChild(Principal.fromText(childIdText)); // returns Text status
-}
-
-export async function deleteChild(f: Factoria, childIdText: string): Promise<string> {
-  return await f.deleteChild(Principal.fromText(childIdText)); // returns Text status
+  return await withLogging("archiveChild", () => f.archiveChild(Principal.fromText(childIdText))); // returns Text status
 }
 
 export async function toggleVisibility(
   f: Factoria,
   childIdText: string
 ): Promise<"Public" | "Private"> {
-  const v = await f.toggleVisibility(Principal.fromText(childIdText));
+  const v = await withLogging("toggleVisibility", () => f.toggleVisibility(Principal.fromText(childIdText)));
   return "Private" in v ? "Private" : "Public";
 }
 
@@ -196,7 +203,7 @@ export async function getBasicPayInfoForChild(
   childIdText: string
 ): Promise<{ account_owner: string; subaccount_hex: string; amount_e8s: bigint }> {
   const cid = Principal.fromText(childIdText);
-  const info = await f.getBasicPayInfoForChild(cid);
+  const info = await withLogging("getBasicPayInfoForChild", () => f.getBasicPayInfoForChild(cid));
   // Convert Blob to hex for frontend display
   const sub = (info.subaccount as unknown as Uint8Array) || new Uint8Array();
   const hex = [...sub].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -216,7 +223,7 @@ export async function activateBasicForChildAfterPayment(
   childIdText: string
 ): Promise<{ ok?: string; err?: string }> {
   const cid = Principal.fromText(childIdText);
-  const res = await f.activateBasicForChildAfterPayment(cid);
+  const res = await withLogging("activateBasicForChildAfterPayment", () => f.activateBasicForChildAfterPayment(cid));
   if ("ok" in res) return { ok: res.ok };
   return { err: res.err };
 }

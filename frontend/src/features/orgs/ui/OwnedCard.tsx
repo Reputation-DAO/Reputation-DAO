@@ -4,12 +4,11 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { formatCycles, formatTimestamp, daysUntil, percentOfMaxCycles } from "../model/org.selectors";
 import type { OrgRecord } from "../model/org.types";
-import { Eye, EyeOff, Power, Trash2, Database, Clock } from "lucide-react";
+import { Eye, EyeOff, Power, Database, Trash2 } from "lucide-react";
 
 type OwnedCardProps = {
   org: OrgRecord;
   onTogglePower?: (org: OrgRecord) => void;
-  onArchive?: (id: string) => void;
   onDelete?: (id: string) => void;
   onVisibility?: (id: string) => void;
   onTopUp?: (id: string) => void;
@@ -19,7 +18,6 @@ type OwnedCardProps = {
 export const OwnedCard = ({
   org,
   onTogglePower,
-  onArchive,
   onDelete,
   onVisibility,
   onTopUp,
@@ -82,9 +80,6 @@ export const OwnedCard = ({
         </div>
 
         <div className="flex gap-1">
-          <Button size="icon" variant="ghost" onClick={() => onArchive?.(org.id)} title="Archive">
-            <Clock className="h-4 w-4" />
-          </Button>
           <Button size="icon" variant="ghost" onClick={() => onDelete?.(org.id)} title="Delete">
             <Trash2 className="h-4 w-4" />
           </Button>

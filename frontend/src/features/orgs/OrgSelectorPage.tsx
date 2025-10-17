@@ -71,7 +71,6 @@ const OrgSelectorPage: React.FC = () => {
     topUp,
     togglePower,
     archive,
-    deleteForever,
     toggleVisibility,
 
     getPaymentInfo,     // exported in case you later add a "Pay" dialog
@@ -197,7 +196,7 @@ const OrgSelectorPage: React.FC = () => {
 
   const onDelete = async () => {
     if (!deleteOrg) return;
-    await deleteForever(deleteOrg.id);
+    await archive(deleteOrg.id);
   };
 
   const onToggleVisibility = async (id: string) => {
@@ -247,10 +246,6 @@ const OrgSelectorPage: React.FC = () => {
               org={org}
               onTopUp={() => onTopUpOpen(org)}
               onTogglePower={(o) => togglePower(o)}
-              onArchive={(id) => {
-                setDeleteOrg({ ...org, id });
-                setDeleteOpen(true);
-              }}
               onDelete={(id) => {
                 setDeleteOrg({ ...org, id });
                 setDeleteOpen(true);
@@ -598,13 +593,9 @@ const OrgSelectorPage: React.FC = () => {
       <ConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        title={deleteOrg?.status === "Active" ? "Remove Organization" : "Delete Organization"}
-        message={
-          deleteOrg?.status === "Active"
-            ? `Are you sure you want to remove ${deleteOrg?.name}? We'll attempt to archive it first.`
-            : `Delete ${deleteOrg?.name}? This is permanent.`
-        }
-        confirmLabel={deleteOrg?.status === "Active" ? "Remove" : "Delete"}
+        title="Archive Organization"
+        message={`Archive ${deleteOrg?.name}? The canister will be parked in the factory pool and controllers handed back to the factory.`}
+        confirmLabel="Archive"
         destructive
         onConfirm={onDelete}
       />
