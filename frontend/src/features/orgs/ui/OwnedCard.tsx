@@ -13,6 +13,7 @@ type OwnedCardProps = {
   onDelete?: (id: string) => void;
   onVisibility?: (id: string) => void;
   onTopUp?: (id: string) => void;
+  onManage?: (id: string) => void;
 };
 
 export const OwnedCard = ({
@@ -22,6 +23,7 @@ export const OwnedCard = ({
   onDelete,
   onVisibility,
   onTopUp,
+  onManage,
 }: OwnedCardProps) => {
   const pct = percentOfMaxCycles(org.cycles);
   const expDays = daysUntil(org.expiresAt);
@@ -85,6 +87,13 @@ export const OwnedCard = ({
           </Button>
           <Button size="icon" variant="ghost" onClick={() => onDelete?.(org.id)} title="Delete">
             <Trash2 className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="default"
+            className="h-9 rounded-xl px-4 text-sm font-semibold"
+            onClick={() => onManage?.(org.id)}
+          >
+            Manage
           </Button>
         </div>
       </CardFooter>

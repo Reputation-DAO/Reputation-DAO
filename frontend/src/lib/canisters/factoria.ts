@@ -1,10 +1,17 @@
 // lib/canisters/factoria.ts
 import { Actor, HttpAgent } from '@dfinity/agent';
-import { idlFactory } from '../../../../src/declarations/factoria/factoria.did.js';
-import type { _SERVICE } from '../../../../src/declarations/factoria/factoria.did.d.ts';
-import { PLUG_HOST } from '@/utils/plug';
+import { idlFactory } from '../../declarations/factoria/factoria.did.js';
+import type { _SERVICE } from '../../declarations/factoria/factoria.did.d.ts';
+import { ensurePlugAgent } from '@/utils/plug';
 
-const FACTORIA_CANISTER_ID = import.meta.env.VITE_FACTORIA_CANISTER_ID || "ttoz7-uaaaa-aaaam-qd34a-cai";
+// IMPORTANT: this must be the API host, not your asset domain.
+const PLUG_HOST =
+  import.meta.env.VITE_DFX_NETWORK === 'local'
+    ? 'http://127.0.0.1:4943'
+    : 'https://icp-api.io';
+
+const FACTORIA_CANISTER_ID =
+  import.meta.env.VITE_FACTORIA_CANISTER_ID || 'ttoz7-uaaaa-aaaam-qd34a-cai';
 const DEFAULT_HOST = PLUG_HOST;
 
 export async function makeFactoriaActor(opts?: {
@@ -15,9 +22,7 @@ export async function makeFactoriaActor(opts?: {
   const host = opts?.host ?? DEFAULT_HOST;
   const canisterId = opts?.canisterId ?? FACTORIA_CANISTER_ID!;
 
-  const agent =
-    opts?.agent ??
-    new HttpAgent({ host });
+  const agent = opts?.agent ?? new HttpAgent({ host });
 
   const lowerHost = host.toLowerCase();
   const isLocal =
@@ -42,20 +47,16 @@ export async function makeFactoriaWithPlug(opts?: {
     throw new Error('Plug extension not found. Please install/enable Plug.');
   }
 
-  const connected = await window.ic.plug.isConnected?.();
-  if (!connected) {
-    const ok = await window.ic.plug.requestConnect?.({ whitelist: [canisterId], host });
-    if (!ok) throw new Error('User rejected Plug connection.');
+  const agent = await ensurePlugAgent({ host, whitelist: [canisterId] });
+
+  // Only fetch root key on local
+  const isLocal =
+    host.startsWith('http://127.0.0.1') || host.startsWith('http://localhost');
+  if (isLocal) {
+    try { await (agent as any)?.fetchRootKey?.(); } catch {}
   }
 
-  if (!window.ic.plug.agent) {
-    await window.ic.plug.createAgent?.({ whitelist: [canisterId], host });
-  }
-
-  const agent = window.ic.plug.agent as HttpAgent;
   return Actor.createActor<_SERVICE>(idlFactory, { agent, canisterId });
 }
 
 export const getFactoriaCanisterId = () => FACTORIA_CANISTER_ID!;
-
-// Global types are handled by @connect2ic library

@@ -1,8 +1,7 @@
 // src/features/orgs/hooks/useOrgData.ts
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { idlFactory } from '../../../../../src/declarations/factoria/factoria.did.js';
-import type { _SERVICE as Factoria } from '../../../../../src/declarations/factoria/factoria.did.d.ts';
+import type { _SERVICE as Factoria } from '../../../declarations/factoria/factoria.did.d.ts';
 import type { OrgRecord } from "../model/org.types";
 import {
   fetchOwnedOrgRecords,
@@ -40,7 +39,7 @@ export function useOrgData(params: {
 
   const [creating, setCreating] = useState(false);
   const [working, setWorking] = useState(false);
-  const [lastError, setLastError] = useState<string | null>(null);
+  const ownedRef = useRef<OrgRecord[]>([]);
 
   const mounted = useRef(true);
 
@@ -56,29 +55,30 @@ export function useOrgData(params: {
     setLoadingOwned(true);
     try {
       const rows = await fetchOwnedOrgRecords(factoria, principal);
-      if (mounted.current) setOwned(rows);
+      if (mounted.current) {
+        ownedRef.current = rows;
+        setOwned(rows);
+      }
     } catch (e: any) {
-      setLastError(e?.message || "Failed to fetch owned organizations");
-      toast.error(lastError ?? "Failed to fetch owned organizations");
+      toast.error(e?.message || "Failed to fetch owned organizations");
     } finally {
       if (mounted.current) setLoadingOwned(false);
     }
-  }, [factoria, principal, lastError]);
+  }, [factoria, principal]);
 
   const fetchPublic = useCallback(async () => {
     if (!factoria) return;
     setLoadingPublic(true);
     try {
-      const mine = new Set(owned.map((o) => o.id));
+      const mine = new Set(ownedRef.current.map((o) => o.id));
       const rows = await fetchPublicOrgRecords(factoria, mine);
       if (mounted.current) setPublicOrgs(rows);
     } catch (e: any) {
-      setLastError(e?.message || "Failed to fetch public organizations");
-      toast.error(lastError ?? "Failed to fetch public organizations");
+      toast.error(e?.message || "Failed to fetch public organizations");
     } finally {
       if (mounted.current) setLoadingPublic(false);
     }
-  }, [factoria, owned, lastError]);
+  }, [factoria]);
 
   const refreshAll = useCallback(async () => {
     await Promise.all([fetchOwned(), fetchPublic()]);
@@ -89,6 +89,7 @@ export function useOrgData(params: {
     if (!factoria || !principal) {
       setOwned([]);
       setPublicOrgs([]);
+      ownedRef.current = [];
       return;
     }
     void fetchOwned().then(() => fetchPublic());
@@ -247,9 +248,13 @@ export function useOrgData(params: {
         const next = await apiToggleVisibility(factoria, childId);
         toast.success(`Visibility: ${next}`);
         // local patch to avoid full refetch
-        setOwned((prev) =>
-          prev.map((o) => (o.id === childId ? { ...o, visibility: next } : o))
-        );
+        setOwned((prev) => {
+          const updated = prev.map((o) =>
+            o.id === childId ? { ...o, visibility: next } : o
+          );
+          ownedRef.current = updated;
+          return updated;
+        });
       } catch (e: any) {
         toast.error(e?.message || "Toggle visibility failed");
       } finally {
@@ -305,7 +310,6 @@ export function useOrgData(params: {
     loadingPublic,
     creating,
     working,
-    lastError,
 
     // derived
     mineIds,

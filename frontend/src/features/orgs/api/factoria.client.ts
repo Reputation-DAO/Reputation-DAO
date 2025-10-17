@@ -2,7 +2,7 @@ import { Principal } from "@dfinity/principal";
 import type {
   _SERVICE as Factoria,
   Child as FactoryChild,
-} from '../../../../../src/declarations/factoria/factoria.did.d.ts';
+} from '../../../declarations/factoria/factoria.did.d.ts';
 import {
   toStatus,
   toPlan,

@@ -1,0 +1,99 @@
+type Visibility = 
+ variant {
+   Private;
+   Public;
+ };
+type Status = 
+ variant {
+   Active;
+   Archived;
+ };
+type Plan = 
+ variant {
+   Basic;
+   Trial;
+ };
+type Child = 
+ record {
+   created_at: nat64;
+   expires_at: nat64;
+   id: principal;
+   note: text;
+   owner: principal;
+   plan: Plan;
+   status: Status;
+   visibility: Visibility;
+ };
+service : {
+  activateBasicForChildAfterPayment: (cid: principal) ->
+   (variant {
+      err: text;
+      ok: text;
+    });
+  adminArchiveExpired: (limit: nat) -> (nat);
+  adminBackfillPlanDefaults: (plan: Plan) -> (text);
+  adminDrainChild: (canister_id: principal, minRemain: nat) -> (nat);
+  adminSetPool: (newPool: vec principal) -> (text);
+  adminTreasuryWithdraw: (to_owner: principal, to_sub: opt blob, amount_e8s:
+   nat) -> (variant {
+              err: text;
+              ok: nat;
+            });
+  /// Archive a child back to pool.
+  archiveChild: (canister_id: principal) -> (text);
+  childHealth: (cid: principal) ->
+   (opt
+     record {
+       cycles: nat;
+       decayConfigHash: nat;
+       paused: bool;
+       topUpCount: nat;
+       txCount: nat;
+       users: nat;
+     });
+  counts: () -> (record {
+                   active: nat;
+                   archived: nat;
+                   total: nat;
+                 }) query;
+  /// Public: Basic plan (activate/extend via Plug payment).
+  createBasicForSelf: (note: text) -> (principal);
+  createChildForOwner: (owner: principal, cycles_for_create: nat,
+   controllers: vec principal, note: text) -> (principal);
+  createOrReuseChildFor: (owner: principal, cycles_for_create: nat,
+   controllers: vec principal, note: text) -> (principal);
+  /// Public: one-time Trial (1T upfront, 30d expiry), no top-ups.
+  createTrialForSelf: (note: text) -> (variant {
+                                         err: text;
+                                         ok: principal;
+                                       });
+  /// Delete permanently.
+  deleteChild: (canister_id: principal) -> (text);
+  forceAddOwnerIndex: (owner: principal, cid: principal) -> (text);
+  getAdmin: () -> (principal) query;
+  getBasicPayInfoForChild: (cid: principal) ->
+   (record {
+      account_owner: principal;
+      amount_e8s: nat;
+      subaccount: blob;
+    }) query;
+  getChild: (canister_id: principal) -> (opt Child) query;
+  listByOwner: (owner: principal) -> (vec principal) query;
+  listChildren: () -> (vec Child) query;
+  poolSize: () -> (nat) query;
+  reassignOwner: (canister_id: principal, newOwner: principal) -> (text);
+  reinstallChild: (canister_id: principal, owner: principal, factory:
+   principal) -> ();
+  setAdmin: (p: principal) -> ();
+  setDefaultChildWasm: (w: blob) -> ();
+  startChild: (canister_id: principal) -> ();
+  stopChild: (canister_id: principal) -> ();
+  toggleVisibility: (canister_id: principal) -> (Visibility);
+  topUpChild: (canister_id: principal, amount: nat) ->
+   (variant {
+      err: text;
+      ok: nat;
+    });
+  upgradeChild: (canister_id: principal) -> ();
+  wallet_receive: () -> (nat);
+}

@@ -1,6 +1,6 @@
 // src/features/orgs/hooks/useFactoria.ts
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { _SERVICE as Factoria } from '../../../../../src/declarations/factoria/factoria.did.d.ts';
+import type { _SERVICE as Factoria } from '../../../declarations/factoria/factoria.did.d.ts';
 import { makeFactoriaWithPlug, getFactoriaCanisterId } from "@/lib/canisters";
 import { usePlugConnection } from "@/hooks/usePlugConnection";
 

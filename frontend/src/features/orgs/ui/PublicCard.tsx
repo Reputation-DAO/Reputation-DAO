@@ -1,5 +1,6 @@
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { formatTimestamp, daysUntil } from "../model/org.selectors";
 import type { OrgRecord } from "../model/org.types";
 import { Users, Globe, Lock } from "lucide-react";
@@ -7,9 +8,10 @@ import { Users, Globe, Lock } from "lucide-react";
 type PublicCardProps = {
   org: OrgRecord;
   onSelect?: (id: string) => void;
+  onJoin?: (id: string) => void;
 };
 
-export const PublicCard = ({ org, onSelect }: PublicCardProps) => {
+export const PublicCard = ({ org, onSelect, onJoin }: PublicCardProps) => {
   const expDays = daysUntil(org.expiresAt);
   const expired = expDays !== null && expDays <= 0;
 
@@ -47,6 +49,18 @@ export const PublicCard = ({ org, onSelect }: PublicCardProps) => {
           {org.visibility}
         </div>
       </CardContent>
+      <CardFooter className="mt-auto flex justify-end">
+        <Button
+          variant="default"
+          className="h-9 rounded-xl px-4 text-sm font-semibold"
+          onClick={(e) => {
+            e.stopPropagation();
+            onJoin?.(org.id);
+          }}
+        >
+          Join
+        </Button>
+      </CardFooter>
     </Card>
   );
 };

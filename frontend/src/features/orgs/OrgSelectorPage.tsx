@@ -248,8 +248,7 @@ const OrgSelectorPage: React.FC = () => {
               onTopUp={() => onTopUpOpen(org)}
               onTogglePower={(o) => togglePower(o)}
               onArchive={(id) => {
-                setDeleteOrg({ ...org, id }); // reuse confirm for archive or use a separate one if you like
-                // Inline archive confirmation
+                setDeleteOrg({ ...org, id });
                 setDeleteOpen(true);
               }}
               onDelete={(id) => {
@@ -260,6 +259,7 @@ const OrgSelectorPage: React.FC = () => {
                 setEditOrg(org);
                 setEditOpen(true);
               }}
+              onManage={(id) => navigate(`/dashboard/home/${id}`)}
             />
           ) : (
             <PublicCard
@@ -269,6 +269,7 @@ const OrgSelectorPage: React.FC = () => {
                 // selecting public → jump in
                 navigate(`/dashboard/home/${org.canisterId}`);
               }}
+              onJoin={(id) => navigate(`/dashboard/home/${id}`)}
             />
           )
         )}
