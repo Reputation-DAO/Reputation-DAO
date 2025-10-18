@@ -611,7 +611,7 @@ public query func getBasicPayInfoForChild(cid : Principal) : async {
   /// Public: Basic plan (activate/extend via Plug payment).
   public shared({ caller }) func createBasicForSelf(note : Text) : async Principal {
     let owner = caller;
-    let cid = await createOrReuseChildFor(owner, 0, [], note);
+    let cid = await createOrReuseChildFor(owner, 1000000000000, [], note);
     let c0 = childOrTrap(cid);
     let c1 : Child = {
       id = c0.id; owner = c0.owner; created_at = c0.created_at; note = c0.note;
