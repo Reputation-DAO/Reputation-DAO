@@ -553,8 +553,6 @@ public query func getBasicPayInfoForChild(cid : Principal) : async {
         status = c0.status; visibility = c0.visibility; plan = #Trial; expires_at = nowNs() + MONTH_NS
       };
       updateChild(c1);
-
-      ignore await topUpInternalGlobal(cid, ONE_T);
       markTrialUsed(owner);
       #ok cid
     };
