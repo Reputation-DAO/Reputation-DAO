@@ -69,7 +69,6 @@ service : {
                                        });
   /// Delete permanently.
   deleteChild: (canister_id: principal) -> (text);
-  forceAddOwnerIndex: (owner: principal, cid: principal) -> (text);
   getAdmin: () -> (principal) query;
   getBasicPayInfoForChild: (cid: principal) ->
    (record {

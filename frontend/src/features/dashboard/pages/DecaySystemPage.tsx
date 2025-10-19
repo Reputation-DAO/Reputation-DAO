@@ -2,8 +2,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
-import { makeChildWithPlug, type ChildActor } from "@/lib/canisters";
+import { type ChildActor } from "@/lib/canisters";
 import { useRole } from "@/contexts/RoleContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { getUserDisplayData } from "@/utils/userUtils";
 
 import { Card } from "@/components/ui/card";
@@ -57,6 +58,7 @@ const DecaySystemPage = () => {
   const navigate = useNavigate();
   const { cid } = useParams<{ cid: string }>();
   const { isAdmin, currentPrincipal, userRole, userName, loading: roleLoading } = useRole();
+  const { getChildActor, isAuthenticated } = useAuth();
 
   const [child, setChild] = useState<ChildActor | null>(null);
   const [connecting, setConnecting] = useState(true);
@@ -94,7 +96,10 @@ const DecaySystemPage = () => {
       try {
         if (!cid) throw new Error("Missing :cid in route");
         setConnecting(true);
-        const actor = await makeChildWithPlug({ canisterId: cid });
+        if (!isAuthenticated) {
+          throw new Error("Please connect a wallet to manage decay settings.");
+        }
+        const actor = await getChildActor(cid);
         setChild(actor);
       } catch (e: any) {
         const msg = String(e?.message || e);
@@ -107,7 +112,7 @@ const DecaySystemPage = () => {
         setConnecting(false);
       }
     })();
-  }, [cid]);
+  }, [cid, getChildActor, isAuthenticated]);
 
   // --- Load real decay data from the child canister ---
   useEffect(() => {

@@ -3,9 +3,10 @@ import React, { useState, useEffect } from "react";
 import type { Dispatch, FormEvent, SetStateAction } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
-import { makeChildWithPlug, type ChildActor } from "@/lib/canisters";
+import { type ChildActor } from "@/lib/canisters";
 
 import { useRole, type UserRole } from "@/contexts/RoleContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { getUserDisplayData } from "@/utils/userUtils";
 import { formatDateForDisplay } from "@/utils/transactionUtils";
 import type { Transaction } from "@/declarations/reputation_dao/reputation_dao.did";
@@ -70,6 +71,7 @@ const revocationCategories = [
 const RevokeRepPage: React.FC = () => {
   const navigate = useNavigate();
   const { cid } = useParams<{ cid: string }>();
+  const { getChildActor, isAuthenticated } = useAuth();
 
   // permissions
   const { userRole, isAdmin, currentPrincipal, loading: roleLoading } = useRole();
@@ -102,7 +104,10 @@ const RevokeRepPage: React.FC = () => {
     (async () => {
       try {
         if (!cid) throw new Error("No organization selected.");
-        const actor = await makeChildWithPlug({ canisterId: cid });
+        if (!isAuthenticated) {
+          throw new Error("Please connect a wallet to manage reputation.");
+        }
+        const actor = await getChildActor(cid);
         setChild(actor);
       } catch (e: any) {
         setConnectError(e?.message || "Failed to connect to org canister");
@@ -110,7 +115,7 @@ const RevokeRepPage: React.FC = () => {
         setConnecting(false);
       }
     })();
-  }, [cid]);
+  }, [cid, getChildActor, isAuthenticated]);
 
   // ---- Load recent revocations + stats directly from child ----
   const loadRevocations = async () => {

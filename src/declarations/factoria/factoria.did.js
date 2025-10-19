@@ -72,11 +72,6 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'deleteChild' : IDL.Func([IDL.Principal], [IDL.Text], []),
-    'forceAddOwnerIndex' : IDL.Func(
-        [IDL.Principal, IDL.Principal],
-        [IDL.Text],
-        [],
-      ),
     'getAdmin' : IDL.Func([], [IDL.Principal], ['query']),
     'getBasicPayInfoForChild' : IDL.Func(
         [IDL.Principal],

@@ -11,7 +11,8 @@ import type { ReactNode } from 'react';
 import { Principal } from '@dfinity/principal';
 import { useLocation } from 'react-router-dom';
 
-import { makeChildWithPlug, makeFactoriaWithPlug, getFactoriaCanisterId } from '@/lib/canisters';
+import { useAuth } from './AuthContext';
+import type { ChildActor } from '@/lib/canisters';
 
 export type UserRole = 'admin' | 'awarder' | 'member' | 'user' | 'loading';
 
@@ -38,17 +39,6 @@ export const useRole = () => {
 
 interface RoleProviderProps { children: ReactNode; }
 
-/** Plug-first principal fetch (matches your past working version) */
-async function getCurrentPrincipal(): Promise<Principal | null> {
-  const plug = (window as any)?.ic?.plug;
-  try {
-    const p = await plug?.getPrincipal?.();
-    return p ?? null;
-  } catch {
-    return null;
-  }
-}
-
 /** Pretty principal helper */
 const short = (t?: string | null) => (t ? `${t.slice(0, 6)}…${t.slice(-6)}` : '');
 
@@ -63,6 +53,12 @@ const deriveCid = (pathname: string): string | null => extractCidFromPathname(pa
 
 export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
   const location = useLocation();
+  const {
+    isAuthenticated,
+    principal: authPrincipal,
+    getFactoriaActor,
+    getChildActor,
+  } = useAuth();
 
   const [cid, setCid] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
@@ -110,21 +106,15 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       if (!cid) {
         console.warn('⚠️ No :cid in route — defaulting role = user');
       } else {
-        // Get Plug principal (no AuthContext dependency)
-        const principal = await getCurrentPrincipal();
-        console.log('👤 Plug principal:', principal ? short(principal.toString()) : '(none)');
-
-        if (!principal) {
-          console.warn('⚠️ No Plug principal — defaulting role = user');
+        if (!isAuthenticated || !authPrincipal) {
+          console.warn('⚠️ No authenticated principal — defaulting role = user');
         } else {
-          finalPrincipal = principal;
-          const meText = principal.toString();
+          finalPrincipal = authPrincipal;
+          const meText = authPrincipal.toText();
           finalUserName = `${meText.slice(0, 5)}...${meText.slice(-3)}`;
 
           try {
-            const factoria = await makeFactoriaWithPlug({
-              canisterId: getFactoriaCanisterId(),
-            });
+            const factoria = await getFactoriaActor();
 
             console.log('🏭 Factoria ready:', { cid: short(cid), me: short(meText) });
 
@@ -150,7 +140,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
 
           if (!resolvedAdmin) {
             try {
-              const child = await makeChildWithPlug({ canisterId: cid });
+              const child: ChildActor = await getChildActor(cid);
 
               if (typeof child.isTrustedAwarder === 'function') {
                 const ok = await child.isTrustedAwarder(Principal.fromText(meText));

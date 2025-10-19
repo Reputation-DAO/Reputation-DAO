@@ -3,9 +3,10 @@ import { useState, useEffect } from "react";
 import type { Dispatch, FormEvent, SetStateAction } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
-import { makeChildWithPlug, type ChildActor } from "@/lib/canisters";
+import { type ChildActor } from "@/lib/canisters";
 
 import { useRole, type UserRole } from "@/contexts/RoleContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { getUserDisplayData } from "@/utils/userUtils";
 import { formatDateForDisplay } from "@/utils/transactionUtils";
 import type { Transaction } from "@/declarations/reputation_dao/reputation_dao.did";
@@ -71,6 +72,7 @@ const AwardRepPage = () => {
   const navigate = useNavigate();
   const { cid } = useParams<{ cid: string }>();
   const { userRole, currentPrincipal, isAdmin, isAwarder, loading: roleLoading } = useRole();
+  const { getChildActor, isAuthenticated } = useAuth();
 
   // child canister actor (built from :cid like your MUI example)
   const [child, setChild] = useState<ChildActor | null>(null);
@@ -101,7 +103,10 @@ const AwardRepPage = () => {
     (async () => {
       try {
         if (!cid) throw new Error("No organization selected.");
-        const actor = await makeChildWithPlug({ canisterId: cid });
+        if (!isAuthenticated) {
+          throw new Error("Please connect a wallet to award reputation.");
+        }
+        const actor = await getChildActor(cid);
         setChild(actor);
       } catch (e: any) {
         setConnectError(e?.message || "Failed to connect to org canister");
@@ -109,7 +114,7 @@ const AwardRepPage = () => {
         setConnecting(false);
       }
     })();
-  }, [cid]);
+  }, [cid, getChildActor, isAuthenticated]);
 
   // ---- Load recent awards + summary directly from child (logic mirrors your MUI example) ----
   const loadAwards = async () => {

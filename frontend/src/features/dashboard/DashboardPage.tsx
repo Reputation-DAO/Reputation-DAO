@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useRole, type UserRole } from "@/contexts/RoleContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { makeChildWithPlug, type ChildActor } from "@/lib/canisters";
+import { type ChildActor } from "@/lib/canisters";
 import { getUserDisplayData } from "@/utils/userUtils";
 import { toast } from "sonner";
 
@@ -169,7 +169,7 @@ const DashboardPage = () => {
   const navigate = useNavigate();
   const { cid } = useParams<{ cid: string }>();
   const { userRole, loading: roleLoading, currentPrincipal, isAdmin, isAwarder } = useRole();
-  const { isAuthenticated, principal } = useAuth();
+  const { isAuthenticated, principal, getChildActor } = useAuth();
 
   const [child, setChild] = useState<ChildActor | null>(null);
   const [loading, setLoading] = useState(false);
@@ -196,7 +196,10 @@ const DashboardPage = () => {
           return;
         }
         setLoading(true);
-        const actor = await makeChildWithPlug({ canisterId: cid });
+        if (!isAuthenticated) {
+          throw new Error("Please connect a wallet to access the dashboard.");
+        }
+        const actor = await getChildActor(cid);
         setChild(actor);
       } catch (e: any) {
         const msg = String(e?.message || e);
@@ -209,7 +212,7 @@ const DashboardPage = () => {
         setLoading(false);
       }
     })();
-  }, [cid, navigate]);
+  }, [cid, navigate, getChildActor, isAuthenticated]);
 
   // Load all dashboard data from child (like your MUI sample)
   useEffect(() => {

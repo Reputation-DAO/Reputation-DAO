@@ -5,6 +5,7 @@ import type { ActorSubclass } from "@dfinity/agent";
 import { idlFactory } from "../../declarations/reputation_dao/reputation_dao.did.js";
 import type { _SERVICE } from "../../declarations/reputation_dao/reputation_dao.did.d.ts";
 import { PLUG_HOST, ensurePlugAgent } from "@/utils/plug";
+import { ensureInternetIdentityAgent } from "@/utils/internetIdentity";
 
 export type ChildActor = ActorSubclass<_SERVICE>;
 
@@ -50,4 +51,29 @@ export async function makeChildWithPlug(opts: MakeChildOpts): Promise<ChildActor
     agent,
     canisterId: opts.canisterId,
   }) as ChildActor;
+}
+
+export async function makeChildWithInternetIdentity(opts: MakeChildOpts): Promise<ChildActor> {
+  const host = opts.host ?? DEFAULT_HOST;
+  const agent = await ensureInternetIdentityAgent({ host });
+  return Actor.createActor<_SERVICE>(idlFactory, {
+    agent,
+    canisterId: opts.canisterId,
+  }) as ChildActor;
+}
+
+export type ChildActorProvider = "plug" | "internetIdentity";
+
+export async function makeChildActor(
+  provider: ChildActorProvider,
+  opts: MakeChildOpts
+): Promise<ChildActor> {
+  switch (provider) {
+    case "plug":
+      return makeChildWithPlug(opts);
+    case "internetIdentity":
+      return makeChildWithInternetIdentity(opts);
+    default:
+      throw new Error(`Unsupported actor provider: ${provider}`);
+  }
 }

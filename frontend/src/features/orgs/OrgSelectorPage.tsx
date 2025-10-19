@@ -30,17 +30,20 @@ import type { OrgRecord } from "./model/org.types";
 // optional site nav if you have it
 import Navigation from "@/components/ui/navigation";
 import { Card } from "@/components/ui/card";
-import { usePlugConnection } from "@/hooks/usePlugConnection";
+import { useAuth } from "@/contexts/AuthContext";
 
 // ---------------- Wallet Badge (tiny) ----------------
 const WalletDisplay = () => {
-  const { isConnected, principal } = usePlugConnection({ autoCheck: true });
-  if (!isConnected || !principal) return null;
-  const short = `${principal.slice(0, 8)}...${principal.slice(-8)}`;
+  const { isAuthenticated, principal, authMethod } = useAuth();
+  if (!isAuthenticated || !principal) return null;
+  const text = principal.toText();
+  const short = `${text.slice(0, 8)}...${text.slice(-8)}`;
   return (
     <div className="flex items-center gap-2 rounded-lg px-3 py-2 border border-border bg-card">
       <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-      <span className="text-sm font-mono text-muted-foreground">{short}</span>
+      <span className="text-sm font-mono text-muted-foreground">
+        {authMethod === 'internetIdentity' ? 'II' : 'Plug'} · {short}
+      </span>
     </div>
   );
 };

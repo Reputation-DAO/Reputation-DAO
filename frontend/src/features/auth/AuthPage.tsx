@@ -67,11 +67,12 @@ const AuthPage = () => {
     principal, 
     isLoading, 
     loginWithPlug, 
+    loginWithInternetIdentity,
     logout, 
     checkConnection 
   } = useAuth();
   const { userRole, loading: roleLoading } = useRole();
-  const [isConnecting, setIsConnecting] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState<"plug" | "internetIdentity" | null>(null);
   const [showConnected, setShowConnected] = useState(false);
 
   // Check connection status on mount
@@ -86,11 +87,13 @@ const AuthPage = () => {
     }
   }, [isAuthenticated, principal, roleLoading]);
 
-  const handleWalletConnect = async (walletType: string) => {
+  const handleWalletConnect = async (walletType: "plug" | "internetIdentity") => {
     setIsConnecting(walletType);
     try {
       if (walletType === "plug") {
         await loginWithPlug();
+      } else if (walletType === "internetIdentity") {
+        await loginWithInternetIdentity();
       } else {
         throw new Error(`Unsupported wallet type: ${walletType}`);
       }
@@ -102,15 +105,32 @@ const AuthPage = () => {
     }
   };
 
-  const walletOptions = [
+  const walletOptions: Array<{
+    id: "plug" | "internetIdentity";
+    icon: any;
+    name: string;
+    description: string;
+    isRecommended?: boolean;
+    isConnected: boolean;
+    onConnect: () => void;
+  }> = [
     {
+      id: "plug",
       icon: Zap,
       name: "Plug Wallet",
       description: "Connect with Plug wallet for Internet Computer",
       isRecommended: true,
       isConnected: isAuthenticated && authMethod === 'plug',
       onConnect: () => handleWalletConnect("plug")
-    }
+    },
+    {
+      id: "internetIdentity",
+      icon: Shield,
+      name: "Internet Identity",
+      description: "Authenticate with Internet Identity for browser-based access",
+      isConnected: isAuthenticated && authMethod === 'internetIdentity',
+      onConnect: () => handleWalletConnect("internetIdentity")
+    },
   ];
 
   return (
@@ -189,7 +209,7 @@ const AuthPage = () => {
               >
                 <WalletOption
                   {...option}
-                  isLoading={isConnecting === option.name.toLowerCase().replace(' ', '')}
+                  isLoading={isConnecting === option.id}
                 />
               </div>
             ))}

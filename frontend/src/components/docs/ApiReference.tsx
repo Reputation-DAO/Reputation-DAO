@@ -258,7 +258,8 @@ dfx canister call <child_id> orgPulse`}
         Run <code>dfx generate</code> to refresh the bindings under <code>src/declarations</code>. Copy the folders you need into <code>frontend/src/declarations</code> so the UI and SDK stay in sync with the canister API surface.
       </p>
       <p className="text-muted-foreground">
-        Frontend actors are instantiated via <code>makeChildWithPlug</code> and connect2ic. See the SDKs guide for a deep dive into how those adapters compose with the <code>repdao</code> helpers.
+        Frontend actors are instantiated through <code>AuthContext</code>'s <code>getChildActor</code> /
+        <code>getFactoriaActor</code> helpers, which delegate to identity-aware utilities. See the SDKs guide for a deep dive into how those adapters compose with the <code>repdao</code> helpers.
       </p>
     </section>
 

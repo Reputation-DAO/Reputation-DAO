@@ -3,6 +3,7 @@ import { Actor, HttpAgent } from '@dfinity/agent';
 import { idlFactory } from '../../declarations/factoria/factoria.did.js';
 import type { _SERVICE } from '../../declarations/factoria/factoria.did.d.ts';
 import { ensurePlugAgent } from '@/utils/plug';
+import { ensureInternetIdentityAgent } from '@/utils/internetIdentity';
 
 // IMPORTANT: this must be the API host, not your asset domain.
 const PLUG_HOST =
@@ -56,6 +57,16 @@ export async function makeFactoriaWithPlug(opts?: {
     try { await (agent as any)?.fetchRootKey?.(); } catch {}
   }
 
+  return Actor.createActor<_SERVICE>(idlFactory, { agent, canisterId });
+}
+
+export async function makeFactoriaWithInternetIdentity(opts?: {
+  host?: string;
+  canisterId?: string;
+}): Promise<_SERVICE> {
+  const canisterId = opts?.canisterId ?? FACTORIA_CANISTER_ID!;
+  const host = opts?.host ?? DEFAULT_HOST;
+  const agent = await ensureInternetIdentityAgent({ host });
   return Actor.createActor<_SERVICE>(idlFactory, { agent, canisterId });
 }
 

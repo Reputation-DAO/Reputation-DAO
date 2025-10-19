@@ -66,7 +66,6 @@ export interface _SERVICE {
       { 'err' : string }
   >,
   'deleteChild' : ActorMethod<[Principal], string>,
-  'forceAddOwnerIndex' : ActorMethod<[Principal, Principal], string>,
   'getAdmin' : ActorMethod<[], Principal>,
   'getBasicPayInfoForChild' : ActorMethod<
     [Principal],

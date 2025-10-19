@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import type { Dispatch, FormEvent, SetStateAction } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
-import { makeChildWithPlug, type ChildActor } from "@/lib/canisters";
+import { type ChildActor } from "@/lib/canisters";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ import {
 
 import { formatDateForDisplay } from "@/utils/transactionUtils";
 import { useRole } from "@/contexts/RoleContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { getUserDisplayData } from "@/utils/userUtils";
 import type { Awarder as BackendAwarder, Transaction } from "@/declarations/reputation_dao/reputation_dao.did";
 
@@ -75,6 +76,7 @@ const RoleIcon = ({ role }: { role: string }) => {
 const ManageAwardersPage: React.FC = () => {
   const navigate = useNavigate();
   const { cid } = useParams<{ cid: string }>();
+  const { getChildActor, isAuthenticated } = useAuth();
 
   // Use your role context to gate access + show user in sidebar
   const { isAdmin, currentPrincipal, loading: roleLoading } = useRole();
@@ -101,7 +103,10 @@ const ManageAwardersPage: React.FC = () => {
       try {
         if (!cid) throw new Error("No organization selected.");
         setConnecting(true);
-        const actor = await makeChildWithPlug({ canisterId: cid });
+        if (!isAuthenticated) {
+          throw new Error("Please connect a wallet to manage awarders.");
+        }
+        const actor = await getChildActor(cid);
         setChild(actor);
       } catch (e: any) {
         setConnectError(e?.message || "Failed to connect to org canister");
@@ -109,7 +114,7 @@ const ManageAwardersPage: React.FC = () => {
         setConnecting(false);
       }
     })();
-  }, [cid]);
+  }, [cid, getChildActor, isAuthenticated]);
 
   // --- Load awarders + lightweight stats from child ---
   const loadAwarders = async () => {

@@ -2,9 +2,10 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
-import { makeChildWithPlug, type ChildActor } from "@/lib/canisters";
+import { type ChildActor } from "@/lib/canisters";
 
 import { useRole } from "@/contexts/RoleContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { getUserDisplayData } from "@/utils/userUtils";
 
 import { Card } from "@/components/ui/card";
@@ -86,6 +87,7 @@ const getTransactionTypeBgClass = (type: TxKind) => {
 const TransactionLogPage: React.FC = () => {
   const navigate = useNavigate();
   const { cid } = useParams<{ cid: string }>();
+  const { getChildActor, isAuthenticated } = useAuth();
   const { userRole, currentPrincipal, userName: roleUserName, loading: roleLoading } = useRole();
   const userDisplay = getUserDisplayData(currentPrincipal || null);
   const principalText = currentPrincipal?.toString() || userDisplay.userPrincipal;
@@ -108,7 +110,10 @@ const TransactionLogPage: React.FC = () => {
     (async () => {
       try {
         if (!cid) throw new Error("No organization selected.");
-        const actor = await makeChildWithPlug({ canisterId: cid });
+        if (!isAuthenticated) {
+          throw new Error("Please connect a wallet to view transactions.");
+        }
+        const actor = await getChildActor(cid);
         setChild(actor);
       } catch (e: any) {
         setConnectError(e?.message || "Failed to connect to org canister");
@@ -116,7 +121,7 @@ const TransactionLogPage: React.FC = () => {
         setConnecting(false);
       }
     })();
-  }, [cid]);
+  }, [cid, getChildActor, isAuthenticated]);
 
   // --- Load transactions from child canister ---
   useEffect(() => {

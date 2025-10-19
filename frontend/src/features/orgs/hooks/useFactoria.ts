@@ -1,71 +1,58 @@
 // src/features/orgs/hooks/useFactoria.ts
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { _SERVICE as Factoria } from '../../../declarations/factoria/factoria.did.d.ts';
-import { makeFactoriaWithPlug, getFactoriaCanisterId } from "@/lib/canisters";
-import { usePlugConnection } from "@/hooks/usePlugConnection";
+import { useCallback, useEffect, useState } from "react";
+import type { _SERVICE as Factoria } from "../../../declarations/factoria/factoria.did.d.ts";
+import { useAuth } from "@/contexts/AuthContext";
 
 /**
- * Creates the Factoria actor once Plug is connected and exposes connection state.
- * Keeps the actor fresh if the Plug session/principal changes.
+ * Provides a Factoria actor using the active authentication method (Plug or Internet Identity).
  */
 export function useFactoria() {
-  const { isConnected, principal } = usePlugConnection({ autoCheck: true });
+  const {
+    isAuthenticated,
+    authMethod,
+    principal,
+    getFactoriaActor,
+    isLoading: authLoading,
+  } = useAuth();
+
   const [factoria, setFactoria] = useState<Factoria | null>(null);
-  const [principalText, setPrincipalText] = useState<string | null>(null);
-  const [connecting, setConnecting] = useState<boolean>(false);
+  const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [principalText, setPrincipalText] = useState<string | null>(null);
 
-  const mounted = useRef(true);
-
-  const canisterId = useMemo(() => getFactoriaCanisterId(), []);
-
-  const connect = async () => {
-    if (!isConnected || !principal) {
+  const connect = useCallback(async () => {
+    if (!isAuthenticated || !authMethod) {
       setFactoria(null);
       setPrincipalText(null);
       setError(null);
-      setConnecting(false);
       return;
     }
 
     setConnecting(true);
     setError(null);
     try {
-      const actor = await makeFactoriaWithPlug({ canisterId });
-      if (mounted.current) {
-        setFactoria(actor);
-        setPrincipalText(principal);
-      }
+      const actor = await getFactoriaActor();
+      setFactoria(actor);
+      setPrincipalText(principal ? principal.toText() : null);
     } catch (e: any) {
-      if (mounted.current) {
-        setError(e?.message || "Failed to create Factoria actor");
-        setFactoria(null);
-      }
+      setFactoria(null);
+      setError(e?.message || "Failed to create Factoria actor");
     } finally {
-      if (mounted.current) setConnecting(false);
+      setConnecting(false);
     }
-  };
+  }, [isAuthenticated, authMethod, getFactoriaActor, principal]);
 
   useEffect(() => {
-    mounted.current = true;
-    connect();
-    return () => {
-      mounted.current = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConnected, principal, canisterId]);
-
-  const refresh = () => {
     void connect();
-  };
+  }, [connect]);
 
   return {
     factoria,
-    connecting,
+    connecting: connecting || authLoading,
     error,
-    isConnected,
-    principal: principalText,
-    refresh,
+    isConnected: isAuthenticated && !!factoria,
+    principal: principal ? principal.toText() : null,
+    refresh: connect,
   };
 }
 

@@ -2,8 +2,8 @@ import { Link } from "react-router-dom";
 
 const items = [
   {
-    title: "connect2ic + Plug",
-    body: "Wallet onboarding and actor creation are handled through connect2ic. We register Plug, Stoic, and Internet Identity providers, then expose the child actor via makeChildWithPlug.",
+    title: "connect2ic + identities",
+    body: "AuthContext bridges Plug and Internet Identity. It orchestrates connect2ic, keeps the active principal in sync, and exposes helpers that create typed actors on demand.",
     resource: "frontend/src/lib/canisters/child.ts"
   },
   {
@@ -38,12 +38,12 @@ const Sdks = () => (
     <section className="mb-12">
       <h2 className="text-2xl font-semibold text-foreground mb-4">Wallet & Actor Setup</h2>
       <p className="text-muted-foreground mb-4">
-        Authentication starts in <code>AuthContext</code>, which checks Plug connectivity and exposes <code>getActor</code>. The helper <code>makeChildWithPlug</code> uses connect2ic to instantiate candid actors with the correct whitelist.
+        Authentication starts in <code>AuthContext</code>, which hydrates either Plug or Internet Identity and exposes <code>getChildActor</code> / <code>getFactoriaActor</code>. Under the hood, helpers such as <code>makeChildActor</code> resolve the right agent for the active provider.
       </p>
       <pre className="glass-card p-4 text-sm overflow-x-auto">
-{`import { makeChildWithPlug } from "@/lib/canisters";
+{`import { makeChildActor } from "@/lib/canisters";
 
-const actor = await makeChildWithPlug({
+const actor = await makeChildActor("plug", {
   canisterId: process.env.VITE_REPUTATION_DAO_CANISTER_ID!,
 });`}
       </pre>
