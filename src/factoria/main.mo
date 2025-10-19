@@ -436,190 +436,141 @@ public query func getBasicPayInfoForChild(cid : Principal) : async {
     cid
   };
 
-
-  // --- Cycle floors & headroom (tuned for reliable reinstall) ---
-  let MIN_CREATE_FEE            : Nat = 600_000_000_000;  // 600G for fresh installs (was 500G)
-  let MIN_REINSTALL_BUFFER      : Nat = 400_000_000_000;  // 400G for re-installs (was 100G)
-  let EXTRA_REINSTALL_HEADROOM  : Nat = 200_000_000_000;  // +200G on retry if first reinstall fails
-
+      // helper to read current cycles from the child (already have ChildMgmt above)
+  func getChildCycles(cid: Principal) : async Nat {
+    let c : ChildMgmt = actor (Principal.toText(cid));
+    try { (await c.health()).cycles } catch (_) { 0 }
+  };
 
   public shared({ caller }) func createOrReuseChildFor(
-    owner: Principal,
-    cycles_for_create: Nat,   // EXACT amount to add/attach on top (fresh) or after buffer (reuse)
-    controllers: [Principal],
-    note: Text
-  ) : async Principal {
-    let defaultCtrls = [Principal.fromActor(ReputationFactory), owner];
-    let initArg : Blob = to_candid(owner, Principal.fromActor(ReputationFactory));
+  owner: Principal,
+  cycles_for_create: Nat,
+  controllers: [Principal],
+  note: Text
+) : async Principal {
+  // Require at least 1T on entry
+  if (cycles_for_create < 1_000_000_000_000) {
+    Debug.trap("createOrReuseChildFor: must attach at least 1T cycles");
+  };
 
-    type ChildWallet = actor { wallet_receive : () -> async Nat };
-    type ChildMgmt   = actor {
-      health : () -> async {
-        paused : Bool; cycles : Nat; users : Nat; txCount : Nat; topUpCount : Nat; decayConfigHash : Nat
-      };
-    };
+  let defaultCtrls = [Principal.fromActor(ReputationFactory), owner];
+  let initArg : Blob = to_candid(owner, Principal.fromActor(ReputationFactory));
 
-    func getChildCycles(cid: Principal) : async Nat {
-      let c : ChildMgmt = actor (Principal.toText(cid));
-      try { (await c.health()).cycles } catch (_) { 0 }
-    };
+  // ---------- REUSE PATH ----------
+  if (pool.size() > 0) {
+    switch (pool.removeLast()) {
+      case (?cid) {
+        let have0 = await getChildCycles(cid);
+        await topUpInternalGlobal(cid, cycles_for_create-have0);
+        await startChild(cid);
+        await IC.update_settings({
+          canister_id = cid;
+          settings = {
+            controllers = ?(if (controllers.size() == 0) defaultCtrls else controllers);
+            compute_allocation = null; memory_allocation = null; freezing_threshold = null;
+          }
+        });
 
-    func topUpInternal(cid: Principal, amount: Nat) : async () {
-      if (amount == 0) return;
-      let target : ChildWallet = actor (Principal.toText(cid));
-      ignore await (with cycles = amount) target.wallet_receive();
-    };
-
-    func ensureMinForReinstall(cid: Principal) : async () {
-      let have = await getChildCycles(cid);
-      if (have < MIN_REINSTALL_BUFFER) {
-        await topUpInternal(cid, MIN_REINSTALL_BUFFER - have);
-      }
-    };
-
-    // ---------- REUSE PATH ----------
-    if (pool.size() > 0) {
-      let m = pool.removeLast();
-      switch (m) {
-        case (?cid) {
-          // Make sure we have enough to safely reinstall
-          await ensureMinForReinstall(cid);
-
-          // If caller asked to attach extra cycles, do it *after* ensuring the buffer
-          if (cycles_for_create > 0) { await topUpInternal(cid, cycles_for_create) };
-
-          await startChild(cid);
-          await IC.update_settings({
-            canister_id = cid;
-            settings = {
-              controllers = ?(if (controllers.size() == 0) defaultCtrls else controllers);
-              compute_allocation = null;
-              memory_allocation  = null;
-              freezing_threshold = null;
-            }
+        // Reinstall code
+        try {
+          await IC.install_code({
+            mode = #reinstall; canister_id = cid; wasm_module = requireWasm(); arg = initArg
           });
 
-          // Try reinstall once; if it fails (e.g., still low cycles), add headroom and retry.
-          let reinstallArg = {
-            mode = #reinstall;
-            canister_id = cid;
-            wasm_module = requireWasm();
-            arg = initArg
-          };
-
-          let reinstallOk : Bool = 
-            await (async {
-              try {
-                await IC.install_code(reinstallArg);
-                true
-              } catch (_) {
-                // add extra headroom then retry once
-                await topUpInternal(cid, EXTRA_REINSTALL_HEADROOM);
-                try {
-                  await IC.install_code(reinstallArg);
-                  true
-                } catch (_) { false }
-              }
-            });
-
-          if (not reinstallOk) {
-            // Put it back into the pool and fall back to fresh create
-            pool.add(cid);
-            storePool := Buffer.toArray(pool);
-
-            // ---------- FRESH CREATE (fallback) ----------
-            let attach = if (cycles_for_create < MIN_CREATE_FEE) MIN_CREATE_FEE else cycles_for_create;
-            let res = await (with cycles = attach) IC.create_canister({
-              settings = ?{
-                controllers = ?(if (controllers.size() == 0) defaultCtrls else controllers);
-                compute_allocation = null;
-                memory_allocation  = null;
-                freezing_threshold = null;
-              }
-            });
-            let newCid = res.canister_id;
-            await IC.install_code({ mode = #install; canister_id = newCid; wasm_module = requireWasm(); arg = initArg });
-            await IC.start_canister({ canister_id = newCid });
-
-            let recFresh : Child = {
-              id = newCid; owner; created_at = nowNs(); note;
-              status = #Active; visibility = #Public; plan = #Basic; expires_at = nowNs() + MONTH_NS
-            };
-            recordChild(recFresh);
-            return newCid;
-          };
-
-          // Reuse success — update indexes and state
+          // Mark as Active/Basic BEFORE backfill (so topUpChild passes policy checks)
           switch (byId.get(cid)) { case (?old) { removeOwnerIndex(old.owner, cid) }; case null {} };
           let rec : Child = {
             id = cid; owner; created_at = nowNs(); note;
             status = #Active; visibility = #Public; plan = #Basic; expires_at = nowNs() + MONTH_NS
           };
           recordOrRefresh(rec); addOwnerIndex(owner, cid);
-
           storePool := Buffer.toArray(pool);
+
+          // Backfill to ensure ≥ cycles_for_create after mgmt burns
+          let have = await getChildCycles(cid);
+          if (have < cycles_for_create) {
+            let need = cycles_for_create - have;
+            switch (await topUpChild(cid, need)) {
+              case (#ok _) {};
+              case (#err e) { Debug.trap("backfill(topUpChild) failed (reuse): " # e) };
+            };
+          };
+
           return cid;
+
+        } catch (_) {
+          // put it back and fall through to fresh create
+          pool.add(cid); storePool := Buffer.toArray(pool);
         };
-        case null { /* nothing in pool */ };
       };
+      case null {};
     };
-
-    // ---------- FRESH CREATE ----------
-    let attach = if (cycles_for_create < MIN_CREATE_FEE) MIN_CREATE_FEE else cycles_for_create;
-
-    let res = await (with cycles = attach) IC.create_canister({
-      settings = ?{
-        controllers = ?(if (controllers.size() == 0) defaultCtrls else controllers);
-        compute_allocation = null;
-        memory_allocation  = null;
-        freezing_threshold = null;
-      }
-    });
-    let cid = res.canister_id;
-
-    await IC.install_code({ mode = #install; canister_id = cid; wasm_module = requireWasm(); arg = initArg });
-    await IC.start_canister({ canister_id = cid });
-
-    let rec : Child = {
-      id = cid; owner; created_at = nowNs(); note;
-      status = #Active; visibility = #Public; plan = #Basic; expires_at = nowNs() + MONTH_NS
-    };
-    recordChild(rec);
-    return cid;
   };
 
+  // ---------- FRESH CREATE ----------
+  let res = await (with cycles = cycles_for_create) IC.create_canister({
+    settings = ?{
+      controllers = ?(if (controllers.size() == 0) defaultCtrls else controllers);
+      compute_allocation = null; memory_allocation = null; freezing_threshold = null;
+    }
+  });
+  let cid = res.canister_id;
 
+  await IC.install_code({ mode = #install; canister_id = cid; wasm_module = requireWasm(); arg = initArg });
+  await IC.start_canister({ canister_id = cid });
 
-  /// Public: one-time Trial (1T upfront, 30d expiry), no top-ups.
-  public shared({ caller }) func createTrialForSelf(note : Text) : async { #ok : Principal; #err : Text } {
-    let owner = caller;
-    if (not isTrialAllowedFor(owner)) { return #err "Trial already used for this owner" };
+  // Record as Active/Basic BEFORE backfill (so topUpChild passes)
+  let recFresh : Child = {
+    id = cid; owner; created_at = nowNs(); note;
+    status = #Active; visibility = #Public; plan = #Basic; expires_at = nowNs() + MONTH_NS
+  };
+  recordChild(recFresh);
 
-    let cid = await createOrReuseChildFor(owner, 1000000000000, [], note);//1T
-    let c0 = childOrTrap(cid);
-    let c1 : Child = {
-      id = c0.id; owner = c0.owner; created_at = c0.created_at; note = c0.note;
-      status = c0.status; visibility = c0.visibility; plan = #Trial; expires_at = nowNs() + MONTH_NS
+  // Backfill to guarantee ≥ cycles_for_create after creation overhead
+  let have = await getChildCycles(cid);
+  if (have < cycles_for_create) {
+    let need = cycles_for_create - have;
+    switch (await topUpChild(cid, need)) {
+      case (#ok _) {};
+      case (#err e) { Debug.trap("backfill(topUpChild) failed (fresh): " # e) };
     };
-    updateChild(c1);
-
-    ignore await topUpInternalGlobal(cid, ONE_T);
-    markTrialUsed(owner);
-    #ok cid
   };
 
-  /// Public: Basic plan (activate/extend via Plug payment).
-  public shared({ caller }) func createBasicForSelf(note : Text) : async Principal {
-    let owner = caller;
-    let cid = await createOrReuseChildFor(owner, 1000000000000, [], note);
-    let c0 = childOrTrap(cid);
-    let c1 : Child = {
-      id = c0.id; owner = c0.owner; created_at = c0.created_at; note = c0.note;
-      status = c0.status; visibility = c0.visibility; plan = #Basic; expires_at = nowNs() + MONTH_NS
+  return cid;
+};
+
+
+
+    /// Public: one-time Trial (1T upfront, 30d expiry), no top-ups.
+    public shared({ caller }) func createTrialForSelf(note : Text) : async { #ok : Principal; #err : Text } {
+      let owner = caller;
+      if (not isTrialAllowedFor(owner)) { return #err "Trial already used for this owner" };
+
+      let cid = await createOrReuseChildFor(owner, 1000000000000, [], note);//1T
+      let c0 = childOrTrap(cid);
+      let c1 : Child = {
+        id = c0.id; owner = c0.owner; created_at = c0.created_at; note = c0.note;
+        status = c0.status; visibility = c0.visibility; plan = #Trial; expires_at = nowNs() + MONTH_NS
+      };
+      updateChild(c1);
+
+      ignore await topUpInternalGlobal(cid, ONE_T);
+      markTrialUsed(owner);
+      #ok cid
     };
-    updateChild(c1);
-    cid
-  };
+
+    /// Public: Basic plan (activate/extend via Plug payment).
+    public shared({ caller }) func createBasicForSelf(note : Text) : async Principal {
+      let owner = caller;
+      let cid = await createOrReuseChildFor(owner, 1000000000000, [], note);
+      let c0 = childOrTrap(cid);
+      let c1 : Child = {
+        id = c0.id; owner = c0.owner; created_at = c0.created_at; note = c0.note;
+        status = c0.status; visibility = c0.visibility; plan = #Basic; expires_at = nowNs() + MONTH_NS
+      };
+      updateChild(c1);
+      cid
+    };
 
   /// Archive a child back to pool.
   public shared({ caller }) func archiveChild(canister_id : Principal) : async Text {
