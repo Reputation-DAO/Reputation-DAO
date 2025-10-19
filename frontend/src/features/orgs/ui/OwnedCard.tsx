@@ -26,6 +26,7 @@ export const OwnedCard = ({
   const pct = percentOfMaxCycles(org.cycles);
   const expDays = daysUntil(org.expiresAt);
   const expired = expDays !== null && expDays <= 0;
+  const isTrial = org.plan === "Trial";
 
   return (
     <Card className="p-4 flex flex-col gap-2 hover:shadow-md transition-all duration-200">
@@ -59,9 +60,11 @@ export const OwnedCard = ({
 
       <CardFooter className="flex justify-between items-center gap-2 mt-auto">
         <div className="flex gap-1">
-          <Button size="icon" variant="outline" onClick={() => onTopUp?.(org.id)} title="Top up">
-            <Database className="h-4 w-4" />
-          </Button>
+          {!isTrial && (
+            <Button size="icon" variant="outline" onClick={() => onTopUp?.(org.id)} title="Top up">
+              <Database className="h-4 w-4" />
+            </Button>
+          )}
           <Button size="icon" variant="outline" onClick={() => onVisibility?.(org.id)} title="Toggle visibility">
             {org.visibility === "Public" ? (
               <Eye className="h-4 w-4" />

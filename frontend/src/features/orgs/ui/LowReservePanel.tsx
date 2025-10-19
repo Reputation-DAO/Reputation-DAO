@@ -93,6 +93,7 @@ export function LowReservePanel({ alerts, onTopUp, onOpenWorkspace }: LowReserve
                 const idShort = `${org.id.slice(0, 6)}...${org.id.slice(-6)}`;
                 const pct = percentOfMaxCycles(org.cycles);
                 const raw = parseCycles(org.cycles);
+                const isTrial = org.plan === "Trial";
 
                 return (
                   <div
@@ -157,14 +158,16 @@ export function LowReservePanel({ alerts, onTopUp, onOpenWorkspace }: LowReserve
 
                     {/* Right: actions */}
                     <div className="flex flex-wrap items-center justify-end gap-2">
-                      <Button
-                        variant="default"
-                        className="h-10 rounded-xl text-sm font-semibold"
-                        onClick={() => onTopUp(org)}
-                      >
-                        <Coins className="h-4 w-4 mr-2" />
-                        Top up
-                      </Button>
+                      {!isTrial && (
+                        <Button
+                          variant="default"
+                          className="h-10 rounded-xl text-sm font-semibold"
+                          onClick={() => onTopUp(org)}
+                        >
+                          <Coins className="h-4 w-4 mr-2" />
+                          Top up
+                        </Button>
+                      )}
                       <Button
                         variant="outline"
                         className="h-10 rounded-xl text-sm font-semibold"
