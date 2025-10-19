@@ -181,11 +181,25 @@ actor ReputationFactory {
     switch (byOwner.get(owner)) {
       case (?buf) {
         let tmp = Buffer.Buffer<Principal>(buf.size());
-        for (x in buf.vals()) { if (x != cid) tmp.add(x) };
-        byOwner.put(owner, tmp);
+        for (x in buf.vals()) {
+          if (x != cid) tmp.add(x);
+        };
+        if (tmp.size() == 0) {
+          ignore byOwner.remove(owner);
+        } else {
+          byOwner.put(owner, tmp);
+        };
       };
       case null {};
-    }
+    };
+
+    let pairs = Buffer.Buffer<(Principal, Principal)>(storeOwnerPairs.size());
+    for ((o, existing) in storeOwnerPairs.vals()) {
+      if (not (Principal.equal(o, owner) and Principal.equal(existing, cid))) {
+        pairs.add((o, existing));
+      };
+    };
+    storeOwnerPairs := Buffer.toArray(pairs);
   };
 
   func recordChild(c : Child) {
@@ -213,8 +227,14 @@ actor ReputationFactory {
     var seen = false;
     let pairs = Buffer.Buffer<(Principal, Principal)>(storeOwnerPairs.size() + 1);
     for ((o, cid) in storeOwnerPairs.vals()) {
-      pairs.add((o, cid));
-      if (o == c.owner and cid == c.id) { seen := true };
+      if (Principal.equal(o, c.owner) and Principal.equal(cid, c.id)) {
+        if (not seen) {
+          pairs.add((o, cid));
+          seen := true;
+        };
+      } else {
+        pairs.add((o, cid));
+      };
     };
     if (not seen) { pairs.add((c.owner, c.id)) };
     storeOwnerPairs := Buffer.toArray(pairs);
@@ -477,7 +497,7 @@ public query func getBasicPayInfoForChild(cid : Principal) : async {
             mode = #reinstall; canister_id = cid; wasm_module = requireWasm(); arg = initArg
           });
 
-          // Mark as Active/Basic BEFORE backfill (so topUpChild passes policy checks)
+          // Mark as Active/Basic BEFORE backfill (policy checks rely on plan state)
           switch (byId.get(cid)) { case (?old) { removeOwnerIndex(old.owner, cid) }; case null {} };
           let rec : Child = {
             id = cid; owner; created_at = nowNs(); note;
@@ -490,10 +510,7 @@ public query func getBasicPayInfoForChild(cid : Principal) : async {
           let have = await getChildCycles(cid);
           if (have < cycles_for_create) {
             let need = cycles_for_create - have;
-            switch (await topUpChild(cid, need)) {
-              case (#ok _) {};
-              case (#err e) { Debug.trap("backfill(topUpChild) failed (reuse): " # e) };
-            };
+            await topUpInternalGlobal(cid, need);
           };
 
           return cid;
@@ -519,7 +536,7 @@ public query func getBasicPayInfoForChild(cid : Principal) : async {
   await IC.install_code({ mode = #install; canister_id = cid; wasm_module = requireWasm(); arg = initArg });
   await IC.start_canister({ canister_id = cid });
 
-  // Record as Active/Basic BEFORE backfill (so topUpChild passes)
+  // Record as Active/Basic BEFORE backfill (policy checks rely on plan state)
   let recFresh : Child = {
     id = cid; owner; created_at = nowNs(); note;
     status = #Active; visibility = #Public; plan = #Basic; expires_at = nowNs() + MONTH_NS
@@ -530,10 +547,7 @@ public query func getBasicPayInfoForChild(cid : Principal) : async {
   let have = await getChildCycles(cid);
   if (have < cycles_for_create) {
     let need = cycles_for_create - have;
-    switch (await topUpChild(cid, need)) {
-      case (#ok _) {};
-      case (#err e) { Debug.trap("backfill(topUpChild) failed (fresh): " # e) };
-    };
+    await topUpInternalGlobal(cid, need);
   };
 
   return cid;
