@@ -422,10 +422,6 @@ public query func getBasicPayInfoForChild(cid : Principal) : async {
 
 
   // -------------------- Create / Reuse / CRUD --------------------
-  public shared({ caller }) func forceAddOwnerIndex(owner: Principal, cid: Principal) : async Text {
-    requireAdmin(caller); addOwnerIndex(owner, cid); "ok"
-  };
-
   public shared({ caller }) func createChildForOwner(
     owner             : Principal,
     cycles_for_create : Nat,
