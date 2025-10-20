@@ -69,7 +69,7 @@ export function CreateOrgDialog({
         <DialogHeader>
           <DialogTitle className="text-xl">Launch an organization</DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Create a managed reputation canister from the Factory. Choose Trial (1T for 30 days) or Basic (paid, extendable).
+            Create a managed reputation canister from the Factory. Trial grants 1T cycles for 30 days; Basic renews via payment.
           </p>
         </DialogHeader>
 
@@ -104,7 +104,7 @@ export function CreateOrgDialog({
                   placeholder="600000000000"
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  Advanced path calls <code>createOrReuseChildFor</code>. Factory enforces floors/headroom internally.
+                  Feature still in development. Advanced path calls <code>createOrReuseChildFor</code>; Factory enforces floors/headroom internally.
                 </p>
               </div>
             )}
@@ -113,7 +113,11 @@ export function CreateOrgDialog({
               <Button variant="outline" onClick={() => setOpen(false)} disabled={creating}>
                 Cancel
               </Button>
-              <Button onClick={act} disabled={creating || (mode === "advanced" && !onCreateAdvanced)}>
+              <Button
+                onClick={act}
+                disabled={creating || mode === "advanced"}
+                title={mode === "advanced" ? "Feature still in development" : undefined}
+              >
                 {creating ? "Provisioning…" : "Launch"}
               </Button>
             </div>
