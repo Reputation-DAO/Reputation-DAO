@@ -11,6 +11,7 @@ type Status =
 type Plan = 
  variant {
    Basic;
+   BasicPending;
    Trial;
  };
 type Child = 
@@ -23,6 +24,13 @@ type Child =
    plan: Plan;
    status: Status;
    visibility: Visibility;
+ };
+type BasicPayInfo = 
+ record {
+   account_owner: principal;
+   amount_e8s: nat;
+   memo: text;
+   subaccount: blob;
  };
 service : {
   activateBasicForChildAfterPayment: (cid: principal) ->
@@ -58,6 +66,12 @@ service : {
                  }) query;
   /// Public: Basic plan (activate/extend via Plug payment).
   createBasicForSelf: (note: text) -> (principal);
+  /// Public: Reserve Basic plan, require payment before activation.
+  createBasicPendingForSelf: (note: text) ->
+   (record {
+      cid: principal;
+      payment: BasicPayInfo;
+    });
   createChildForOwner: (owner: principal, cycles_for_create: nat,
    controllers: vec principal, note: text) -> (principal);
   createOrReuseChildFor: (owner: principal, cycles_for_create: nat,
@@ -69,14 +83,8 @@ service : {
                                        });
   /// Delete permanently.
   deleteChild: (canister_id: principal) -> (text);
-  forceAddOwnerIndex: (owner: principal, cid: principal) -> (text);
   getAdmin: () -> (principal) query;
-  getBasicPayInfoForChild: (cid: principal) ->
-   (record {
-      account_owner: principal;
-      amount_e8s: nat;
-      subaccount: blob;
-    }) query;
+  getBasicPayInfoForChild: (cid: principal) -> (BasicPayInfo) query;
   getChild: (canister_id: principal) -> (opt Child) query;
   listByOwner: (owner: principal) -> (vec principal) query;
   listChildren: () -> (vec Child) query;

@@ -13,6 +13,7 @@ type TopUpDialogProps = {
 
 export function TopUpDialog({ open, onOpenChange, target, onTopUp }: TopUpDialogProps) {
   const [amount, setAmount] = useState("0");
+  const isPending = target?.plan === "BasicPending";
 
   useEffect(() => {
     if (open) setAmount("0");
@@ -45,15 +46,18 @@ export function TopUpDialog({ open, onOpenChange, target, onTopUp }: TopUpDialog
               inputMode="numeric"
               autoFocus
               placeholder="100000000000"
+              disabled={isPending}
             />
             <p className="text-[11px] text-muted-foreground mt-1">
-              Daily cap applies for Basic plan (1T per day, enforced by the Factory).
+              {isPending
+                ? "Top-ups are disabled until payment activation is complete."
+                : "Daily cap applies for Basic plan (1T per day, enforced by the Factory)."}
             </p>
           </div>
 
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button onClick={submit}>Top up</Button>
+            <Button onClick={submit} disabled={isPending}>Top up</Button>
           </div>
         </div>
       </DialogContent>

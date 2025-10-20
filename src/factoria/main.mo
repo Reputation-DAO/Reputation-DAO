@@ -76,7 +76,7 @@ actor ReputationFactory {
   // -------------------- Plans & policy --------------------
   public type Status = { #Active; #Archived };
   public type Visibility = { #Public; #Private };
-  public type Plan = { #Trial; #Basic };
+  public type Plan = { #Trial; #Basic; #BasicPending };
 
   let ONE_T   : Nat   = 1_000_000_000_000;          // 1T cycles
   let DAY_NS  : Nat64 = 86_400_000_000_000;         // 24h
@@ -271,6 +271,7 @@ actor ReputationFactory {
 
   func checkAndAutoArchive(cid : Principal) : async () {
     let c = childOrTrap(cid);
+    if (c.plan == #BasicPending) return;
     if (c.status == #Archived) return;
     if (nowNs() >= c.expires_at) { ignore await archiveChild(cid) };
   };
@@ -338,8 +339,15 @@ actor ReputationFactory {
 
   let TREASURY_SUB : Blob = Blob.fromArray(Array.tabulate<Nat8>(32, func _ { 0 }));
 
-  let PRICE_E8S : Nat = 1_000_000_000; // ≈ 1 ICP (tune to your $10 target)
+  let PRICE_E8S : Nat = 100_000_000; // ≈ 1 ICP (tune to your target)
   let FEE_E8S   : Nat = 10_000;
+
+  type BasicPayInfo = {
+    account_owner: Principal;
+    subaccount: Blob;
+    amount_e8s: Nat;
+    memo: Text;
+  };
 
   func icrcAccount(owner : Principal, sub : Blob) : IcrcAccount {
       { owner = owner; subaccount = ?sub }
@@ -352,15 +360,14 @@ actor ReputationFactory {
     Blob.fromArray(arr)
   };
 
-public query func getBasicPayInfoForChild(cid : Principal) : async {
-  account_owner : Principal; subaccount : Blob; amount_e8s : Nat
-} {
+public query func getBasicPayInfoForChild(cid : Principal) : async BasicPayInfo {
   // validate child exists
   ignore childOrTrap(cid);
   {
     account_owner = Principal.fromActor(ReputationFactory);
-    subaccount    = subaccountForCid(cid);
-    amount_e8s    = PRICE_E8S;
+    subaccount = subaccountForCid(cid);
+    amount_e8s = PRICE_E8S;
+    memo = "Basic plan deposit";
   }
 };
 
@@ -373,8 +380,14 @@ public query func getBasicPayInfoForChild(cid : Principal) : async {
     switch (byId.get(cid)) {
       case null { return #err "unknown canister" };
       case (?c0) {
-        // (Optionally) allow renewal even if archived; here we require Active.
-        if (c0.status != #Active) { return #err "not active; cannot extend" };
+        let fromPending = switch (c0.plan) {
+          case (#BasicPending) true;
+          case _ false;
+        };
+
+        if (not fromPending and c0.status != #Active) {
+          return #err "not active; cannot extend";
+        };
 
         let depSub = subaccountForCid(cid);
         let depAcc = icrcAccount(Principal.fromActor(ReputationFactory), depSub);
@@ -398,11 +411,25 @@ public query func getBasicPayInfoForChild(cid : Principal) : async {
         switch (res) {
           case (#Ok _) {
             let now = nowNs();
-            let expiry = if (c0.expires_at > now) c0.expires_at + MONTH_NS else now + MONTH_NS;
+            let expiry = if (fromPending) {
+              now + MONTH_NS
+            } else if (c0.expires_at > now) {
+              c0.expires_at + MONTH_NS
+            } else {
+              now + MONTH_NS
+            };
+
+            if (fromPending) {
+              // Attempt to start the canister now that payment cleared
+              try { await IC.start_canister({ canister_id = cid }) } catch (_) {};
+            };
 
             let c1 : Child = {
               id = c0.id; owner = c0.owner; created_at = c0.created_at; note = c0.note;
-              status = c0.status; visibility = c0.visibility; plan = #Basic; expires_at = expiry
+              status = if (fromPending) #Active else c0.status;
+              visibility = c0.visibility;
+              plan = #Basic;
+              expires_at = expiry
             };
 
             byId.put(cid, c1);
@@ -561,24 +588,61 @@ public query func getBasicPayInfoForChild(cid : Principal) : async {
       let c1 : Child = {
         id = c0.id; owner = c0.owner; created_at = c0.created_at; note = c0.note;
         status = c0.status; visibility = c0.visibility; plan = #Trial; expires_at = nowNs() + MONTH_NS
-      };
-      updateChild(c1);
-      markTrialUsed(owner);
-      #ok cid
     };
+    updateChild(c1);
+    markTrialUsed(owner);
+    #ok cid
+  };
 
-    /// Public: Basic plan (activate/extend via Plug payment).
-    public shared({ caller }) func createBasicForSelf(note : Text) : async Principal {
-      let owner = caller;
-      let cid = await createOrReuseChildFor(owner, 1000000000000, [], note);
-      let c0 = childOrTrap(cid);
-      let c1 : Child = {
-        id = c0.id; owner = c0.owner; created_at = c0.created_at; note = c0.note;
-        status = c0.status; visibility = c0.visibility; plan = #Basic; expires_at = nowNs() + MONTH_NS
-      };
-      updateChild(c1);
-      cid
+  /// Public: Basic plan (activate/extend via Plug payment).
+  public shared({ caller }) func createBasicForSelf(note : Text) : async Principal {
+    let owner = caller;
+    let cid = await createOrReuseChildFor(owner, 1000000000000, [], note);
+    let c0 = childOrTrap(cid);
+    let c1 : Child = {
+      id = c0.id; owner = c0.owner; created_at = c0.created_at; note = c0.note;
+      status = c0.status; visibility = c0.visibility; plan = #Basic; expires_at = nowNs() + MONTH_NS
     };
+    updateChild(c1);
+    cid
+  };
+
+  /// Public: Reserve Basic plan, require payment before activation.
+  public shared({ caller }) func createBasicPendingForSelf(note : Text) : async {
+    cid : Principal;
+    payment : BasicPayInfo;
+  } {
+    let owner = caller;
+    let cid = await createOrReuseChildFor(owner, 1_000_000_000_000, [], note);
+
+    // Pause canister until payment clears
+    try {
+      await IC.stop_canister({ canister_id = cid });
+    } catch (_) {};
+
+    let base = childOrTrap(cid);
+    let pending : Child = {
+      id = base.id;
+      owner = base.owner;
+      created_at = base.created_at;
+      note = base.note;
+      status = #Archived;
+      visibility = base.visibility;
+      plan = #BasicPending;
+      expires_at = 0;
+    };
+    updateChild(pending);
+
+    {
+      cid;
+      payment = {
+        account_owner = Principal.fromActor(ReputationFactory);
+        subaccount = subaccountForCid(cid);
+        amount_e8s = PRICE_E8S;
+        memo = "Basic plan deposit";
+      };
+    }
+  };
 
   /// Archive a child back to pool.
   public shared({ caller }) func archiveChild(canister_id : Principal) : async Text {
@@ -655,7 +719,16 @@ public query func getBasicPayInfoForChild(cid : Principal) : async {
   };
 
   public shared({ caller }) func startChild(canister_id : Principal) : async () {
-    requireOrgAdmin(caller, canister_id); await IC.start_canister({ canister_id = canister_id })
+    requireOrgAdmin(caller, canister_id);
+    let c = childOrTrap(canister_id);
+    switch (c.plan) {
+      case (#BasicPending) {
+        Debug.trap("cannot start child while payment is pending");
+      };
+      case (_) {
+        await IC.start_canister({ canister_id = canister_id })
+      };
+    };
   };
 
   public shared({ caller }) func stopChild(canister_id : Principal) : async () {
@@ -690,6 +763,7 @@ public query func getBasicPayInfoForChild(cid : Principal) : async {
     };
     switch (c.plan) {
       case (#Trial) { return #err "Trial plan: top-ups are not allowed" };
+      case (#BasicPending) { return #err "Pending payment: finalize activation before topping up" };
       case (#Basic) {
         let used = getUsedToday(canister_id);
         if (used >= ONE_T) { return #err "Daily cap reached (1T)" };

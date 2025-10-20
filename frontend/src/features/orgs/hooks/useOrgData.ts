@@ -8,7 +8,7 @@ import {
   fetchPublicOrgRecords,
   createOrReuseChildFor as apiCreateOrReuse,
   createTrialForSelf as apiCreateTrialForSelf,
-  createBasicForSelf as apiCreateBasicForSelf,
+  createBasicPendingForSelf as apiCreateBasicPendingForSelf,
   startChild as apiStartChild,
   stopChild as apiStopChild,
   archiveChild as apiArchiveChild,
@@ -122,16 +122,18 @@ export function useOrgData(params: {
   );
 
   const createBasicForSelf = useCallback(
-    async (note: string) => {
+    async (
+      note: string
+    ): Promise<Awaited<ReturnType<typeof apiCreateBasicPendingForSelf>>> => {
       if (!factoria) throw new Error("Actor not ready");
       setCreating(true);
       try {
-        const id = await apiCreateBasicForSelf(factoria, note);
-        toast.success(`Basic created: ${id}`);
+        const res = await apiCreateBasicPendingForSelf(factoria, note);
+        toast.success(`Reserved organization: ${res.id}`);
         await refreshAll();
-        return id;
+        return res;
       } catch (e: any) {
-        const msg = e?.message || "Basic create failed";
+        const msg = e?.message || "Basic reservation failed";
         toast.error(msg);
         throw e;
       } finally {

@@ -161,6 +161,32 @@ export async function createBasicForSelf(
   return id.toText();
 }
 
+export async function createBasicPendingForSelf(
+  f: Factoria,
+  note: string
+): Promise<{
+  id: string;
+  payment: {
+    account_owner: string;
+    subaccount_hex: string;
+    amount_e8s: bigint;
+    memo?: string;
+  };
+}> {
+  const res = await withLogging("createBasicPendingForSelf", () => f.createBasicPendingForSelf(note));
+  const sub = (res.payment.subaccount as unknown as Uint8Array) || new Uint8Array();
+  const hex = [...sub].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return {
+    id: res.cid.toText(),
+    payment: {
+      account_owner: res.payment.account_owner.toText(),
+      subaccount_hex: hex,
+      amount_e8s: res.payment.amount_e8s,
+      memo: (res.payment as any).memo ?? "Basic plan deposit",
+    },
+  };
+}
+
 export async function topUpChild(
   f: Factoria,
   childIdText: string,
@@ -201,7 +227,7 @@ export async function toggleVisibility(
 export async function getBasicPayInfoForChild(
   f: Factoria,
   childIdText: string
-): Promise<{ account_owner: string; subaccount_hex: string; amount_e8s: bigint }> {
+): Promise<{ account_owner: string; subaccount_hex: string; amount_e8s: bigint; memo?: string }> {
   const cid = Principal.fromText(childIdText);
   const info = await withLogging("getBasicPayInfoForChild", () => f.getBasicPayInfoForChild(cid));
   // Convert Blob to hex for frontend display
@@ -211,6 +237,7 @@ export async function getBasicPayInfoForChild(
     account_owner: info.account_owner.toText(),
     subaccount_hex: hex,
     amount_e8s: info.amount_e8s,
+    memo: (info as any).memo ?? "Basic plan deposit",
   };
 }
 

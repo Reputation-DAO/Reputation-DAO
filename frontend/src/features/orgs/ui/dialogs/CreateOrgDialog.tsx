@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Copy } from "lucide-react";
+import { toast } from "sonner";
+import { principalToAccountIdentifier } from "@/utils/accountIdentifier";
 
 type CreateOrgDialogProps = {
   creating: boolean;
@@ -13,9 +15,27 @@ type CreateOrgDialogProps = {
   triggerClassName?: string;
 
   onCreateTrial: (note: string) => Promise<void>;
-  onCreateBasic: (note: string) => Promise<void>;
+  onCreateBasic: (note: string) => Promise<BasicReservation>;
   /** Optional admin/advanced path calling factory.createOrReuseChildFor */
   onCreateAdvanced?: (cycles: bigint, note: string) => Promise<void>;
+};
+
+type BasicReservation = {
+  id: string;
+  payment: {
+    account_owner: string;
+    subaccount_hex: string;
+    amount_e8s: bigint;
+    memo?: string;
+  };
+};
+
+const formatIcp = (amount: bigint): string => {
+  const whole = amount / 100_000_000n;
+  const frac = amount % 100_000_000n;
+  if (frac === 0n) return `${whole.toString()} ICP`;
+  const fracStr = frac.toString().padStart(8, "0").replace(/0+$/, "");
+  return `${whole.toString()}.${fracStr} ICP`;
 };
 
 export function CreateOrgDialog({
@@ -31,26 +51,70 @@ export function CreateOrgDialog({
   const [note, setNote] = useState("");
   const [cycles, setCycles] = useState("600000000000"); // sensible default (600G)
   const [mode, setMode] = useState<"trial" | "basic" | "advanced">("basic");
+  const [paymentResult, setPaymentResult] = useState<BasicReservation | null>(null);
 
   const reset = () => {
     setNote("");
     setCycles("600000000000");
     setMode("basic");
+    setPaymentResult(null);
+  };
+
+  useEffect(() => {
+    if (!open) {
+      reset();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  useEffect(() => {
+    if (mode !== "basic") {
+      setPaymentResult(null);
+    }
+  }, [mode]);
+
+  const copyValue = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.message(`${label} copied`);
+    } catch (e: any) {
+      toast.error(e?.message || `Failed to copy ${label.toLowerCase()}`);
+    }
   };
 
   const act = async () => {
     const n = note.trim() || "New organization";
     if (mode === "trial") {
       await onCreateTrial(n);
+      reset();
+      setOpen(false);
+      return;
     } else if (mode === "basic") {
-      await onCreateBasic(n);
+      const res = await onCreateBasic(n);
+      setPaymentResult(res);
+      setNote(n);
+      return;
     } else if (mode === "advanced" && onCreateAdvanced) {
       const amt = BigInt((cycles || "0").replace(/[^\d]/g, "") || "0");
       await onCreateAdvanced(amt, n);
+      reset();
+      setOpen(false);
+      return;
     }
-    reset();
-    setOpen(false);
   };
+
+  const disableLaunch =
+    creating ||
+    (mode === "advanced" && !onCreateAdvanced) ||
+    (mode === "basic" && Boolean(paymentResult));
+
+  const primaryLabel = mode === "basic" ? "Reserve" : "Launch";
+  const paymentAccountIdentifier = paymentResult
+    ? principalToAccountIdentifier(
+        paymentResult.payment.account_owner,
+        paymentResult.payment.subaccount_hex
+      )
+    : "";
 
   return (
     <Dialog open={open} onOpenChange={(v) => !creating && setOpen(v)}>
@@ -109,17 +173,89 @@ export function CreateOrgDialog({
               </div>
             )}
 
+            {mode === "basic" && paymentResult && (
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
+                <div>
+                  <h4 className="text-sm font-semibold text-primary">Payment required</h4>
+                  <p className="text-xs text-muted-foreground">
+                    Deposit the Basic subscription payment to activate <span className="font-medium">{paymentResult.id}</span>.
+                  </p>
+                </div>
+
+                {paymentResult.payment.memo && (
+                  <div className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground/70">
+                    {paymentResult.payment.memo}
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <span className="text-xs uppercase text-muted-foreground">Account identifier (Plug)</span>
+                  <div className="flex items-center gap-2">
+                    <code className="text-[11px] break-all flex-1">{paymentAccountIdentifier}</code>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => paymentAccountIdentifier && copyValue(paymentAccountIdentifier, "Account identifier")}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-xs uppercase text-muted-foreground">Account owner (principal)</span>
+                  <div className="flex items-center gap-2">
+                    <code className="text-[11px] break-all flex-1">{paymentResult.payment.account_owner}</code>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => copyValue(paymentResult.payment.account_owner, "Account owner")}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-xs uppercase text-muted-foreground">Subaccount (hex)</span>
+                  <div className="flex items-center gap-2">
+                    <code className="text-[11px] break-all flex-1">{paymentResult.payment.subaccount_hex}</code>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => copyValue(paymentResult.payment.subaccount_hex, "Subaccount")}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Amount</span>
+                  <span className="font-semibold text-foreground">
+                    {formatIcp(paymentResult.payment.amount_e8s)} ({paymentResult.payment.amount_e8s.toString()} e8s)
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-muted-foreground">
+                  After depositing, return to the organizations list and choose <span className="font-medium">Pay & Activate</span> on your card.
+                </p>
+              </div>
+            )}
+
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setOpen(false)} disabled={creating}>
-                Cancel
+                {paymentResult ? "Close" : "Cancel"}
               </Button>
-              <Button
-                onClick={act}
-                disabled={creating || mode === "advanced"}
-                title={mode === "advanced" ? "Feature still in development" : undefined}
-              >
-                {creating ? "Provisioning…" : "Launch"}
-              </Button>
+              {!paymentResult && (
+                <Button
+                  onClick={act}
+                  disabled={disableLaunch}
+                  title={mode === "advanced" ? "Feature still in development" : undefined}
+                >
+                  {creating ? "Provisioning…" : primaryLabel}
+                </Button>
+              )}
             </div>
           </div>
 

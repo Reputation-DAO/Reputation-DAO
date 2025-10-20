@@ -2,6 +2,12 @@ import type { Principal } from '@dfinity/principal';
 import type { ActorMethod } from '@dfinity/agent';
 import type { IDL } from '@dfinity/candid';
 
+export interface BasicPayInfo {
+  'account_owner' : Principal,
+  'memo' : string,
+  'subaccount' : Uint8Array | number[],
+  'amount_e8s' : bigint,
+}
 export interface Child {
   'id' : Principal,
   'status' : Status,
@@ -13,7 +19,8 @@ export interface Child {
   'expires_at' : bigint,
 }
 export type Plan = { 'Basic' : null } |
-  { 'Trial' : null };
+  { 'Trial' : null } |
+  { 'BasicPending' : null };
 export type Status = { 'Active' : null } |
   { 'Archived' : null };
 export type Visibility = { 'Private' : null } |
@@ -52,6 +59,10 @@ export interface _SERVICE {
     { 'total' : bigint, 'active' : bigint, 'archived' : bigint }
   >,
   'createBasicForSelf' : ActorMethod<[string], Principal>,
+  'createBasicPendingForSelf' : ActorMethod<
+    [string],
+    { 'cid' : Principal, 'payment' : BasicPayInfo }
+  >,
   'createChildForOwner' : ActorMethod<
     [Principal, bigint, Array<Principal>, string],
     Principal
@@ -66,16 +77,8 @@ export interface _SERVICE {
       { 'err' : string }
   >,
   'deleteChild' : ActorMethod<[Principal], string>,
-  'forceAddOwnerIndex' : ActorMethod<[Principal, Principal], string>,
   'getAdmin' : ActorMethod<[], Principal>,
-  'getBasicPayInfoForChild' : ActorMethod<
-    [Principal],
-    {
-      'account_owner' : Principal,
-      'subaccount' : Uint8Array | number[],
-      'amount_e8s' : bigint,
-    }
-  >,
+  'getBasicPayInfoForChild' : ActorMethod<[Principal], BasicPayInfo>,
   'getChild' : ActorMethod<[Principal], [] | [Child]>,
   'listByOwner' : ActorMethod<[Principal], Array<Principal>>,
   'listChildren' : ActorMethod<[], Array<Child>>,

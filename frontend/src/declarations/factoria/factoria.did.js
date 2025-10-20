@@ -1,5 +1,15 @@
 export const idlFactory = ({ IDL }) => {
-  const Plan = IDL.Variant({ 'Basic' : IDL.Null, 'Trial' : IDL.Null });
+  const Plan = IDL.Variant({
+    'Basic' : IDL.Null,
+    'Trial' : IDL.Null,
+    'BasicPending' : IDL.Null,
+  });
+  const BasicPayInfo = IDL.Record({
+    'account_owner' : IDL.Principal,
+    'memo' : IDL.Text,
+    'subaccount' : IDL.Vec(IDL.Nat8),
+    'amount_e8s' : IDL.Nat,
+  });
   const Status = IDL.Variant({ 'Active' : IDL.Null, 'Archived' : IDL.Null });
   const Visibility = IDL.Variant({ 'Private' : IDL.Null, 'Public' : IDL.Null });
   const Child = IDL.Record({
@@ -56,6 +66,11 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'createBasicForSelf' : IDL.Func([IDL.Text], [IDL.Principal], []),
+    'createBasicPendingForSelf' : IDL.Func(
+        [IDL.Text],
+        [IDL.Record({ 'cid' : IDL.Principal, 'payment' : BasicPayInfo })],
+        [],
+      ),
     'createChildForOwner' : IDL.Func(
         [IDL.Principal, IDL.Nat, IDL.Vec(IDL.Principal), IDL.Text],
         [IDL.Principal],
@@ -72,21 +87,10 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'deleteChild' : IDL.Func([IDL.Principal], [IDL.Text], []),
-    'forceAddOwnerIndex' : IDL.Func(
-        [IDL.Principal, IDL.Principal],
-        [IDL.Text],
-        [],
-      ),
     'getAdmin' : IDL.Func([], [IDL.Principal], ['query']),
     'getBasicPayInfoForChild' : IDL.Func(
         [IDL.Principal],
-        [
-          IDL.Record({
-            'account_owner' : IDL.Principal,
-            'subaccount' : IDL.Vec(IDL.Nat8),
-            'amount_e8s' : IDL.Nat,
-          }),
-        ],
+        [BasicPayInfo],
         ['query'],
       ),
     'getChild' : IDL.Func([IDL.Principal], [IDL.Opt(Child)], ['query']),

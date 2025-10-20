@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-import { LayoutGrid, List, RefreshCw, Search, Building, Users, Coins, Globe, Settings, CheckCircle2 } from "lucide-react";
+import { LayoutGrid, List, RefreshCw, Search, Building, Users, Coins, Globe, Settings, CheckCircle2, Copy } from "lucide-react";
 
 import { useFactoria } from "./hooks/useFactoria";
 import { useOrgData } from "./hooks/useOrgData";
@@ -31,6 +31,9 @@ import type { OrgRecord } from "./model/org.types";
 import Navigation from "@/components/ui/navigation";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { toast } from "sonner";
+import { principalToAccountIdentifier } from "@/utils/accountIdentifier";
 
 // ---------------- Wallet Badge (tiny) ----------------
 const WalletDisplay = () => {
@@ -46,6 +49,22 @@ const WalletDisplay = () => {
       </span>
     </div>
   );
+};
+
+type PaymentDetails = {
+  accountOwner: string;
+  subaccountHex: string;
+  amountE8s: bigint;
+  accountIdentifier: string;
+  memo?: string;
+};
+
+const formatIcp = (amount: bigint): string => {
+  const whole = amount / 100_000_000n;
+  const frac = amount % 100_000_000n;
+  if (frac === 0n) return `${whole.toString()} ICP`;
+  const fracStr = frac.toString().padStart(8, "0").replace(/0+$/, "");
+  return `${whole.toString()}.${fracStr} ICP`;
 };
 
 // ---------------- Page ----------------
@@ -83,7 +102,7 @@ const OrgSelectorPage: React.FC = () => {
   // ---------------- UI State ----------------
   const [ownershipView, setOwnershipView] = useState<"overview" | "owned" | "discover">("owned");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "archived" | "stopped">("all");
-  const [planFilter, setPlanFilter] = useState<"all" | "Trial" | "Basic">("all");
+  const [planFilter, setPlanFilter] = useState<"all" | "Trial" | "Basic" | "BasicPending">("all");
   const [sortOrder, setSortOrder] = useState<"recent" | "name" | "usage">("recent");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchTerm, setSearchTerm] = useState("");
@@ -95,6 +114,11 @@ const OrgSelectorPage: React.FC = () => {
   const [deleteOrg, setDeleteOrg] = useState<OrgRecord | null>(null);
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [topUpOrg, setTopUpOrg] = useState<OrgRecord | null>(null);
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [paymentTarget, setPaymentTarget] = useState<OrgRecord | null>(null);
+  const [paymentDetails, setPaymentDetails] = useState<PaymentDetails | null>(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [finalizingPayment, setFinalizingPayment] = useState(false);
 
   // ---------------- Derived data ----------------
   const ownedIds = useMemo(() => new Set(owned.map((o) => o.id)), [owned]);
@@ -207,6 +231,78 @@ const OrgSelectorPage: React.FC = () => {
     setEditOpen(false);
   };
 
+  const fetchPaymentDetails = async (org: OrgRecord) => {
+    if (!factoria) return false;
+    setPaymentLoading(true);
+    try {
+      const info = await getPaymentInfo(org.id);
+      setPaymentDetails({
+        accountOwner: info.account_owner,
+        subaccountHex: info.subaccount_hex,
+        amountE8s: info.amount_e8s,
+        accountIdentifier: principalToAccountIdentifier(info.account_owner, info.subaccount_hex),
+        memo: info.memo ?? "Basic plan deposit",
+      });
+      return true;
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to load payment info");
+      return false;
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
+  const openPaymentDialog = async (org: OrgRecord) => {
+    setPaymentTarget(org);
+    const ok = await fetchPaymentDetails(org);
+    if (ok) {
+      setPaymentOpen(true);
+    } else {
+      setPaymentTarget(null);
+      setPaymentDetails(null);
+    }
+  };
+
+  const refreshPayment = async () => {
+    if (paymentTarget) {
+      await fetchPaymentDetails(paymentTarget);
+    }
+  };
+
+  const closePaymentDialog = () => {
+    setPaymentOpen(false);
+    setPaymentTarget(null);
+    setPaymentDetails(null);
+  };
+
+  const finalizePayment = async () => {
+    if (!paymentTarget) return;
+    setFinalizingPayment(true);
+    try {
+      const res = await activateAfterPayment(paymentTarget.id);
+      if (res.ok) {
+        toast.success(res.ok || "Payment processed");
+        closePaymentDialog();
+        await refreshAll();
+      } else {
+        toast.error(res.err || "Unable to finalize payment");
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "Unable to finalize payment");
+    } finally {
+      setFinalizingPayment(false);
+    }
+  };
+
+  const handleCopy = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.message(`${label} copied`);
+    } catch (e: any) {
+      toast.error(e?.message || `Failed to copy ${label.toLowerCase()}`);
+    }
+  };
+
   const renderList = (
     records: OrgRecord[],
     options: {
@@ -258,6 +354,7 @@ const OrgSelectorPage: React.FC = () => {
                 setEditOpen(true);
               }}
               onManage={(id) => navigate(`/dashboard/home/${id}`)}
+              onViewPayment={openPaymentDialog}
             />
           ) : (
             <PublicCard
@@ -485,12 +582,13 @@ const OrgSelectorPage: React.FC = () => {
                     <SelectTrigger className="h-11 w-[140px] rounded-full text-sm">
                       <SelectValue placeholder="Plan" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Any plan</SelectItem>
-                      <SelectItem value="Trial">Trial</SelectItem>
-                      <SelectItem value="Basic">Basic</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <SelectContent>
+                    <SelectItem value="all">Any plan</SelectItem>
+                    <SelectItem value="Trial">Trial</SelectItem>
+                    <SelectItem value="Basic">Basic</SelectItem>
+                    <SelectItem value="BasicPending">Basic (pending)</SelectItem>
+                  </SelectContent>
+                </Select>
 
                   <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as typeof sortOrder)}>
                     <SelectTrigger className="h-11 w-[150px] rounded-full text-sm">
@@ -609,6 +707,126 @@ const OrgSelectorPage: React.FC = () => {
         target={topUpOrg}
         onTopUp={onTopUp}
       />
+
+      <Dialog open={paymentOpen} onOpenChange={(open) => (open ? setPaymentOpen(true) : closePaymentDialog())}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Payment instructions</DialogTitle>
+          </DialogHeader>
+
+          {paymentTarget && (
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm font-semibold text-foreground">{paymentTarget.name}</p>
+                <p className="text-xs font-mono text-muted-foreground break-all">
+                  {paymentTarget.id}
+                </p>
+              </div>
+
+              {paymentLoading && (
+                <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
+                  <RefreshCw className="h-4 w-4 animate-spin" /> Loading payment details…
+                </div>
+              )}
+
+              {!paymentLoading && paymentDetails && (
+                <div className="space-y-4">
+                  {paymentDetails.memo && (
+                    <div className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground/70">
+                      {paymentDetails.memo}
+                    </div>
+                  )}
+
+                  <div className="space-y-1">
+                    <span className="text-xs uppercase text-muted-foreground">Account identifier (Plug)</span>
+                    <div className="flex items-center gap-2">
+                      <code className="text-[11px] break-all flex-1">{paymentDetails.accountIdentifier}</code>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => handleCopy(paymentDetails.accountIdentifier, "Account identifier")}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="text-xs uppercase text-muted-foreground">Account owner (principal)</span>
+                    <div className="flex items-center gap-2">
+                      <code className="text-[11px] break-all flex-1">{paymentDetails.accountOwner}</code>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => handleCopy(paymentDetails.accountOwner, "Account owner")}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="text-xs uppercase text-muted-foreground">Subaccount (hex)</span>
+                    <div className="flex items-center gap-2">
+                      <code className="text-[11px] break-all flex-1">{paymentDetails.subaccountHex}</code>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => handleCopy(paymentDetails.subaccountHex, "Subaccount")}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Amount</span>
+                    <span className="font-semibold text-foreground">
+                      {formatIcp(paymentDetails.amountE8s)} ({paymentDetails.amountE8s.toString()} e8s)
+                    </span>
+                  </div>
+
+                  {paymentTarget.plan === "BasicPending" ? (
+                    <p className="text-xs text-amber-500">
+                      Send the payment above, then mark it received to activate your Basic plan.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      After sending renewal funds, sweep them into the treasury to extend your plan.
+                    </p>
+                  )}
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={refreshPayment}
+                      disabled={paymentLoading}
+                    >
+                      <RefreshCw className="mr-2 h-3 w-3" /> Refresh
+                    </Button>
+                    <div className="flex gap-2">
+                      <Button variant="outline" onClick={closePaymentDialog}>
+                        Close
+                      </Button>
+                      <Button
+                        onClick={finalizePayment}
+                        disabled={paymentLoading || finalizingPayment}
+                      >
+                        {finalizingPayment
+                          ? "Processing…"
+                          : paymentTarget.plan === "BasicPending"
+                            ? "Mark payment received"
+                            : "Sweep payment"}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

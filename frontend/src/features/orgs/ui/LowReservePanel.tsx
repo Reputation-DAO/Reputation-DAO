@@ -94,6 +94,7 @@ export function LowReservePanel({ alerts, onTopUp, onOpenWorkspace }: LowReserve
                 const pct = percentOfMaxCycles(org.cycles);
                 const raw = parseCycles(org.cycles);
                 const isTrial = org.plan === "Trial";
+                const isPending = org.plan === "BasicPending";
 
                 return (
                   <div
@@ -163,6 +164,7 @@ export function LowReservePanel({ alerts, onTopUp, onOpenWorkspace }: LowReserve
                           variant="default"
                           className="h-10 rounded-xl text-sm font-semibold"
                           onClick={() => onTopUp(org)}
+                          disabled={isPending}
                         >
                           <Coins className="h-4 w-4 mr-2" />
                           Top up

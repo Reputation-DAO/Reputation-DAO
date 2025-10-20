@@ -1,6 +1,6 @@
 // src/features/orgs/model/org.types.ts
 
-export type Plan = "Trial" | "Basic";
+export type Plan = "Trial" | "Basic" | "BasicPending";
 export type OrgStatus = "Active" | "Archived";
 export type Visibility = "Public" | "Private";
 

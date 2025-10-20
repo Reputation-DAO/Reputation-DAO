@@ -23,7 +23,7 @@ export const toVisibility = (v: Record<string, unknown>): Visibility =>
   "Private" in v ? "Private" : "Public";
 
 export const toPlan = (p: Record<string, unknown>): Plan =>
-  "Trial" in p ? "Trial" : "Basic";
+  "Trial" in p ? "Trial" : "BasicPending" in p ? "BasicPending" : "Basic";
 
 export const parseCycles = (value?: string | bigint): bigint => {
   try {
