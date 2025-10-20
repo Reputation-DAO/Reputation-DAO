@@ -81,7 +81,7 @@ const OrgSelectorPage: React.FC = () => {
   } = useOrgData({ factoria, principal });
 
   // ---------------- UI State ----------------
-  const [ownershipView, setOwnershipView] = useState<"overview" | "owned" | "discover">("overview");
+  const [ownershipView, setOwnershipView] = useState<"overview" | "owned" | "discover">("owned");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "archived" | "stopped">("all");
   const [planFilter, setPlanFilter] = useState<"all" | "Trial" | "Basic">("all");
   const [sortOrder, setSortOrder] = useState<"recent" | "name" | "usage">("recent");
@@ -233,12 +233,12 @@ const OrgSelectorPage: React.FC = () => {
       );
     }
 
+    const gridLayout = options.compact
+      ? "grid gap-6 md:grid-cols-2 xl:grid-cols-3"
+      : "grid gap-6 md:grid-cols-2 xl:grid-cols-3";
+
     const container =
-      viewMode === "grid"
-        ? options.compact
-          ? "grid gap-6 md:grid-cols-2 xl:grid-cols-3"
-          : "grid grid-cols-1 gap-6"
-        : "flex flex-col gap-6";
+      viewMode === "grid" ? gridLayout : "flex flex-col gap-6";
 
     return (
       <div className={container}>
