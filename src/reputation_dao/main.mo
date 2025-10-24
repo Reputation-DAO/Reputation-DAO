@@ -104,6 +104,16 @@ actor class ReputationChild(initOwner : Principal, initFactory : Principal) = th
   stable var events : [Event] = [];
   stable var nextEventId : Nat = 1;
 
+  // ——— Initialization ———
+  // Automatically add the owner as a trusted awarder on first deploy
+  stable var initialized : Bool = false;
+  
+  // Initialize owner as trusted awarder if not already done
+  if (not initialized) {
+    trustedAwarders := Trie.put(trustedAwarders, pKey(initOwner), Principal.equal, "Admin (Owner)").0;
+    initialized := true;
+  };
+
   // ——— Utils ———
   func now() : Nat { Int.abs(Time.now() / 1_000_000_000) }; // seconds
   func pKey(p: Principal) : Trie.Key<Principal> { { key = p; hash = Principal.hash(p) } };
