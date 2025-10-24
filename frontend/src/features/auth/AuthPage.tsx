@@ -66,13 +66,12 @@ const AuthPage = () => {
     authMethod, 
     principal, 
     isLoading, 
-    loginWithPlug, 
     loginWithInternetIdentity,
     logout, 
     checkConnection 
   } = useAuth();
   const { userRole, loading: roleLoading } = useRole();
-  const [isConnecting, setIsConnecting] = useState<"plug" | "internetIdentity" | null>(null);
+  const [isConnecting, setIsConnecting] = useState<boolean>(false);
   const [showConnected, setShowConnected] = useState(false);
 
   // Check connection status on mount
@@ -87,26 +86,20 @@ const AuthPage = () => {
     }
   }, [isAuthenticated, principal, roleLoading]);
 
-  const handleWalletConnect = async (walletType: "plug" | "internetIdentity") => {
-    setIsConnecting(walletType);
+  const handleWalletConnect = async () => {
+    setIsConnecting(true);
     try {
-      if (walletType === "plug") {
-        await loginWithPlug();
-      } else if (walletType === "internetIdentity") {
-        await loginWithInternetIdentity();
-      } else {
-        throw new Error(`Unsupported wallet type: ${walletType}`);
-      }
+      await loginWithInternetIdentity();
       // Connection success is handled by the useEffect above
     } catch (error) {
-      console.error(`Failed to connect ${walletType}:`, error);
+      console.error('Failed to connect Internet Identity:', error);
     } finally {
-      setIsConnecting(null);
+      setIsConnecting(false);
     }
   };
 
   const walletOptions: Array<{
-    id: "plug" | "internetIdentity";
+    id: "internetIdentity";
     icon: any;
     name: string;
     description: string;
@@ -115,21 +108,13 @@ const AuthPage = () => {
     onConnect: () => void;
   }> = [
     {
-      id: "plug",
-      icon: Zap,
-      name: "Plug Wallet",
-      description: "Connect with Plug wallet for Internet Computer",
-      isRecommended: true,
-      isConnected: isAuthenticated && authMethod === 'plug',
-      onConnect: () => handleWalletConnect("plug")
-    },
-    {
       id: "internetIdentity",
       icon: Shield,
       name: "Internet Identity",
       description: "Authenticate with Internet Identity for browser-based access",
+      isRecommended: true,
       isConnected: isAuthenticated && authMethod === 'internetIdentity',
-      onConnect: () => handleWalletConnect("internetIdentity")
+      onConnect: handleWalletConnect
     },
   ];
 
@@ -171,7 +156,7 @@ const AuthPage = () => {
                     </div>
                     <div>
                       <h3 className="text-lg font-semibold text-foreground">
-                        {authMethod === 'plug' ? 'Plug Wallet' : 'Internet Identity'} Connected
+                        Internet Identity Connected
                       </h3>
                       <p className="text-sm text-muted-foreground font-mono">
                         {principal.toString().slice(0, 8)}...{principal.toString().slice(-8)}
@@ -209,7 +194,7 @@ const AuthPage = () => {
               >
                 <WalletOption
                   {...option}
-                  isLoading={isConnecting === option.id}
+                  isLoading={isConnecting}
                 />
               </div>
             ))}

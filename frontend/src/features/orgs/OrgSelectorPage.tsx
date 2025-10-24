@@ -41,12 +41,27 @@ const WalletDisplay = () => {
   if (!isAuthenticated || !principal) return null;
   const text = principal.toText();
   const short = `${text.slice(0, 8)}...${text.slice(-8)}`;
+  
+  const handleCopy = () => {
+    navigator.clipboard
+      .writeText(text)
+      .then(() => toast.success("Principal copied"))
+      .catch(() => toast.error("Failed to copy principal"));
+  };
+  
   return (
     <div className="flex items-center gap-2 rounded-lg px-3 py-2 border border-border bg-card">
       <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
       <span className="text-sm font-mono text-muted-foreground">
-        {authMethod === 'internetIdentity' ? 'II' : 'Plug'} · {short}
+        II · {short}
       </span>
+      <button
+        onClick={handleCopy}
+        className="ml-1 p-1 hover:bg-muted rounded transition-colors"
+        title="Copy Principal ID"
+      >
+        <Copy className="w-3 h-3 text-muted-foreground" />
+      </button>
     </div>
   );
 };
@@ -383,7 +398,7 @@ const OrgSelectorPage: React.FC = () => {
           </div>
           <div className="text-center">
             <h2 className="text-lg font-semibold">Connecting wallet</h2>
-            <p className="mt-2 text-sm text-muted-foreground">Waiting for Plug to confirm your session…</p>
+            <p className="mt-2 text-sm text-muted-foreground">Waiting for Internet Identity to confirm your session…</p>
           </div>
         </div>
       </div>
@@ -399,13 +414,13 @@ const OrgSelectorPage: React.FC = () => {
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-border bg-muted text-muted-foreground">
               <Settings className="h-7 w-7" />
             </div>
-            <h2 className="mt-6 text-2xl font-semibold">Connect your Plug wallet</h2>
+            <h2 className="mt-6 text-2xl font-semibold">Connect Internet Identity</h2>
             <p className="mt-3 text-sm text-muted-foreground">
-              Authenticate with Plug to view and manage your Reputation DAO organizations.
+              Authenticate with Internet Identity to view and manage your Reputation DAO organizations.
             </p>
             <div className="mt-6">
-              <Button className="h-11 rounded-xl" onClick={() => window.open("https://plugwallet.ooo/", "_blank")}>
-                Get Plug
+              <Button className="h-11 rounded-xl" onClick={() => window.open("https://identity.ic0.app/", "_blank")}>
+                Learn About Internet Identity
               </Button>
             </div>
           </Card>
@@ -738,7 +753,7 @@ const OrgSelectorPage: React.FC = () => {
                   )}
 
                   <div className="space-y-1">
-                    <span className="text-xs uppercase text-muted-foreground">Account identifier (Plug)</span>
+                    <span className="text-xs uppercase text-muted-foreground">Account identifier</span>
                     <div className="flex items-center gap-2">
                       <code className="text-[11px] break-all flex-1">{paymentDetails.accountIdentifier}</code>
                       <Button

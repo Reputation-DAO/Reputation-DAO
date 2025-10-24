@@ -189,7 +189,7 @@ export function CreateOrgDialog({
                 )}
 
                 <div className="space-y-2">
-                  <span className="text-xs uppercase text-muted-foreground">Account identifier (Plug)</span>
+                  <span className="text-xs uppercase text-muted-foreground">Account identifier</span>
                   <div className="flex items-center gap-2">
                     <code className="text-[11px] break-all flex-1">{paymentAccountIdentifier}</code>
                     <Button

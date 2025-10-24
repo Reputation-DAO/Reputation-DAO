@@ -1,13 +1,13 @@
 // src/components/layout/DashboardLayout.tsx
 import React, {
-  ReactNode,
   useCallback,
   useContext,
   useEffect,
   useMemo,
   useState,
 } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import type { ReactNode } from "react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard,
@@ -28,6 +28,9 @@ import {
   PanelLeft,
   Eye,
   EyeOff,
+  Copy,
+  Check,
+  ArrowLeft,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -38,7 +41,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { toast } from "sonner";
 import { Principal } from "@dfinity/principal";
-import { makeFactoriaWithPlug } from "@/lib/canisters"; // <-- ensure this exists
+import { makeFactoriaWithInternetIdentity } from "@/lib/canisters";
 
 const SIDEBAR_COOKIE_NAME = "sidebar:collapsed";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
@@ -281,6 +284,8 @@ function SidebarContent({
   pathname: string;
   onNavigate: () => void;
 }) {
+  const navigate = useNavigate();
+  
   const makePath = useCallback(
     (slug: string) => (cid ? `/dashboard/${slug}/${cid}` : `/dashboard/${slug}`),
     [cid]
@@ -295,6 +300,22 @@ function SidebarContent({
   const [vis, setVis] = useState<"Public" | "Private" | null>(null);
   const [visBusy, setVisBusy] = useState(false);
 
+  // ---------- Principal copy state ----------
+  const [principalCopied, setPrincipalCopied] = useState(false);
+
+  const handleCopyPrincipal = useCallback(() => {
+    if (!sidebar.userPrincipal) return;
+    
+    navigator.clipboard
+      .writeText(sidebar.userPrincipal)
+      .then(() => {
+        setPrincipalCopied(true);
+        toast.success("Principal ID copied to clipboard");
+        setTimeout(() => setPrincipalCopied(false), 2000);
+      })
+      .catch(() => toast.error("Failed to copy principal"));
+  }, [sidebar.userPrincipal]);
+
   // Load current visibility for this cid
   useEffect(() => {
     (async () => {
@@ -303,7 +324,7 @@ function SidebarContent({
           setVis(null);
           return;
         }
-        const factoria = await makeFactoriaWithPlug({
+        const factoria = await makeFactoriaWithInternetIdentity({
           canisterId: import.meta.env.VITE_FACTORIA_CANISTER_ID,
         });
         const res = await factoria.getChild(Principal.fromText(cid));
@@ -323,7 +344,7 @@ function SidebarContent({
     try {
       if (!cid) return;
       setVisBusy(true);
-      const factoria = await makeFactoriaWithPlug({
+      const factoria = await makeFactoriaWithInternetIdentity({
         canisterId: import.meta.env.VITE_FACTORIA_CANISTER_ID,
       });
       const next = await factoria.toggleVisibility(Principal.fromText(cid));
@@ -343,7 +364,7 @@ function SidebarContent({
         <AnimatePresence>
           {!collapsed && (
             <motion.div
-              className="flex items-center space-x-3"
+              className="flex items-center space-x-3 flex-1 min-w-0"
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
@@ -356,12 +377,29 @@ function SidebarContent({
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
-                <p className="text-slate-900 dark:text-slate-100 truncate text-sm font-medium">
-                  {sidebar.userName ||
-                    (sidebar.userPrincipal
-                      ? `${sidebar.userPrincipal.slice(0, 8)}...${sidebar.userPrincipal.slice(-4)}`
-                      : "Unknown User")}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="text-slate-900 dark:text-slate-100 truncate text-sm font-medium">
+                    {sidebar.userName ||
+                      (sidebar.userPrincipal
+                        ? `${sidebar.userPrincipal.slice(0, 8)}...${sidebar.userPrincipal.slice(-4)}`
+                        : "Unknown User")}
+                  </p>
+                  {sidebar.userPrincipal && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleCopyPrincipal}
+                      className="h-6 w-6 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      title="Copy Principal ID"
+                    >
+                      {principalCopied ? (
+                        <Check className="h-3 w-3 text-green-500" />
+                      ) : (
+                        <Copy className="h-3 w-3 text-slate-500 dark:text-slate-400" />
+                      )}
+                    </Button>
+                  )}
+                </div>
                 <p className="text-slate-500 dark:text-slate-400 text-xs capitalize">{safeRole}</p>
               </div>
             </motion.div>
@@ -530,6 +568,15 @@ function SidebarContent({
 
             <Button
               variant="ghost"
+              onClick={() => navigate("/org-selector")}
+              className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to Organizations
+            </Button>
+
+            <Button
+              variant="ghost"
               onClick={sidebar.onDisconnect}
               className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground"
             >
@@ -544,7 +591,22 @@ function SidebarContent({
                 {sidebar.userName ? sidebar.userName.charAt(0).toUpperCase() : "U"}
               </AvatarFallback>
             </Avatar>
-            <Button variant="ghost" size="sm" onClick={sidebar.onDisconnect} className="w-8 h-8 p-0">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => navigate("/org-selector")} 
+              className="w-8 h-8 p-0"
+              title="Back to Organizations"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={sidebar.onDisconnect} 
+              className="w-8 h-8 p-0"
+              title="Disconnect"
+            >
               <LogOut className="w-4 h-4" />
             </Button>
           </div>

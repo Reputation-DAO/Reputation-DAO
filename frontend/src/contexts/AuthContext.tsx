@@ -2,13 +2,6 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { Principal } from '@dfinity/principal';
 import {
-  ensurePlugAgent,
-  getPlugPrincipal,
-  isPlugConnected,
-  disconnectPlug,
-  PLUG_HOST,
-} from '../utils/plug';
-import {
   isInternetIdentityAuthenticated,
   loginInternetIdentity,
   logoutInternetIdentity,
@@ -17,13 +10,11 @@ import {
 import {
   makeChildActor,
   type ChildActor,
-  makeFactoriaWithPlug,
   makeFactoriaWithInternetIdentity,
-  getFactoriaCanisterId,
 } from '@/lib/canisters';
 import type { _SERVICE as FactoriaActor } from '@/declarations/factoria/factoria.did.d.ts';
 
-export type AuthMethod = 'plug' | 'internetIdentity' | null;
+export type AuthMethod = 'internetIdentity' | null;
 
 const STORAGE_KEY = 'repdao:authMethod';
 
@@ -44,7 +35,7 @@ function loadAuthMethod(): AuthMethod {
   if (typeof window === 'undefined') return null;
   try {
     const value = window.localStorage.getItem(STORAGE_KEY);
-    return value === 'plug' || value === 'internetIdentity' ? value : null;
+    return value === 'internetIdentity' ? value : null;
   } catch {
     return null;
   }
@@ -58,7 +49,6 @@ interface AuthContextType {
   isLoading: boolean;
   
   // Authentication methods
-  loginWithPlug: () => Promise<void>;
   loginWithInternetIdentity: () => Promise<void>;
   logout: () => Promise<void>;
   
@@ -82,16 +72,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [principal, setPrincipal] = useState<Principal | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const resolvePlugPrincipal = async (): Promise<Principal | null> => {
-    if (!(await isPlugConnected())) return null;
-    try {
-      return await getPlugPrincipal();
-    } catch (err) {
-      console.error('Failed to read Plug principal:', err);
-      return null;
-    }
-  };
-
   const resolveInternetIdentityPrincipal = async (): Promise<Principal | null> => {
     try {
       if (!(await isInternetIdentityAuthenticated())) return null;
@@ -109,36 +89,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsLoading(true);
 
     try {
-      const last = loadAuthMethod();
-      const order: AuthMethod[] =
-        last === 'plug'
-          ? ['plug', 'internetIdentity']
-          : last === 'internetIdentity'
-          ? ['internetIdentity', 'plug']
-          : ['plug', 'internetIdentity'];
-
-      for (const method of order) {
-        if (method === 'plug') {
-          const plugPrincipal = await resolvePlugPrincipal();
-          if (plugPrincipal) {
-            setIsAuthenticated(true);
-            setAuthMethod('plug');
-            setPrincipal(plugPrincipal);
-            saveAuthMethod('plug');
-            console.log('✅ Authenticated with Plug:', plugPrincipal.toString());
-            return;
-          }
-        } else if (method === 'internetIdentity') {
-          const iiPrincipal = await resolveInternetIdentityPrincipal();
-          if (iiPrincipal) {
-            setIsAuthenticated(true);
-            setAuthMethod('internetIdentity');
-            setPrincipal(iiPrincipal);
-            saveAuthMethod('internetIdentity');
-            console.log('✅ Authenticated with Internet Identity:', iiPrincipal.toString());
-            return;
-          }
-        }
+      const iiPrincipal = await resolveInternetIdentityPrincipal();
+      if (iiPrincipal) {
+        setIsAuthenticated(true);
+        setAuthMethod('internetIdentity');
+        setPrincipal(iiPrincipal);
+        saveAuthMethod('internetIdentity');
+        console.log('✅ Authenticated with Internet Identity:', iiPrincipal.toString());
+        return;
       }
 
       setIsAuthenticated(false);
@@ -152,31 +110,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setAuthMethod(null);
       setPrincipal(null);
       saveAuthMethod(null);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  /**
-   * Login with Plug wallet
-   */
-  const loginWithPlug = async () => {
-    setIsLoading(true);
-    
-    try {
-      // Connect with Plug
-      await ensurePlugAgent({ host: PLUG_HOST });
-      const plugPrincipal = await getPlugPrincipal();
-      
-      setIsAuthenticated(true);
-      setAuthMethod('plug');
-      setPrincipal(plugPrincipal);
-      saveAuthMethod('plug');
-      
-      console.log('✅ Plug login successful:', plugPrincipal?.toString());
-    } catch (error) {
-      console.error('❌ Plug login failed:', error);
-      throw error;
     } finally {
       setIsLoading(false);
     }
@@ -216,11 +149,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsLoading(true);
 
     try {
-      if (authMethod === 'plug') {
-        await disconnectPlug();
-      } else if (authMethod === 'internetIdentity') {
-        await logoutInternetIdentity();
-      }
+      await logoutInternetIdentity();
 
       setIsAuthenticated(false);
       setAuthMethod(null);
@@ -243,26 +172,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (!isAuthenticated || !authMethod) {
       throw new Error('Not authenticated. Please login first.');
     }
-    if (authMethod === 'plug') {
-      await ensurePlugAgent({ host: PLUG_HOST, whitelist: [canisterId] });
-    }
-    return makeChildActor(authMethod, { canisterId });
+    return makeChildActor({ canisterId });
   };
 
   const getFactoriaActor = async () => {
     if (!isAuthenticated || !authMethod) {
       throw new Error('Not authenticated. Please login first.');
     }
-    const canisterId = getFactoriaCanisterId();
-    switch (authMethod) {
-      case 'plug':
-        await ensurePlugAgent({ host: PLUG_HOST, whitelist: [canisterId] });
-        return makeFactoriaWithPlug();
-      case 'internetIdentity':
-        return makeFactoriaWithInternetIdentity();
-      default:
-        throw new Error(`Unsupported authentication method: ${authMethod}`);
-    }
+    return makeFactoriaWithInternetIdentity();
   };
 
   // Check connection on mount
@@ -275,7 +192,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     authMethod,
     principal,
     isLoading,
-    loginWithPlug,
     loginWithInternetIdentity,
     logout,
     checkConnection,
