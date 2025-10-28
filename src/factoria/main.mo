@@ -890,5 +890,39 @@ public shared({ caller }) func adminTreasuryWithdraw(
     case (#Err e)  { #err ("transfer failed: " # debug_show e) };
   }
 };
+public shared({ caller }) func adminForceArchive(canister_id : Principal) : async Text {
+  requireAdmin(caller);
+  switch (byId.get(canister_id)) {
+    case null { return "Error: unknown canister" };
+    case (?c) {
+      // Best-effort stop
+      try { await IC.stop_canister({ canister_id }) } catch (_) {};
+
+      // Take control
+      await IC.update_settings({
+        canister_id;
+        settings = {
+          controllers = ?[Principal.fromActor(ReputationFactory)];
+          compute_allocation = null; memory_allocation = null; freezing_threshold = null;
+        }
+      });
+
+      // Mark archived + update indices
+      let c2 : Child = {
+        id = canister_id; owner = c.owner; created_at = c.created_at; note = c.note;
+        status = #Archived; visibility = c.visibility; plan = c.plan; expires_at = c.expires_at
+      };
+      updateChild(c2);
+      removeOwnerIndex(c.owner, canister_id);     // ← missing in your snippet
+
+      // De-dupe pool
+      for (x in pool.vals()) { if (x == canister_id) { storePool := Buffer.toArray(pool); return "already in pool" } };
+      pool.add(canister_id);
+      storePool := Buffer.toArray(pool);
+      "Success: force-archived"
+    }
+  }
+};
+
 
 }
