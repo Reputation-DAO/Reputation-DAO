@@ -1,14 +1,18 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Menu, X, Zap } from "lucide-react";
+import { Menu, X, Zap, Copy } from "lucide-react";
 import { Button } from "./button";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
+  const { isAuthenticated, principal, authMethod } = useAuth();
+  const principalText = useMemo(() => principal?.toText?.() ?? null, [principal]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -23,6 +27,43 @@ const Navigation = () => {
     { name: "Blog", href: "/blog" },
     { name: "Community", href: "/community" },
   ];
+
+  const handleCopyPrincipal = async () => {
+    if (!principalText) return;
+    try {
+      if (typeof navigator === "undefined" || !navigator.clipboard) {
+        throw new Error("Clipboard API unavailable");
+      }
+      const { clipboard } = navigator;
+      if (typeof clipboard.writeText !== "function") {
+        throw new Error("Clipboard API unavailable");
+      }
+      await clipboard.writeText(principalText);
+      toast.success("Wallet principal copied to clipboard");
+    } catch (error) {
+      console.error("Failed to copy wallet principal", error);
+      toast.error("Unable to copy. Try again.");
+    }
+  };
+
+  const walletBadge = isAuthenticated && principalText ? (
+    <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-card/60 backdrop-blur px-3 py-2">
+      <div className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+      <span className="text-sm font-mono text-muted-foreground">
+        {(authMethod === "internetIdentity" ? "II" : "Plug") + " · " + principalText.slice(0, 8) + "..." + principalText.slice(-8)}
+      </span>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7"
+        onClick={handleCopyPrincipal}
+        aria-label="Copy wallet principal"
+      >
+        <Copy className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  ) : null;
 
   return (
     <nav className={cn(
@@ -43,6 +84,7 @@ const Navigation = () => {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-8">
+            {walletBadge}
             {navItems.map((item) => (
               <Link
                 key={item.name}

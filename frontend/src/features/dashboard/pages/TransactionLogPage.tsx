@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DashboardLayout, SidebarTrigger } from "@/components/layout/DashboardLayout";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import WalletCopyBadge from "../components/WalletCopyBadge";
 import { toast } from "sonner";
 
 import {
@@ -350,12 +351,13 @@ function InnerTransactionLog(props: any) {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              className="group"
-              onClick={() => toast.info("CSV export not wired to backend in this view")}
-            >
+        <div className="flex items-center gap-2">
+          <WalletCopyBadge />
+          <Button
+            variant="outline"
+            className="group"
+            onClick={() => toast.info("CSV export not wired to backend in this view")}
+          >
               <Download className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
               Export CSV
             </Button>

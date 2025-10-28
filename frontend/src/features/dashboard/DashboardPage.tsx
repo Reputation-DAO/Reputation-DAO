@@ -28,6 +28,7 @@ import {
 import { DashboardLayout, SidebarTrigger } from "@/components/layout/DashboardLayout";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import type { Transaction, TransactionType } from "@/declarations/reputation_dao/reputation_dao.did";
+import WalletCopyBadge from "./components/WalletCopyBadge";
 
 type TxKind = "awarded" | "revoked" | "decayed";
 interface ReputationActivity {
@@ -406,6 +407,7 @@ function InnerDashboard(props: InnerDashboardProps) {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <WalletCopyBadge />
           <Button
             variant="outline"
             size="sm"

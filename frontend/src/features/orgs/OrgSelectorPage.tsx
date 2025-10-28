@@ -41,12 +41,40 @@ const WalletDisplay = () => {
   if (!isAuthenticated || !principal) return null;
   const text = principal.toText();
   const short = `${text.slice(0, 8)}...${text.slice(-8)}`;
+
+  const handleCopy = async () => {
+    try {
+      if (typeof navigator === "undefined" || !navigator.clipboard) {
+        throw new Error("Clipboard API unavailable");
+      }
+      const { clipboard } = navigator;
+      if (typeof clipboard.writeText !== "function") {
+        throw new Error("Clipboard API unavailable");
+      }
+      await clipboard.writeText(text);
+      toast.success("Wallet principal copied to clipboard");
+    } catch (err) {
+      console.error("Failed to copy principal", err);
+      toast.error("Unable to copy. Try again.");
+    }
+  };
+
   return (
     <div className="flex items-center gap-2 rounded-lg px-3 py-2 border border-border bg-card">
       <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
       <span className="text-sm font-mono text-muted-foreground">
         {authMethod === 'internetIdentity' ? 'II' : 'Plug'} · {short}
       </span>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7"
+        onClick={handleCopy}
+        aria-label="Copy wallet principal"
+      >
+        <Copy className="h-3.5 w-3.5" />
+      </Button>
     </div>
   );
 };

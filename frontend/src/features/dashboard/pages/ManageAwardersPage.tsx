@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DashboardLayout, SidebarTrigger } from "@/components/layout/DashboardLayout";
+import WalletCopyBadge from "../components/WalletCopyBadge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import {
@@ -367,22 +368,24 @@ function InnerManageAwarders(props: InnerManageAwardersProps) {
               </div>
             </div>
 
-            <Dialog open={isAddingAwarder} onOpenChange={setIsAddingAwarder}>
-              <DialogTrigger asChild>
-                <Button variant="hero" className="group">
-                  <UserPlus className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
-                  Add Awarder
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md bg-background border border-border shadow-lg">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    <UserPlus className="w-5 h-5 text-primary" />
-                    Add New Awarder
-                  </DialogTitle>
-                </DialogHeader>
+            <div className="flex items-center gap-2">
+              <WalletCopyBadge />
+              <Dialog open={isAddingAwarder} onOpenChange={setIsAddingAwarder}>
+                <DialogTrigger asChild>
+                  <Button variant="hero" className="group">
+                    <UserPlus className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
+                    Add Awarder
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md bg-background border border-border shadow-lg">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <UserPlus className="w-5 h-5 text-primary" />
+                      Add New Awarder
+                    </DialogTitle>
+                  </DialogHeader>
 
-                <form onSubmit={handleAddAwarder} className="space-y-4 mt-4">
+                  <form onSubmit={handleAddAwarder} className="space-y-4 mt-4">
                   <div className="space-y-2">
                     <Label htmlFor="name">Name *</Label>
                     <Input
@@ -450,9 +453,10 @@ function InnerManageAwarders(props: InnerManageAwardersProps) {
                       Cancel
                     </Button>
                   </div>
-                </form>
-              </DialogContent>
-            </Dialog>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
         </header>
 

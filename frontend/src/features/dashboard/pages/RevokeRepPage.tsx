@@ -13,6 +13,7 @@ import type { Transaction } from "@/declarations/reputation_dao/reputation_dao.d
 
 import { DashboardLayout, SidebarTrigger } from "@/components/layout/DashboardLayout";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import WalletCopyBadge from "../components/WalletCopyBadge";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -373,6 +374,7 @@ function InnerRevokeRep(props: InnerRevokeRepProps) {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <WalletCopyBadge />
             <ThemeToggle />
           </div>
         </header>

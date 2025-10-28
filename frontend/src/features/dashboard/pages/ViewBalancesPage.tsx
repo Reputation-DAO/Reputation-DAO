@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DashboardLayout, SidebarTrigger } from "@/components/layout/DashboardLayout";
+import WalletCopyBadge from "../components/WalletCopyBadge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
@@ -407,6 +408,9 @@ function InnerViewBalances(props: InnerViewBalancesProps) {
               <h1 className="text-lg font-semibold text-foreground">View Balances</h1>
               <p className="text-xs text-muted-foreground">Org: {cid}</p>
             </div>
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <WalletCopyBadge />
           </div>
         </header>
 

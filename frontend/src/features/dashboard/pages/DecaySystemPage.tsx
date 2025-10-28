@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { DashboardLayout, SidebarTrigger } from "@/components/layout/DashboardLayout";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import WalletCopyBadge from "../components/WalletCopyBadge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import {
@@ -398,6 +399,7 @@ function InnerDecaySystem(props: any) {
             </div>
 
             <div className="flex items-center gap-2">
+              <WalletCopyBadge />
               <Badge
                 variant={settings.enabled ? "default" : "secondary"}
                 className={settings.enabled ? "bg-green-500/10 text-green-600" : ""}

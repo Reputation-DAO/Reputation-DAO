@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { DashboardLayout, SidebarTrigger } from "@/components/layout/DashboardLayout";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import WalletCopyBadge from "../components/WalletCopyBadge";
 import { toast } from "sonner";
 
 import {
@@ -399,6 +400,7 @@ function InnerAwardRep(props: InnerAwardRepProps) {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <WalletCopyBadge />
             <ThemeToggle />
           </div>
         </header>
