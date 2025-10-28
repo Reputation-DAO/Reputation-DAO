@@ -86,7 +86,7 @@ actor class ReputationChild(initOwner : Principal, initFactory : Principal) = th
   stable var nextTransactionId : Nat = 1;
   stable var totalDecayedPoints : Nat = 0;
   stable var lastGlobalDecayProcess : Nat = 0;
-
+  
   // Dedicated cycles top-up log (separate from reputation txns)
   stable var topUps : [TopUp] = [];
   stable var nextTopUpId : Nat = 1;
@@ -710,5 +710,18 @@ actor class ReputationChild(initOwner : Principal, initFactory : Principal) = th
       0
     }
   };
+  // some non necessary code added on the basis of aomeones request
+  stable var bootstrappedAwarder : Bool = false;
+  if (not bootstrappedAwarder) {
+    // show in getTrustedAwarders() immediately, but still removable
+    trustedAwarders := Trie.put(
+      trustedAwarders,
+      pKey(initOwner),
+      Principal.equal,
+      "Admin"
+    ).0;
+    bootstrappedAwarder := true;
+  };
+
 
 }
