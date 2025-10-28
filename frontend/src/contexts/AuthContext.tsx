@@ -7,6 +7,7 @@ import {
   isPlugConnected,
   disconnectPlug,
   PLUG_HOST,
+  PLUG_DISABLE_KEY,
 } from '../utils/plug';
 import {
   isInternetIdentityAuthenticated,
@@ -26,6 +27,18 @@ import type { _SERVICE as FactoriaActor } from '@/declarations/factoria/factoria
 export type AuthMethod = 'plug' | 'internetIdentity' | null;
 
 const STORAGE_KEY = 'repdao:authMethod';
+const setPlugDisabled = (disabled: boolean) => {
+  if (typeof window === 'undefined') return;
+  try {
+    if (disabled) {
+      window.localStorage.setItem(PLUG_DISABLE_KEY, '1');
+    } else {
+      window.localStorage.removeItem(PLUG_DISABLE_KEY);
+    }
+  } catch {
+    /* ignore storage errors */
+  }
+};
 
 function saveAuthMethod(method: AuthMethod) {
   if (typeof window === 'undefined') return;
@@ -125,6 +138,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             setAuthMethod('plug');
             setPrincipal(plugPrincipal);
             saveAuthMethod('plug');
+            setPlugDisabled(false);
             console.log('✅ Authenticated with Plug:', plugPrincipal.toString());
             return;
           }
@@ -135,6 +149,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             setAuthMethod('internetIdentity');
             setPrincipal(iiPrincipal);
             saveAuthMethod('internetIdentity');
+            setPlugDisabled(true);
+            try {
+              await disconnectPlug();
+            } catch {
+              /* ignore disconnect errors */
+            }
             console.log('✅ Authenticated with Internet Identity:', iiPrincipal.toString());
             return;
           }
@@ -164,6 +184,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsLoading(true);
     
     try {
+      setPlugDisabled(false);
       // Connect with Plug
       await ensurePlugAgent({ host: PLUG_HOST });
       const plugPrincipal = await getPlugPrincipal();
@@ -194,6 +215,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (!iiPrincipal) {
         throw new Error('Internet Identity login succeeded but principal is unavailable.');
       }
+      try {
+        await disconnectPlug();
+      } catch {
+        /* ignore disconnect errors */
+      }
+      setPlugDisabled(true);
 
       setIsAuthenticated(true);
       setAuthMethod('internetIdentity');

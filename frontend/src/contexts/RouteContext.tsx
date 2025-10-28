@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useAuth } from './AuthContext';
 
 interface RouteContextType {
   isPlugAllowed: boolean;
@@ -16,6 +17,7 @@ const ALLOWED_ROUTES = ['/auth', '/org-selector', '/dashboard', '/award-rep', '/
 
 export const RouteProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
+  const { authMethod } = useAuth();
   const [isPlugAllowed, setIsPlugAllowed] = useState(false);
   const [currentRoute, setCurrentRoute] = useState(location.pathname);
 
@@ -28,11 +30,11 @@ export const RouteProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const explicitlyAllowed = ALLOWED_ROUTES.some(matches);
 
     // Allow Plug only on whitelisted routes that are not explicitly blocked
-    const allowed = explicitlyAllowed && !explicitlyRestricted;
+    const allowed = authMethod === 'plug' && explicitlyAllowed && !explicitlyRestricted;
     setIsPlugAllowed(allowed);
     
     console.log(`🛣️ Route changed to: ${path}, Plug allowed: ${allowed}`);
-  }, [location.pathname]);
+  }, [location.pathname, authMethod]);
 
   return (
     <RouteContext.Provider value={{ isPlugAllowed, currentRoute }}>

@@ -2,6 +2,7 @@ import type { HttpAgent } from '@dfinity/agent';
 
 export const PLUG_HOST = 'https://icp-api.io';
 const WL_STORAGE_KEY = 'plug:whitelist';
+export const PLUG_DISABLE_KEY = 'repdao:ii-lock';
 
 const getPlug = () => (window as any)?.ic?.plug;
 
@@ -43,6 +44,19 @@ export const ensurePlugAgent = async (options: { host?: string; whitelist?: stri
   const plug = getPlug();
   if (!plug) {
     throw new Error('Plug wallet not found. Please install or enable the Plug extension.');
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      if (window.localStorage?.getItem(PLUG_DISABLE_KEY) === '1') {
+        throw new Error('Plug access is disabled for the current session.');
+      }
+    } catch (err) {
+      // If storage throws (e.g., private mode), fall through; we still attempt to connect.
+      if (err instanceof Error && err.message === 'Plug access is disabled for the current session.') {
+        throw err;
+      }
+    }
   }
 
   const host = options.host ?? PLUG_HOST;
