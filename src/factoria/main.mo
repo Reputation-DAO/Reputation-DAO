@@ -894,11 +894,11 @@ public shared({ caller }) func adminForceArchive(canister_id : Principal) : asyn
   requireAdmin(caller);
   switch (byId.get(canister_id)) {
     case null { return "Error: unknown canister" };
-    case (?c) {
-      // Best-effort stop
+    case (?c0) {
+      // Best-effort stop (ok if already stopped)
       try { await IC.stop_canister({ canister_id }) } catch (_) {};
 
-      // Take control
+      // Take control so Factory owns it
       await IC.update_settings({
         canister_id;
         settings = {
@@ -907,19 +907,45 @@ public shared({ caller }) func adminForceArchive(canister_id : Principal) : asyn
         }
       });
 
-      // Mark archived + update indices
-      let c2 : Child = {
-        id = canister_id; owner = c.owner; created_at = c.created_at; note = c.note;
-        status = #Archived; visibility = c.visibility; plan = c.plan; expires_at = c.expires_at
+      // Normalize plan: BasicPending -> Basic (so start/reuse won't trap)
+      let now  = nowNs();
+      let planNorm : Plan = switch (c0.plan) {
+        case (#BasicPending) #Basic;
+        case (p) p
       };
-      updateChild(c2);
-      removeOwnerIndex(c.owner, canister_id);     // ← missing in your snippet
 
-      // De-dupe pool
-      for (x in pool.vals()) { if (x == canister_id) { storePool := Buffer.toArray(pool); return "already in pool" } };
+      // If it was pending it often had expires_at = 0; give it a sane window
+      let expBase : Nat64 =
+        if (c0.expires_at == 0) now
+        else if (c0.expires_at > now) c0.expires_at
+        else now;
+
+      let c1 : Child = {
+        id         = canister_id;
+        owner      = c0.owner;
+        created_at = c0.created_at;
+        note       = c0.note;
+        status     = #Archived;        // keep archived
+        visibility = c0.visibility;
+        plan       = planNorm;         // <- Basic if it was BasicPending
+        expires_at = expBase + MONTH_NS;
+      };
+
+      // Update registry + indices
+      updateChild(c1);
+      removeOwnerIndex(c0.owner, canister_id);
+
+      // De-dupe pool then add
+      for (x in pool.vals()) {
+        if (x == canister_id) {
+          storePool := Buffer.toArray(pool);
+          return "already in pool";
+        }
+      };
       pool.add(canister_id);
       storePool := Buffer.toArray(pool);
-      "Success: force-archived"
+
+      "Success: force-archived (pending normalized)"
     }
   }
 };
