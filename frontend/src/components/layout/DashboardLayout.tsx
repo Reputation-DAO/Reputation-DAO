@@ -478,13 +478,14 @@ function SidebarContent({
           <div className="pt-6">
             <div className="h-px bg-slate-200 dark:bg-slate-800 mb-4" />
             <NavLink
-              to="/settings"
-              onClick={onNavigate}
-              className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all duration-200 group text-left"
-            >
-              <Settings className="w-4 h-4 flex-shrink-0" />
-              <span className="text-sm font-medium">Settings</span>
-            </NavLink>
+                to={cid ? `/dashboard/settings/${cid}` : "/dashboard/settings"}
+                onClick={onNavigate}
+                className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all duration-200 group text-left"
+              >
+                <Settings className="w-4 h-4 flex-shrink-0" />
+                <span className="text-sm font-medium">Settings</span>
+              </NavLink>
+
           </div>
         )}
       </div>

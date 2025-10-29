@@ -20,6 +20,7 @@ import DashboardPage, {
   ViewBalancesPage,
   TransactionLogPage,
   DecaySystemPage,
+  SettingsAdminPage,
 } from "@/features/dashboard";
 import { NotFoundPage } from "@/features/common";
 
@@ -75,6 +76,7 @@ const App = () => (
                   <Route path="/dashboard/view-balances/:cid" element={<ViewBalancesPage />} />
                   <Route path="/dashboard/transaction-log/:cid" element={<TransactionLogPage />} />
                   <Route path="/dashboard/decay-system/:cid" element={<DecaySystemPage />} />
+                  <Route path="/dashboard/settings/:cid" element={<SettingsAdminPage />} />
 
                   {/* Catch-all */}
                   <Route path="*" element={<NotFoundPage />} />
