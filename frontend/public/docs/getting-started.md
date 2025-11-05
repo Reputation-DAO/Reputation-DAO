@@ -2,6 +2,23 @@
 
 Get Reputation DAO running locally in under 15 minutes.
 
+## Orientation
+
+### What is Reputation DAO?
+
+Reputation DAO is a factory-powered reputation platform for the Internet Computer. It lets you mint organization-specific canisters that:
+
+- Keep soulbound reputation ledgers per community
+- Expose configurable governance controls (roles, decay, analytics)
+- Run fully on-chain so data remains tamper-proof and auditable
+
+### Why Choose Reputation DAO?
+
+- **Operational Simplicity** – Provision managed org canisters with one command while the factory handles cycles, upgrades, and indexing.
+- **Security by Design** – All reputation logic stays on-chain, eliminating centralized databases and manual reconciliation.
+- **Scalable Multi-Tenancy** – Serve dozens or thousands of orgs through a repeatable template without sacrificing isolation.
+- **Extensible Interfaces** – Use the React frontend, CLI, or SDK to integrate reputation signals into your own products.
+
 ## Prerequisites
 
 Before you begin, ensure you have:
