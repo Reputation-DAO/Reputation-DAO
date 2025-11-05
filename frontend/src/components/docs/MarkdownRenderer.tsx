@@ -8,6 +8,16 @@ import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Link } from 'react-router-dom';
 import { Copy, Check } from 'lucide-react';
 
+let codeIdCounter = 0;
+const generateCodeId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `code-${crypto.randomUUID()}`;
+  }
+
+  codeIdCounter = (codeIdCounter + 1) % Number.MAX_SAFE_INTEGER;
+  return `code-${Date.now().toString(36)}-${codeIdCounter.toString(36)}`;
+};
+
 interface MarkdownRendererProps {
   filePath: string;
 }
@@ -23,10 +33,11 @@ const MarkdownRenderer = ({ filePath }: MarkdownRendererProps) => {
       try {
         setLoading(true);
         setError(null);
-        const response = await fetch(`/docs/${filePath}.md`);
-        
+        const docPath = `/docs/${filePath}.md`;
+        const response = await fetch(docPath);
+
         if (!response.ok) {
-          throw new Error(`Failed to load documentation: ${response.statusText}`);
+          throw new Error(`Failed to load documentation from ${docPath}: ${response.statusText}`);
         }
         
         const text = await response.text();
@@ -136,9 +147,9 @@ const MarkdownRenderer = ({ filePath }: MarkdownRendererProps) => {
           
           // Custom code blocks with syntax highlighting
           code: ({ inline, className, children, ...props }: any) => {
-            const match = /language-(\w+)/.exec(className || '');
+            const match = /language-([\w-]+)/.exec(className || '');
             const codeString = String(children).replace(/\n$/, '');
-            const codeId = `code-${Math.random().toString(36).substr(2, 9)}`;
+            const codeId = generateCodeId();
             
             if (!inline && match) {
               return (

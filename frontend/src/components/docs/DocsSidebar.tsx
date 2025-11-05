@@ -154,8 +154,8 @@ const NavSection = ({ item, level = 0 }: { item: NavItem; level?: number }) => {
       
       {isOpen && hasChildren && (
         <div className="space-y-1 ml-2">
-          {item.items!.map((child, index) => (
-            <NavSection key={index} item={child} level={level + 1} />
+          {item.items!.map((child) => (
+            <NavSection key={child.href || child.title} item={child} level={level + 1} />
           ))}
         </div>
       )}
@@ -167,8 +167,8 @@ const DocsSidebar = () => {
   return (
     <aside className="w-64 h-[calc(100vh-4rem)] sticky top-16 overflow-y-auto border-r border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <nav className="p-4 space-y-2">
-        {navigation.map((item, index) => (
-          <NavSection key={index} item={item} />
+        {navigation.map((item) => (
+          <NavSection key={item.href || item.title} item={item} />
         ))}
       </nav>
     </aside>

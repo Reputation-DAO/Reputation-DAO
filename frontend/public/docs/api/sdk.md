@@ -16,6 +16,8 @@ const actor = await makeChildActor("plug", {
 });
 ```
 
+> **Admin access:** Factoria management functions are only exposed through the official Reputation DAO admin interface. They are not available to normal users or via the public SDK.
+
 ### Actor Helpers
 
 The `frontend/src/lib/canisters` module provides typed helpers:
@@ -24,7 +26,6 @@ The `frontend/src/lib/canisters` module provides typed helpers:
 // lib/canisters.ts
 import { Actor, HttpAgent } from "@dfinity/agent";
 import { idlFactory as childIdl } from "../declarations/reputation_dao";
-import { idlFactory as factoryIdl } from "../declarations/factoria";
 
 export async function makeChildActor(
   provider: "plug" | "ii",
@@ -37,19 +38,6 @@ export async function makeChildActor(
     canisterId: options.canisterId,
   });
 }
-
-export async function makeFactoriaActor(
-  provider: "plug" | "ii",
-  options: { canisterId: string }
-) {
-  const agent = await getAgent(provider);
-  
-  return Actor.createActor(factoryIdl, {
-    agent,
-    canisterId: options.canisterId,
-  });
-}
-
 async function getAgent(provider: "plug" | "ii"): Promise<HttpAgent> {
   if (provider === "plug") {
     // @ts-ignore

@@ -6,6 +6,8 @@ Complete API reference for the Factory canister (`factoria`).
 
 The Factory canister orchestrates the creation and management of child reputation canisters. It maintains a cycles vault, tracks ownership, and provides lifecycle management for all child instances.
 
+> **Access control:** Factoria management functions are only available through the official Reputation DAO admin interface. Direct API access is restricted to platform operators and is not exposed to normal users.
+
 ## Core Methods
 
 ### createChildForOwner
@@ -36,19 +38,6 @@ dfx canister call factoria createChildForOwner \
   '(principal "xxxxx-xxxxx-xxxxx-xxxxx-cai", 1_000_000_000_000:nat, vec {}, "My DAO")'
 ```
 
-**TypeScript:**
-
-```typescript
-import { createChildForOwner } from 'repdao';
-
-const childId = await createChildForOwner(
-  ownerPrincipal,
-  1_000_000_000_000n,
-  [],
-  'My DAO',
-  { identity, network: 'ic' }
-);
-```
 
 ### listChildren
 
@@ -403,42 +392,6 @@ The factory implements rate limiting:
    - Track factory stats
    - Monitor top-up history
    - Alert on low cycles
-
-## TypeScript SDK
-
-The `repdao` package provides typed wrappers:
-
-```typescript
-import {
-  createChildForOwner,
-  listChildren,
-  getChild,
-  topUpChild,
-  upgradeChild,
-  getFactoryStats,
-} from 'repdao';
-
-// Create child
-const childId = await createChildForOwner(
-  ownerPrincipal,
-  1_000_000_000_000n,
-  [],
-  'My DAO',
-  { identity, network: 'ic' }
-);
-
-// List all children
-const children = await listChildren({ network: 'ic' });
-
-// Get specific child
-const child = await getChild(childId, { network: 'ic' });
-
-// Top up cycles
-await topUpChild(childId, 1_000_000_000n, { identity, network: 'ic' });
-
-// Get stats
-const stats = await getFactoryStats({ network: 'ic' });
-```
 
 ## See Also
 
