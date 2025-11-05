@@ -25,3 +25,9 @@ dist-ssr
 .dfx/
 **/.env
 **/.env.*
+
+# tmp
+tmp/
+.gitignore
+
+

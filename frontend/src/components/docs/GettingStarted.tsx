@@ -1,6 +1,11 @@
-import { Link } from "react-router-dom";
+import MarkdownRenderer from "./MarkdownRenderer";
 
-const GettingStarted = () => (
+const GettingStarted = () => <MarkdownRenderer filePath="getting-started" />;
+
+export default GettingStarted;
+
+/* OLD COMPONENT - REPLACED WITH MARKDOWN
+const GettingStartedOld = () => (
   <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
     <header className="mb-12 text-center">
       <span className="uppercase tracking-wide text-sm text-primary">Docs</span>
@@ -142,5 +147,4 @@ npm run dev`}
     </section>
   </div>
 );
-
-export default GettingStarted;
+*/

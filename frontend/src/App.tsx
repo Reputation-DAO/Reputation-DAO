@@ -27,13 +27,7 @@ import { NotFoundPage } from "@/features/common";
 // docs layout + sections
 import DocsLayout from "@/components/layout/DocsLayout";
 import DocsIndex from "@/components/docs/DocsIndex";
-import GettingStarted from "@/components/docs/GettingStarted";
-import SmartContracts from "@/components/docs/SmartContracts";
-import ApiReference from "@/components/docs/ApiReference";
-import Sdks from "@/components/docs/Sdks";
-import SecurityGuide from "@/components/docs/SecurityGuide";
-import CommunityResources from "@/components/docs/CommunityResources";
-import CliReference from "@/components/docs/CliReference";
+import DocPage from "@/components/docs/DocPage";
 
 const queryClient = new QueryClient();
 
@@ -58,13 +52,7 @@ const App = () => (
                   {/* Docs (all enclosed by DocsLayout) */}
                   <Route path="/docs" element={<DocsLayout />}>
                     <Route index element={<DocsIndex />} />
-                    <Route path="getting-started" element={<GettingStarted />} />
-                    <Route path="smart-contracts" element={<SmartContracts />} />
-                    <Route path="api" element={<ApiReference />} />
-                    <Route path="cli" element={<CliReference />} />
-                    <Route path="sdks" element={<Sdks />} />
-                    <Route path="security" element={<SecurityGuide />} />
-                    <Route path="community" element={<CommunityResources />} />
+                    <Route path="*" element={<DocPage />} />
                   </Route>
 
                   {/* App flows */}
