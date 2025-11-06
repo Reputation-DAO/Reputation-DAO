@@ -10,7 +10,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
 import AuthPage from "@/features/auth";
-import { HomePage, BlogPage, CommunityPage, PostViewerPage } from "@/features/marketing";
+import { HomePage, BlogPage, CommunityPage, PostViewerPage, CreatorPage } from "@/features/marketing";
 import OrgSelectorPage from "@/features/orgs";
 
 import DashboardPage, {
@@ -47,6 +47,7 @@ const App = () => (
                   <Route path="/blog" element={<BlogPage />} />
                   <Route path="/posts/:id" element={<PostViewerPage />} />
                   <Route path="/community" element={<CommunityPage />} />
+                  <Route path="/creator" element={<CreatorPage />} />
                   <Route path="/auth" element={<AuthPage />} />
 
                   {/* Docs (all enclosed by DocsLayout) */}
