@@ -275,7 +275,7 @@ export function PostEditor({ initialPost, onComplete }: PostEditorProps) {
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit, handleInvalid)} className="space-y-6">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="flex flex-wrap gap-2">
+          <TabsList className="grid w-full grid-cols-8 gap-1">
             <TabsTrigger value="basics">Basics</TabsTrigger>
             <TabsTrigger value="media">Media</TabsTrigger>
             <TabsTrigger value="content">Content</TabsTrigger>
