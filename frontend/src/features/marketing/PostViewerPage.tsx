@@ -1,123 +1,73 @@
-// frontend/src/pages/PostViewer.tsx
-// @ts-nocheck
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import Navigation from "@/components/ui/navigation";
 import Footer from "@/components/layout/Footer";
-import { blogActor } from "@/lib/canisters";
-import type {
-  Post as BackendPost,
-  Author as BackendAuthor,
-  PostStatus as BackendPostStatus,
-} from "@/declarations/blog_backend/blog_backend.did";
-import {
-  Calendar,
-  User as UserIcon,
-  ArrowLeft,
-  ArrowRight,
-  Eye,
-} from "lucide-react";
+import { Calendar, User as UserIcon, ArrowLeft, ArrowRight, Eye } from "lucide-react";
+import { fetchBlogPostById, fetchBlogPosts } from "./api/blog.client";
+import type { MediaAsset, Post, HeroSettings } from "./lib/blog.types";
+import { ContentRenderer, useSupabaseAssetUrl } from "./utils/contentRenderer";
 
-// --- Markdown libs (GFM + safe sanitize) ---
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import remarkBreaks from "remark-breaks";
-import rehypeSanitize from "rehype-sanitize";
+const safeAuthor = (author?: Post["author"] | null) => author?.name ?? "—";
 
-type PostStatusLabel = "Draft" | "Published" | "Archived" | "Unknown";
-
-// --------- ASSET HELPERS (fix missing images due to relative paths) ----------
-const resolveAsset = (src?: string) => {
-  if (!src) return "";
-  // absolute http(s)
-  if (/^https?:\/\//i.test(src)) return src;
-  // ipfs
-  if (src.startsWith("ipfs://")) return src.replace("ipfs://", "https://ipfs.io/ipfs/");
-  // already absolute from site root
-  if (src.startsWith("/")) return src;
-  // normalize "./foo.png" or "images/foo.png" to "/images/foo.png"
-  return `/${src.replace(/^\.?\//, "")}`;
+const postDateSeconds = (post?: Post | null): number | null => {
+  if (!post) return null;
+  return post.publishedAt ?? post.updatedAt ?? post.createdAt ?? null;
 };
 
-const onImgError: React.ReactEventHandler<HTMLImageElement> = (e) => {
-  const el = e.currentTarget;
-  // Prevent infinite loop if fallback also errors
-  if (el.getAttribute("data-fallback") === "1") return;
-  el.setAttribute("data-fallback", "1");
-  el.src =
-    "data:image/svg+xml;charset=UTF-8," +
-    encodeURIComponent(
-      `<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='630'>
-        <rect width='100%' height='100%' fill='black'/>
-        <text x='50%' y='50%' fill='white' font-family='sans-serif' font-size='28' text-anchor='middle' dominant-baseline='middle'>
-          image unavailable
-        </text>
-      </svg>`
+const fmtDate = (post?: Post | null) => {
+  const seconds = postDateSeconds(post);
+  if (!seconds && seconds !== 0) return "";
+  const date = new Date(seconds * 1000);
+  return Number.isNaN(date.getTime())
+    ? ""
+    : date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+};
+
+type HeroImageProps = {
+  media: MediaAsset | null;
+  alt: string;
+  className?: string;
+  imageClassName?: string;
+};
+
+const HeroImage = ({ media, alt, className = "", imageClassName = "" }: HeroImageProps) => {
+  const url = useSupabaseAssetUrl(media);
+  if (!media || !url) {
+    return (
+      <div className={`w-full h-full bg-gradient-to-br from-primary/15 to-primary/5 ${className}`} />
     );
-};
-// ---------------------------------------------------------------------------
-
-const statusLabel = (
-  status: BackendPostStatus | string | null | undefined
-): PostStatusLabel => {
-  if (!status) return "Unknown";
-  if (typeof status === "string") {
-    return status === "Draft" || status === "Published" || status === "Archived"
-      ? status
-      : "Unknown";
   }
-  if ("Published" in status) return "Published";
-  if ("Draft" in status) return "Draft";
-  if ("Archived" in status) return "Archived";
-  return "Unknown";
+  return (
+    <div className={className}>
+      <img
+        src={url}
+        alt={alt}
+        className={`w-full h-full object-cover ${imageClassName}`}
+        loading="lazy"
+      />
+    </div>
+  );
 };
 
-const nsToMs = (value: bigint | number | null | undefined): number | null => {
-  if (value === undefined || value === null) return null;
-  if (typeof value === "number")
-    return Number.isFinite(value) ? Math.floor(value / 1_000_000) : null;
-  try {
-    return Number(value / 1_000_000n);
-  } catch {
-    return null;
-  }
-};
-
-const fmtDate = (ms: number | null | undefined) => {
-  if (!ms && ms !== 0) return "";
-  const d = new Date(ms);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-};
-
-const safeAuthor = (author?: BackendAuthor | null) => author?.name ?? "—";
-
-const estimateReadingTime = (text?: string) => {
-  if (!text) return "—";
-  const words = text.trim().split(/\s+/).length;
-  const mins = Math.max(1, Math.round(words / 200));
-  return `${mins} min read`;
+const HeroCaption = ({ hero }: { hero?: HeroSettings | null }) => {
+  if (!hero?.media?.caption) return null;
+  return (
+    <p className="mt-2 text-sm text-muted-foreground text-center">{hero.media.caption}</p>
+  );
 };
 
 export default function PostViewerPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [post, setPost] = useState<BackendPost | null>(null);
-  const [siblings, setSiblings] = useState<BackendPost[]>([]);
+  const [post, setPost] = useState<Post | null>(null);
+  const [siblings, setSiblings] = useState<Post[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // parse route id -> bigint
-  const postId = useMemo(() => {
-    try {
-      return id ? BigInt(id) : null;
-    } catch {
-      return null;
-    }
+  const numericId = useMemo(() => {
+    if (!id) return null;
+    const parsed = Number(id);
+    return Number.isFinite(parsed) ? parsed : null;
   }, [id]);
 
   useEffect(() => {
@@ -126,15 +76,15 @@ export default function PostViewerPage() {
       setLoading(true);
       setError(null);
       try {
-        if (!postId) throw new Error("Invalid post id");
-        const one = await blogActor.getPostById(postId);
-        const found = (one && one[0]) || null;
-
-        // fetch list for “More from blog” + prev/next
-        const list = await blogActor.getPosts();
+        const [one, list] = await Promise.all([
+          numericId !== null ? fetchBlogPostById(numericId) : Promise.resolve(null),
+          fetchBlogPosts(),
+        ]);
         if (!alive) return;
-
-        setPost(found);
+        if (numericId !== null && !one) {
+          throw new Error("Post not found");
+        }
+        setPost(one ?? null);
         setSiblings(list ?? []);
       } catch (e: any) {
         console.error(e);
@@ -146,41 +96,34 @@ export default function PostViewerPage() {
     return () => {
       alive = false;
     };
-  }, [postId]);
+  }, [numericId]);
 
-  const dateMs = nsToMs(post?.date);
-  const isPublished = statusLabel(post?.status) === "Published";
-
-  // Prev/Next by date among published posts
   const published = useMemo(
     () =>
-      (siblings ?? [])
-        .filter((p) => statusLabel(p.status) === "Published")
-        .sort((a, b) => Number(b.date) - Number(a.date)),
+      siblings
+        .filter((p) => p.status === "Published")
+        .sort((a, b) => (postDateSeconds(b) ?? 0) - (postDateSeconds(a) ?? 0)),
     [siblings]
   );
 
   const indexInPub = useMemo(() => {
     if (!post) return -1;
-    return published.findIndex(
-      (p) => p.id.toString() === post.id.toString()
-    );
+    return published.findIndex((p) => p.id === post.id);
   }, [published, post]);
 
   const prevPost = indexInPub > 0 ? published[indexInPub - 1] : null;
   const nextPost =
-    indexInPub >= 0 && indexInPub < published.length - 1
-      ? published[indexInPub + 1]
-      : null;
+    indexInPub >= 0 && indexInPub < published.length - 1 ? published[indexInPub + 1] : null;
 
   const moreFromBlog = useMemo(() => {
-    const currentKey = post?.id?.toString();
-    return published
-      .filter((p) => p.id.toString() !== currentKey)
-      .slice(0, 3);
+    if (!post) return published.slice(0, 3);
+    return published.filter((p) => p.id !== post.id).slice(0, 3);
   }, [published, post]);
 
-  const heroUrl = resolveAsset(post?.image) || "/banner/blogBanner.jpg";
+  const heroMedia = post?.hero?.media ?? null;
+  const heroBackground = useSupabaseAssetUrl(heroMedia) ?? "/banner/blogBanner.jpg";
+  const readingMinutes = Math.max(1, post?.readingMinutes ?? 0);
+  const viewCount = post?.metrics?.views ?? 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -193,7 +136,7 @@ export default function PostViewerPage() {
           style={{
             backgroundImage: `
               linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.35)),
-              url('${heroUrl}')
+              url('${heroBackground}')
             `,
             backgroundSize: "cover",
             backgroundPosition: "center",
@@ -207,9 +150,7 @@ export default function PostViewerPage() {
                 <div className="h-4 w-1/2 bg-black/20 mx-auto rounded" />
               </div>
             ) : error ? (
-              <h1 className="text-3xl sm:text-5xl font-bold">
-                Couldn’t load post
-              </h1>
+              <h1 className="text-3xl sm:text-5xl font-bold">Couldn’t load post</h1>
             ) : post ? (
               <>
                 {post.category && (
@@ -229,20 +170,20 @@ export default function PostViewerPage() {
                 <h1 className="text-4xl sm:text-6xl font-bold mb-4 drop-shadow-lg">
                   {post.title}
                 </h1>
-                <div className="flex items-center justify-center gap-4 text-sm text-gray-200">
+                <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-gray-200">
                   <span className="flex items-center gap-2">
                     <UserIcon className="w-4 h-4" /> {safeAuthor(post.author)}
                   </span>
                   <span className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4" /> {fmtDate(dateMs)}
+                    <Calendar className="w-4 h-4" /> {fmtDate(post)}
                   </span>
                   <span className="flex items-center gap-2">
-                    <Eye className="w-4 h-4" /> {Number(post.views || 0)}
+                    <Eye className="w-4 h-4" /> {viewCount.toLocaleString()}
                   </span>
-                  <span>{estimateReadingTime(post.content)}</span>
-                  {!isPublished && (
+                  <span>{readingMinutes} min read</span>
+                  {post.status !== "Published" && (
                     <span className="px-2 py-0.5 rounded border border-yellow-400 text-yellow-300">
-                      Draft
+                      {post.status}
                     </span>
                   )}
                 </div>
@@ -273,178 +214,22 @@ export default function PostViewerPage() {
                 </button>
               </div>
             ) : post ? (
-              <article className="max-w-none">
-               
+              <article className="space-y-8 max-w-none">
+                <HeroImage
+                  media={heroMedia}
+                  alt={post.title}
+                  className="w-full h-80 rounded-2xl overflow-hidden bg-muted"
+                />
+                <HeroCaption hero={post.hero ?? null} />
 
-                {/* --- GFM MARKDOWN RENDER --- */}
                 <div className="glass-card p-6">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm, remarkBreaks]}
-                    rehypePlugins={[rehypeSanitize]}
-                    components={{
-                      h1: ({ node, ...props }) => (
-                        <h1
-                          className="mt-6 mb-3 text-4xl font-bold text-foreground"
-                          {...props}
-                        />
-                      ),
-                      h2: ({ node, ...props }) => (
-                        <h2
-                          className="mt-8 mb-3 text-3xl font-bold text-foreground"
-                          {...props}
-                        />
-                      ),
-                      h3: ({ node, ...props }) => (
-                        <h3
-                          className="mt-6 mb-2 text-2xl font-semibold text-foreground"
-                          {...props}
-                        />
-                      ),
-                      h4: ({ node, ...props }) => (
-                        <h4
-                          className="mt-5 mb-2 text-xl font-semibold text-foreground"
-                          {...props}
-                        />
-                      ),
-                      p: ({ node, ...props }) => (
-                        <p
-                          className="my-4 leading-relaxed text-muted-foreground"
-                          {...props}
-                        />
-                      ),
-                      a: ({ node, ...props }) => (
-                        <a
-                          className="text-primary underline underline-offset-4 hover:no-underline break-words"
-                          target="_blank"
-                          rel="noreferrer"
-                          {...props}
-                        />
-                      ),
-                      ul: ({ node, ...props }) => (
-                        <ul
-                          className="my-4 list-disc list-inside text-muted-foreground space-y-1"
-                          {...props}
-                        />
-                      ),
-                      ol: ({ node, ...props }) => (
-                        <ol
-                          className="my-4 list-decimal list-inside text-muted-foreground space-y-1"
-                          {...props}
-                        />
-                      ),
-                      li: ({ node, ...props }) => (
-                        <li className="leading-relaxed" {...props} />
-                      ),
-                      blockquote: ({ node, ...props }) => (
-                        <blockquote
-                          className="my-6 border-l-4 pl-4 italic text-muted-foreground"
-                          style={{ borderColor: "hsl(var(--info))" }}
-                          {...props}
-                        />
-                      ),
-                      // inline vs block code
-                      code: ({ inline, children, ...props }) =>
-                        inline ? (
-                          <code
-                            className="px-1.5 py-0.5 rounded border"
-                            style={{
-                              background: "hsl(var(--muted))",
-                              borderColor: "hsl(var(--border))",
-                              color: "hsl(var(--foreground))",
-                            }}
-                            {...props}
-                          >
-                            {children}
-                          </code>
-                        ) : (
-                          <pre
-                            className="rounded-xl border overflow-x-auto text-sm leading-relaxed p-4 my-4"
-                            style={{
-                              background: "hsl(var(--muted))",
-                              borderColor: "hsl(var(--border))",
-                              color: "hsl(var(--muted-foreground))",
-                            }}
-                          >
-                            <code {...props}>{children}</code>
-                          </pre>
-                        ),
-                      // tables
-                      table: ({ node, ...props }) => (
-                        <div className="my-6 overflow-x-auto">
-                          <table
-                            className="w-full border rounded-lg"
-                            style={{ borderColor: "hsl(var(--border))" }}
-                            {...props}
-                          />
-                        </div>
-                      ),
-                      thead: ({ node, ...props }) => (
-                        <thead
-                          className="text-foreground"
-                          style={{ background: "hsl(var(--muted))" }}
-                          {...props}
-                        />
-                      ),
-                      th: ({ node, ...props }) => (
-                        <th
-                          className="text-left px-3 py-2 border"
-                          style={{ borderColor: "hsl(var(--border))" }}
-                          {...props}
-                        />
-                      ),
-                      td: ({ node, ...props }) => (
-                        <td
-                          className="align-top px-3 py-2 border text-muted-foreground"
-                          style={{ borderColor: "hsl(var(--border))" }}
-                          {...props}
-                        />
-                      ),
-                      // images with optional caption via title attribute
-                      img: ({ node, ...props }) => {
-                        // @ts-ignore
-                        const alt = props.alt || "";
-                        // @ts-ignore
-                        const title = props.title;
-                        // @ts-ignore
-                        const src = resolveAsset(props.src || "");
-                        return (
-                          <figure className="my-6">
-                            {/* @ts-ignore */}
-                            <img
-                              {...props}
-                              src={src}
-                              className="w-full h-auto rounded-xl border"
-                              style={{ borderColor: "hsl(var(--border))" }}
-                              alt={alt}
-                              loading="lazy"
-                              onError={onImgError}
-                            />
-                            {title ? (
-                              <figcaption className="mt-2 text-center text-sm text-muted-foreground">
-                                {title}
-                              </figcaption>
-                            ) : null}
-                          </figure>
-                        );
-                      },
-                      hr: ({ node, ...props }) => (
-                        <hr
-                          className="my-8 border"
-                          style={{ borderColor: "hsl(var(--border))" }}
-                          {...props}
-                        />
-                      ),
-                    }}
-                  >
-                    {post.content || ""}
-                  </ReactMarkdown>
+                  <ContentRenderer blocks={post.content} />
                 </div>
 
-                {/* Prev / Next */}
                 <div className="mt-10 flex justify-between gap-4">
                   {prevPost ? (
                     <Link
-                      to={`/posts/${prevPost.id.toString()}`}
+                      to={`/posts/${prevPost.id}`}
                       className="glass-card p-4 flex items-center gap-2 hover-lift"
                     >
                       <ArrowLeft className="w-4 h-4" /> Previous
@@ -455,7 +240,7 @@ export default function PostViewerPage() {
 
                   {nextPost ? (
                     <Link
-                      to={`/posts/${nextPost.id.toString()}`}
+                      to={`/posts/${nextPost.id}`}
                       className="glass-card p-4 flex items-center gap-2 hover-lift"
                     >
                       Next <ArrowRight className="w-4 h-4" />
@@ -466,9 +251,7 @@ export default function PostViewerPage() {
                 </div>
               </article>
             ) : (
-              <div className="glass-card p-6 text-muted-foreground">
-                Post not found.
-              </div>
+              <div className="glass-card p-6 text-muted-foreground">Post not found.</div>
             )}
           </div>
         </section>
@@ -477,32 +260,21 @@ export default function PostViewerPage() {
         {moreFromBlog.length > 0 && (
           <section className="py-16 bg-gradient-to-b from-background to-secondary/20">
             <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-              <h2 className="text-3xl font-bold mb-8 text-foreground">
-                More from the blog
-              </h2>
+              <h2 className="text-3xl font-bold mb-8 text-foreground">More from the blog</h2>
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {moreFromBlog.map((p, i) => (
                   <Link
-                    key={p.id.toString()}
-                    to={`/posts/${p.id.toString()}`}
+                    key={p.id}
+                    to={`/posts/${p.id}`}
                     className="glass-card p-6 hover-lift group"
                     style={{ animationDelay: `${i * 100}ms` }}
                   >
-                    <div className="w-full h-40 rounded-xl mb-4 overflow-hidden bg-muted">
-                      {p.image ? (
-                        <img
-                          src={resolveAsset(p.image)}
-                          alt={p.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          onError={onImgError}
-                        />
-                      ) : (
-                        <div
-                          className="w-full h-full"
-                          style={{ background: "hsl(var(--primary))", opacity: 0.06 }}
-                        />
-                      )}
-                    </div>
+                    <HeroImage
+                      media={p.hero?.media ?? null}
+                      alt={p.title}
+                      className="w-full h-40 rounded-xl mb-4 overflow-hidden bg-muted"
+                      imageClassName="group-hover:scale-105 transition-transform duration-500"
+                    />
                     {p.category && (
                       <div className="mb-2">
                         <span
@@ -520,12 +292,15 @@ export default function PostViewerPage() {
                     <h3 className="text-lg font-semibold mb-2 text-foreground group-hover:text-primary transition-colors">
                       {p.title}
                     </h3>
+                    {p.excerpt && (
+                      <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{p.excerpt}</p>
+                    )}
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
                       <span className="flex items-center gap-2">
                         <UserIcon className="w-3 h-3" /> {safeAuthor(p.author)}
                       </span>
                       <span className="flex items-center gap-2">
-                        <Calendar className="w-3 h-3" /> {fmtDate(nsToMs(p.date))}
+                        <Calendar className="w-3 h-3" /> {fmtDate(p)}
                       </span>
                     </div>
                   </Link>

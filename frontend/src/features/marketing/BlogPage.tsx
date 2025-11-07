@@ -3,77 +3,68 @@ import { useEffect, useMemo, useState } from "react";
 import Navigation from "@/components/ui/navigation";
 import Footer from "@/components/layout/Footer";
 import { Calendar, User as UserIcon, ArrowRight } from "lucide-react";
-import { blogActor } from "@/lib/canisters";
-import type {
-  Post as BackendPost,
-  PostStatus as BackendPostStatus,
-  Author as BackendAuthor,
-} from "@/declarations/blog_backend/blog_backend.did";
+import type { MediaAsset, Post } from "./lib/blog.types";
+import { fetchBlogPosts } from "./api/blog.client";
+import { useSupabaseAssetUrl } from "./utils/contentRenderer";
 
-type PostStatusLabel = "Draft" | "Published" | "Archived" | "Unknown";
+const safeAuthor = (author?: Post["author"] | null) => author?.name ?? "—";
 
-type BlogPost = BackendPost & {
-  statusLabel: PostStatusLabel;
-  idText: string;
-  dateMs: number | null;
+const postKey = (post: Post) => post.id.toString();
+
+const toDateSeconds = (post: Post): number | null => {
+  if (post.publishedAt) return post.publishedAt;
+  if (post.updatedAt) return post.updatedAt;
+  if (post.createdAt) return post.createdAt;
+  return null;
 };
 
-const statusLabel = (status: BackendPostStatus | string | null | undefined): PostStatusLabel => {
-  if (!status) return "Unknown";
-  if (typeof status === "string") {
-    return status === "Draft" || status === "Published" || status === "Archived" ? status : "Unknown";
+const fmtDate = (post: Post) => {
+  const seconds = toDateSeconds(post);
+  if (!seconds && seconds !== 0) return "";
+  const date = new Date(seconds * 1000);
+  return Number.isNaN(date.getTime())
+    ? ""
+    : date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+};
+
+type HeroImageProps = {
+  media: MediaAsset | null;
+  alt: string;
+  className?: string;
+  imageClassName?: string;
+};
+
+const HeroImage = ({ media, alt, className = "", imageClassName = "" }: HeroImageProps) => {
+  const url = useSupabaseAssetUrl(media);
+  if (!media || !url) {
+    return (
+      <div
+        className={`w-full h-full bg-gradient-to-br from-primary/10 to-primary/5 ${className}`}
+      />
+    );
   }
-  if ("Published" in status) return "Published";
-  if ("Draft" in status) return "Draft";
-  if ("Archived" in status) return "Archived";
-  return "Unknown";
+  return (
+    <div className={className}>
+      <img
+        src={url}
+        alt={alt}
+        className={`w-full h-full object-cover ${imageClassName}`}
+        loading="lazy"
+      />
+    </div>
+  );
 };
-
-const nsToMs = (value: bigint | number | undefined | null): number | null => {
-  if (value === undefined || value === null) return null;
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? Math.floor(value / 1_000_000) : null;
-  }
-  try {
-    return Number(value / 1_000_000n);
-  } catch {
-    return null;
-  }
-};
-
-const fmtDate = (milliseconds: number | null | undefined) => {
-  if (!milliseconds && milliseconds !== 0) return "";
-  const date = new Date(milliseconds);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-};
-
-const safeAuthor = (author?: BackendAuthor | null) => author?.name ?? "—";
-
-const normalizePost = (post: BackendPost): BlogPost => {
-  const idText = post.id.toString();
-  const dateMs = nsToMs(post.date);
-  return {
-    ...post,
-    statusLabel: statusLabel(post.status),
-    idText,
-    dateMs,
-  };
-};
-
-const postKey = (post: BlogPost) => post.idText || post.title;
 
 const BlogPage = () => {
   const [loading, setLoading] = useState(true);
-  const [posts, setPosts] = useState<BlogPost[]>([]);
+  const [posts, setPosts] = useState<Post[]>([]);
 
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const data = await blogActor.getPosts();
-        const formatted = (data ?? []).map(normalizePost);
-        if (alive) setPosts(formatted);
+        const data = await fetchBlogPosts();
+        if (alive) setPosts(data);
       } catch (e) {
         console.error(e);
         if (alive) setPosts([]);
@@ -84,21 +75,22 @@ const BlogPage = () => {
     return () => { alive = false; };
   }, []);
 
-  const published = useMemo(
-    () => posts.filter((p) => p.statusLabel === "Published"),
-    [posts]
-  );
+  const published = useMemo(() => posts.filter((p) => p.status === "Published"), [posts]);
 
   const featuredPost = useMemo(
-    () => published.find((p) => p.isFeatured),
+    () => published.find((p) => p.flags?.featured),
     [published]
   );
 
   const latest = useMemo(() => {
-    const fpKey = featuredPost ? postKey(featuredPost) : null;
+    const fpKey = featuredPost ? featuredPost.id : null;
     return published
-      .filter((p) => postKey(p) !== fpKey)
-      .sort((a, b) => (b.dateMs ?? 0) - (a.dateMs ?? 0));
+      .filter((p) => p.id !== fpKey)
+      .sort((a, b) => {
+        const aSeconds = toDateSeconds(a) ?? 0;
+        const bSeconds = toDateSeconds(b) ?? 0;
+        return bSeconds - aSeconds;
+      });
   }, [published, featuredPost]);
 
   return (
@@ -165,26 +157,26 @@ const BlogPage = () => {
                       {featuredPost.title}
                     </h3>
 
-                    {featuredPost.content ? (
+                    {featuredPost.excerpt ? (
                       <p className="text-lg text-muted-foreground mb-6 leading-relaxed line-clamp-4">
-                        {featuredPost.content}
+                        {featuredPost.excerpt}
                       </p>
                     ) : null}
 
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-2">
-                          <UserIcon className="w-4 h-4" />
-                          {safeAuthor(featuredPost.author)}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Calendar className="w-4 h-4" />
-                          {fmtDate(featuredPost.dateMs)}
-                        </div>
-                      </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                              <UserIcon className="w-4 h-4" />
+                              {safeAuthor(featuredPost.author)}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Calendar className="w-4 h-4" />
+                              {fmtDate(featuredPost)}
+                            </div>
+                          </div>
 
                       <a
-                        href={`/posts/${featuredPost.idText}`}
+                        href={`/posts/${featuredPost.id}`}
                         className="flex items-center gap-2 text-primary font-medium hover:gap-3 transition-all duration-300"
                       >
                         Read More <ArrowRight className="w-4 h-4" />
@@ -192,18 +184,11 @@ const BlogPage = () => {
                     </div>
                   </div>
 
-                  <div className="w-full h-64 lg:h-80 rounded-2xl overflow-hidden bg-muted">
-                    {featuredPost.image ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={featuredPost.image}
-                        alt={featuredPost.title}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-primary/10 to-primary/5" />
-                    )}
-                  </div>
+                  <HeroImage
+                    media={featuredPost.hero?.media ?? null}
+                    alt={featuredPost.title}
+                    className="w-full h-64 lg:h-80 rounded-2xl overflow-hidden bg-muted"
+                  />
                 </div>
               </div>
             ) : (
@@ -239,19 +224,13 @@ const BlogPage = () => {
                     className="glass-card p-6 hover-lift cursor-pointer group"
                     style={{ animationDelay: `${index * 100}ms` }}
                   >
-                    <a href={`/posts/${post.idText}`} className="block">
-                      <div className="w-full h-48 rounded-xl mb-6 overflow-hidden bg-muted">
-                        {post.image ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={post.image}
-                            alt={post.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-gradient-to-br from-primary/5 to-primary/5" />
-                        )}
-                      </div>
+                    <a href={`/posts/${post.id}`} className="block">
+                      <HeroImage
+                        media={post.hero?.media ?? null}
+                        alt={post.title}
+                        className="w-full h-48 rounded-xl mb-6 overflow-hidden bg-muted"
+                        imageClassName="group-hover:scale-105 transition-transform duration-500"
+                      />
 
                       {post.category ? (
                         <div className="flex items-center gap-3 mb-3">
@@ -265,9 +244,9 @@ const BlogPage = () => {
                         {post.title}
                       </h3>
 
-                      {post.content ? (
+                      {post.excerpt ? (
                         <p className="text-muted-foreground mb-4 leading-relaxed text-sm line-clamp-3">
-                          {post.content}
+                          {post.excerpt}
                         </p>
                       ) : null}
 
@@ -278,7 +257,7 @@ const BlogPage = () => {
                         </div>
                         <div className="flex items-center gap-2">
                           <Calendar className="w-3 h-3" />
-                          {fmtDate(post.dateMs)}
+                          {fmtDate(post)}
                         </div>
                       </div>
                     </a>

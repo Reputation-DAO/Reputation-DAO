@@ -1,5 +1,7 @@
-import type { ActorSubclass } from '@dfinity/agent';
-import { createActor, canisterId } from '@/declarations/blog_backend';
+import { Actor, HttpAgent, type ActorSubclass } from '@dfinity/agent';
+import { idlFactory } from '@/declarations/blog_backend/blog_backend.did.js';
+import type { _SERVICE as BlogBackendService } from '@/declarations/blog_backend/blog_backend.did.d.ts';
+import { blogActor as defaultBlogActor } from '@/lib/canisters';
 import type { CreatePostPayload, Post, PostSummary, SupabaseRef } from '../lib/blog.types';
 import {
   fromCandidPost,
@@ -8,31 +10,44 @@ import {
   toCandidCreatePayload,
 } from '../lib/blog.mappers';
 
-type BlogBackendActor = {
-  createPost: (payload: ReturnType<typeof toCandidCreatePayload>) => Promise<any>;
-  replacePost: (id: bigint, payload: ReturnType<typeof toCandidCreatePayload>) => Promise<[] | [any]>;
-  getPosts: () => Promise<any[]>;
-  getPostById: (id: bigint) => Promise<[] | [any]>;
-  getAllMediaRefsForPost: (id: bigint) => Promise<[] | [Array<any>]>;
-  listLatest: (offset: bigint, limit: bigint) => Promise<any[]>;
-  listByTag: (tag: string, offset: bigint, limit: bigint) => Promise<any[]>;
-  listFeatured: (limit: bigint) => Promise<any[]>;
-  searchByKeyword: (keyword: string, limit: bigint) => Promise<any[]>;
-};
+type BlogBackendActor = ActorSubclass<BlogBackendService>;
 
-let cachedActor: ActorSubclass<BlogBackendActor> | null = null;
+export const BLOG_HOST = 'https://icp-api.io';
+export const BLOG_BACKEND_CANISTER_ID =
+  import.meta.env.VITE_BLOG_BACKEND_CANISTER_ID || 'oy2j4-syaaa-aaaam-qdvxq-cai';
 
-export function setBlogBackendActor(actor: ActorSubclass<BlogBackendActor>) {
+let cachedActor: BlogBackendActor | null = defaultBlogActor as BlogBackendActor | null;
+
+function buildAnonymousActor(): BlogBackendActor {
+  const agent = new HttpAgent({ host: BLOG_HOST });
+  return Actor.createActor<BlogBackendService>(idlFactory, {
+    agent,
+    canisterId: BLOG_BACKEND_CANISTER_ID,
+  });
+}
+
+export function setBlogBackendActor(actor: BlogBackendActor) {
   cachedActor = actor;
 }
 
-async function getActor(): Promise<ActorSubclass<BlogBackendActor>> {
-  if (cachedActor) return cachedActor;
-  if (!canisterId) {
-    throw new Error('blog_backend canister ID is not configured.');
+async function getActor(): Promise<BlogBackendActor> {
+  if (!cachedActor) {
+    cachedActor = buildAnonymousActor();
   }
-  cachedActor = createActor(canisterId) as unknown as ActorSubclass<BlogBackendActor>;
   return cachedActor;
+}
+
+export function resetBlogBackendActor() {
+  cachedActor = buildAnonymousActor();
+}
+
+export function configureBlogBackendActor(agent: HttpAgent) {
+  const actor = Actor.createActor<BlogBackendService>(idlFactory, {
+    agent,
+    canisterId: BLOG_BACKEND_CANISTER_ID,
+  });
+  setBlogBackendActor(actor);
+  return actor;
 }
 
 export async function createBlogPost(payload: CreatePostPayload): Promise<Post> {

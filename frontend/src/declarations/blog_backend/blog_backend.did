@@ -1,36 +1,206 @@
+type Tone = 
+ variant {
+   danger;
+   info;
+   success;
+   tip;
+   warning;
+ };
+type SupabaseRef = 
+ record {
+   bucket: text;
+   mime: opt text;
+   path: text;
+   size: opt nat;
+ };
+type SocialLink = 
+ record {
+   "text": text;
+   url: text;
+ };
+type SeoMeta = 
+ record {
+   canonicalUrl: opt text;
+   description: opt text;
+   keywords: vec text;
+   ogImage: opt MediaAsset;
+   title: opt text;
+   twitterCard: opt text;
+ };
+type ReplacePostPayload = 
+ record {
+   author: Author;
+   category: text;
+   content: vec ContentBlock;
+   excerpt: text;
+   flags: opt FeatureFlags;
+   gallery: vec MediaAsset;
+   hero: opt HeroSettings;
+   related: vec nat;
+   scheduledFor: opt nat;
+   seo: opt SeoMeta;
+   slug: text;
+   status: PostStatus;
+   subtitle: opt text;
+   tags: vec text;
+   title: text;
+ };
+type PostSummary = 
+ record {
+   author: Author;
+   category: text;
+   createdAt: nat;
+   excerpt: text;
+   flags: FeatureFlags;
+   hero: opt HeroSettings;
+   id: nat;
+   metrics: Metrics;
+   publishedAt: opt nat;
+   readingMinutes: nat;
+   slug: text;
+   status: PostStatus;
+   subtitle: opt text;
+   tags: vec text;
+   title: text;
+   updatedAt: nat;
+ };
 type PostStatus = 
  variant {
    Archived;
    Draft;
    Published;
+   Scheduled;
  };
 type Post = 
  record {
    author: Author;
    category: text;
-   content: text;
-   date: nat;
+   content: vec ContentBlock;
+   createdAt: nat;
+   excerpt: text;
+   flags: FeatureFlags;
+   gallery: vec MediaAsset;
+   hero: opt HeroSettings;
    id: nat;
-   image: text;
-   isEditorsPick: bool;
-   isFeatured: bool;
+   metrics: Metrics;
+   publishedAt: opt nat;
+   readingMinutes: nat;
+   related: vec nat;
+   scheduledFor: opt nat;
+   seo: SeoMeta;
+   slug: text;
    status: PostStatus;
+   subtitle: opt text;
+   tags: vec text;
    title: text;
+   updatedAt: nat;
+ };
+type Metrics = 
+ record {
+   likes: nat;
+   shares: nat;
    views: nat;
+ };
+type MediaAsset = 
+ record {
+   alt: text;
+   aspectRatio: opt text;
+   caption: opt text;
+   credit: opt text;
+   ref: SupabaseRef;
+ };
+type HeroSettings = 
+ record {
+   accentColor: opt text;
+   ctaLabel: opt text;
+   ctaUrl: opt text;
+   media: MediaAsset;
+   overlaySubtitle: opt text;
+   overlayTitle: opt text;
+ };
+type FeatureFlags = 
+ record {
+   allowComments: bool;
+   editorsPick: bool;
+   featured: bool;
+   heroLayout: text;
+ };
+type CreatePostPayload = 
+ record {
+   author: Author;
+   category: text;
+   content: vec ContentBlock;
+   excerpt: text;
+   flags: opt FeatureFlags;
+   gallery: vec MediaAsset;
+   hero: opt HeroSettings;
+   related: vec nat;
+   scheduledFor: opt nat;
+   seo: opt SeoMeta;
+   slug: text;
+   status: PostStatus;
+   subtitle: opt text;
+   tags: vec text;
+   title: text;
+ };
+type ContentBlock = 
+ variant {
+   Callout: record {
+              body: text;
+              title: text;
+              tone: Tone;
+            };
+   Code: record {
+           code: text;
+           language: text;
+         };
+   Divider;
+   Embed: record {
+            provider: opt text;
+            title: opt text;
+            url: text;
+          };
+   Heading: record {
+              anchor: opt text;
+              level: nat8;
+              "text": text;
+            };
+   Image: record {
+            asset: MediaAsset;
+            fullWidth: bool;
+          };
+   List: record {
+           items: vec text;
+           ordered: bool;
+         };
+   Paragraph: record {"text": text;};
+   Quote: record {
+            attribution: opt text;
+            "text": text;
+          };
  };
 type Author = 
  record {
    avatar: text;
+   bio: opt text;
+   links: vec SocialLink;
    name: text;
+   title: opt text;
  };
 service : {
-  createPost: (title: text, content: text, category: text, date: nat, author:
-   Author, image: text, isFeatured: bool, isEditorsPick: bool, status:
-   PostStatus) -> (Post);
-  deletePost: (id: nat) -> (bool);
+  createPost: (payload: CreatePostPayload) -> (Post);
+  getAllMediaRefsForPost: (id: nat) -> (opt vec SupabaseRef) query;
   getPostById: (id: nat) -> (opt Post) query;
+  getPostBySlug: (slug: text) -> (opt Post) query;
   getPosts: () -> (vec Post) query;
-  updatePost: (id: nat, title: text, content: text, category: text, date:
-   nat, author: Author, image: text, isFeatured: bool, isEditorsPick: 
-   bool, views: nat, status: PostStatus) -> (opt Post);
+  listByTag: (tag: text, offset: nat, limit: nat) -> (vec PostSummary) query;
+  listFeatured: (limit: nat) -> (vec PostSummary) query;
+  listLatest: (offset: nat, limit: nat) -> (vec PostSummary) query;
+  recordLike: (id: nat, delta: int) -> (opt Metrics);
+  recordShare: (id: nat) -> (opt Metrics);
+  recordView: (id: nat) -> (opt nat);
+  replacePost: (id: nat, payload: ReplacePostPayload) -> (opt Post);
+  searchByKeyword: (keyword: text, limit: nat) -> (vec PostSummary) query;
+  updateStatus: (id: nat, status: PostStatus, scheduledFor: opt nat) ->
+   (opt Post);
 }

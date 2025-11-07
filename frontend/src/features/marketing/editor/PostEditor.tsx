@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Controller, useForm, useWatch } from 'react-hook-form';
+import { Controller, useForm, useWatch, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -60,6 +60,9 @@ export function PostEditor({ initialPost, onComplete }: PostEditorProps) {
     defaultValues: initialPost ? mapPostToFormValues(initialPost) : defaultFormValues(),
     mode: 'onChange',
   });
+  const {
+    formState: { errors },
+  } = form;
 
   const watchAll = useWatch({ control: form.control });
   const draftPreview = useMemo(() => buildPreviewPost(watchAll, currentPost), [watchAll, currentPost]);
@@ -67,7 +70,45 @@ export function PostEditor({ initialPost, onComplete }: PostEditorProps) {
   async function handleSubmit(values: CreatePostFormValues) {
     setSubmitting(true);
     try {
-      const payload = formValuesToPayload(values);
+      const normalized = ensurePostDefaults(values);
+
+      if (!normalized.slug) {
+        toast({
+          title: 'Missing slug',
+          description: 'Add a title so we can generate a URL-friendly slug.',
+          variant: 'destructive',
+        });
+        setSubmitting(false);
+        return;
+      }
+
+      if (!normalized.excerpt) {
+        toast({
+          title: 'Missing excerpt',
+          description: 'Add a short summary or paragraph so readers see a preview.',
+          variant: 'destructive',
+        });
+        setSubmitting(false);
+        return;
+      }
+
+      if (normalized.slug !== values.slug) {
+        form.setValue('slug', normalized.slug, { shouldDirty: true });
+      }
+      if (normalized.excerpt !== values.excerpt) {
+        form.setValue('excerpt', normalized.excerpt, { shouldDirty: true });
+      }
+      if (normalized.category !== values.category) {
+        form.setValue('category', normalized.category, { shouldDirty: true });
+      }
+      if (
+        normalized.tags.length !== values.tags.length ||
+        normalized.tags.some((tag, idx) => tag !== values.tags[idx])
+      ) {
+        form.setValue('tags', normalized.tags, { shouldDirty: true });
+      }
+
+      const payload = formValuesToPayload(normalized);
 
       if (mode === 'create') {
         const created = await createBlogPost(payload);
@@ -99,12 +140,21 @@ export function PostEditor({ initialPost, onComplete }: PostEditorProps) {
       console.error(error);
       toast({
         title: 'Failed to save',
-        description: error instanceof Error ? error.message : 'Unknown error occurred.',
+        description: error instanceof Error ? error.message : String(error),
         variant: 'destructive',
       });
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function handleInvalid(errors: FieldErrors<CreatePostFormValues>) {
+    const first = findFirstError(errors);
+    toast({
+      title: first?.label ?? 'Please complete the required fields',
+      description: first?.message ?? 'Check slug, tags, and excerpt before publishing.',
+      variant: 'destructive',
+    });
   }
 
   async function cascadeTempAssets(postId: number, payload: CreatePostPayload) {
@@ -210,7 +260,7 @@ export function PostEditor({ initialPost, onComplete }: PostEditorProps) {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(handleSubmit, handleInvalid)} className="space-y-6">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="flex flex-wrap gap-2">
             <TabsTrigger value="basics">Basics</TabsTrigger>
@@ -255,7 +305,18 @@ export function PostEditor({ initialPost, onComplete }: PostEditorProps) {
                   render={({ field }) => (
                     <div className="space-y-2">
                       <Label>Slug</Label>
-                      <Input {...field} placeholder="my-post-slug" />
+                      <Input
+                        {...field}
+                        placeholder="my-post-slug"
+                        aria-invalid={Boolean(errors.slug)}
+                      />
+                      {errors.slug ? (
+                        <p className="text-xs text-destructive">{String(errors.slug.message)}</p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Used in the URL. Leave blank to auto-generate.
+                        </p>
+                      )}
                     </div>
                   )}
                 />
@@ -265,7 +326,15 @@ export function PostEditor({ initialPost, onComplete }: PostEditorProps) {
                   render={({ field }) => (
                     <div className="space-y-2">
                       <Label>Excerpt</Label>
-                      <Textarea {...field} rows={3} />
+                      <Textarea
+                        {...field}
+                        value={field.value ?? ''}
+                        rows={3}
+                        aria-invalid={Boolean(errors.excerpt)}
+                      />
+                      {errors.excerpt && (
+                        <p className="text-xs text-destructive">{String(errors.excerpt.message)}</p>
+                      )}
                     </div>
                   )}
                 />
@@ -296,7 +365,15 @@ export function PostEditor({ initialPost, onComplete }: PostEditorProps) {
                           )
                         }
                         placeholder="dao, governance, transparency"
+                        aria-invalid={Boolean(errors.tags)}
                       />
+                      {errors.tags ? (
+                        <p className="text-xs text-destructive">Add at least one tag.</p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Separate tags with commas to improve discovery.
+                        </p>
+                      )}
                     </div>
                   )}
                 />
@@ -334,7 +411,16 @@ export function PostEditor({ initialPost, onComplete }: PostEditorProps) {
                   render={({ field }) => (
                     <div className="space-y-2">
                       <Label>Avatar URL</Label>
-                      <Input {...field} placeholder="https://..." />
+                      <Input
+                        {...field}
+                        placeholder="https://..."
+                        aria-invalid={Boolean(errors.author?.avatar)}
+                      />
+                      {errors.author?.avatar && (
+                        <p className="text-xs text-destructive">
+                          {String(errors.author.avatar.message)}
+                        </p>
+                      )}
                     </div>
                   )}
                 />
@@ -344,7 +430,17 @@ export function PostEditor({ initialPost, onComplete }: PostEditorProps) {
                   render={({ field }) => (
                     <div className="space-y-2">
                       <Label>Bio</Label>
-                      <Textarea {...field} rows={3} />
+                      <Textarea
+                        {...field}
+                        value={field.value ?? ''}
+                        rows={3}
+                        aria-invalid={Boolean(errors.author?.bio)}
+                      />
+                      {errors.author?.bio && (
+                        <p className="text-xs text-destructive">
+                          {String(errors.author.bio.message)}
+                        </p>
+                      )}
                     </div>
                   )}
                 />
@@ -529,13 +625,116 @@ function defaultFormValues(): CreatePostFormValues {
     gallery: [],
     content: [{ kind: 'Paragraph', text: '' }],
     seo: null,
-    status: 'Draft',
+    status: 'Published',
     flags: null,
-    scheduledFor: null,
+    scheduledFor: Math.floor(Date.now() / 1000),
     related: [],
   };
 }
 
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function deriveExcerpt(values: CreatePostFormValues): string {
+  if (values.excerpt?.trim()) return values.excerpt.trim();
+  const paragraph = values.content.find(
+    (block) => block.kind === 'Paragraph' && block.text.trim().length > 0,
+  );
+  if (paragraph && paragraph.kind === 'Paragraph') {
+    return paragraph.text.trim().slice(0, 240);
+  }
+  if (values.title.trim()) {
+    return values.title.trim();
+  }
+  return '';
+}
+
+function ensurePostDefaults(values: CreatePostFormValues): CreatePostFormValues {
+  const baseSlug = values.slug.trim() || values.title.trim();
+  const normalizedSlug = slugify(baseSlug);
+  const fallbackSlug = normalizedSlug || `post-${Date.now()}`;
+  const excerpt = deriveExcerpt(values);
+  const category = values.category.trim() || 'Uncategorized';
+  const cleanedTags = values.tags
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+  const tags = cleanedTags.length ? cleanedTags : [fallbackSlug];
+  return {
+    ...values,
+    slug: fallbackSlug,
+    excerpt,
+    category,
+    tags,
+  };
+}
+
+type ErrorSummary = { label: string; message: string };
+
+function findFirstError(errors: FieldErrors<CreatePostFormValues>): ErrorSummary | null {
+  const detail = findFirstErrorDetail(errors);
+  if (!detail) return null;
+  const pathKey = formatErrorPath(detail.path);
+  const label = fieldLabels[pathKey] ?? humanizePath(pathKey);
+  return { label, message: detail.message };
+}
+
+type ErrorDetail = { path: string[]; message: string };
+
+function findFirstErrorDetail(
+  errors: FieldErrors<CreatePostFormValues>,
+  parentPath: string[] = []
+): ErrorDetail | null {
+  for (const [key, value] of Object.entries(errors)) {
+    if (!value) continue;
+    const path = [...parentPath, key];
+    if (typeof value === 'object') {
+      if ('message' in value && value.message) {
+        return { path, message: String(value.message) };
+      }
+      if ('types' in value && value.types && typeof value.types === 'object') {
+        const first = Object.values(value.types as Record<string, unknown>)[0];
+        if (first) return { path, message: String(first) };
+      }
+      const nested = findFirstErrorDetail(value as FieldErrors<any>, path);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
+
+function formatErrorPath(path: string[]): string {
+  return path
+    .map((segment) => segment.replace(/\.\d+/g, ''))
+    .join('.')
+    .replace(/\.message$/, '');
+}
+
+function humanizePath(path: string): string {
+  return path
+    .split('.')
+    .filter(Boolean)
+    .map((token) => token.replace(/\[\d+\]/g, '').replace(/([A-Z])/g, ' $1'))
+    .join(' ')
+    .replace(/^\w/, (c) => c.toUpperCase());
+}
+
+const fieldLabels: Record<string, string> = {
+  title: 'Title',
+  slug: 'Slug',
+  excerpt: 'Excerpt',
+  category: 'Category',
+  tags: 'Tags',
+  'author.name': 'Author name',
+  'author.avatar': 'Author avatar URL',
+  'author.bio': 'Author bio',
+  'author.links': 'Author links',
+  content: 'Content blocks',
+};
 function mapPostToFormValues(post: Post): CreatePostFormValues {
   return {
     slug: post.slug,

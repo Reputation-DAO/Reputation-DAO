@@ -9,18 +9,8 @@ export { idlFactory } from "./blog_backend.did.js";
  * process.env.CANISTER_ID_<CANISTER_NAME_UPPERCASE>
  * beginning in dfx 0.15.0
  */
-const processEnv = typeof process !== "undefined" ? process.env : undefined;
-const importMetaEnv =
-  typeof import.meta !== "undefined" ? import.meta.env : undefined;
-
-const getEnvVar = (key) =>
-  (processEnv && processEnv[key]) ||
-  (importMetaEnv && importMetaEnv[key]) ||
-  undefined;
-
 export const canisterId =
-  getEnvVar("CANISTER_ID_BLOG_BACKEND") ||
-  getEnvVar("VITE_CANISTER_ID_BLOG_BACKEND");
+  process.env.CANISTER_ID_BLOG_BACKEND;
 
 export const createActor = (canisterId, options = {}) => {
   const agent = options.agent || new HttpAgent({ ...options.agentOptions });
@@ -32,8 +22,7 @@ export const createActor = (canisterId, options = {}) => {
   }
 
   // Fetch root key for certificate validation during development
-  const network = getEnvVar("DFX_NETWORK") || getEnvVar("VITE_DFX_NETWORK");
-  if (network !== "ic") {
+  if (process.env.DFX_NETWORK !== "ic") {
     agent.fetchRootKey().catch((err) => {
       console.warn(
         "Unable to fetch root key. Check to ensure that your local replica is running"
