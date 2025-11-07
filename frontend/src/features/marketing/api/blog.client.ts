@@ -2,7 +2,7 @@ import { Actor, HttpAgent, type ActorSubclass } from '@dfinity/agent';
 import { idlFactory } from '@/declarations/blog_backend/blog_backend.did.js';
 import type { _SERVICE as BlogBackendService } from '@/declarations/blog_backend/blog_backend.did.d.ts';
 import { blogActor as defaultBlogActor } from '@/lib/canisters';
-import type { CreatePostPayload, Post, PostSummary, SupabaseRef } from '../lib/blog.types';
+import type { CreatePostPayload, Post, PostStatus, PostSummary, SupabaseRef } from '../lib/blog.types';
 import {
   fromCandidPost,
   fromCandidPostSummary,
@@ -106,4 +106,25 @@ export async function searchSummaries(keyword: string, limit = 10): Promise<Post
   const actor = await getActor();
   const summaries = await actor.searchByKeyword(keyword, BigInt(limit));
   return summaries.map(fromCandidPostSummary);
+}
+
+export async function updateBlogPostStatus(
+  id: number,
+  status: PostStatus,
+  scheduledFor?: number | null,
+): Promise<Post | null> {
+  const actor = await getActor();
+  const statusVariant =
+    status === 'Draft'
+      ? ({ Draft: null } as const)
+      : status === 'Scheduled'
+      ? ({ Scheduled: null } as const)
+      : status === 'Published'
+      ? ({ Published: null } as const)
+      : ({ Archived: null } as const);
+  const scheduledOpt =
+    scheduledFor === undefined || scheduledFor === null ? [] : [BigInt(scheduledFor)];
+  const response = await actor.updateStatus(BigInt(id), statusVariant, scheduledOpt);
+  if (!response.length) return null;
+  return fromCandidPost(response[0]);
 }

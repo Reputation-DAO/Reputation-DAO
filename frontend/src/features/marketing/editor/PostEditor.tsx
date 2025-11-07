@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Controller, useForm, useWatch, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
@@ -66,6 +66,19 @@ export function PostEditor({ initialPost, onComplete }: PostEditorProps) {
 
   const watchAll = useWatch({ control: form.control });
   const draftPreview = useMemo(() => buildPreviewPost(watchAll, currentPost), [watchAll, currentPost]);
+
+  useEffect(() => {
+    if (initialPost) {
+      const values = mapPostToFormValues(initialPost);
+      form.reset(values, { keepDefaultValues: false });
+      setCurrentPost(initialPost);
+      setActiveTab('basics');
+    } else {
+      form.reset(defaultFormValues(), { keepDefaultValues: false });
+      setCurrentPost(null);
+      setActiveTab('basics');
+    }
+  }, [initialPost]);
 
   async function handleSubmit(values: CreatePostFormValues) {
     setSubmitting(true);

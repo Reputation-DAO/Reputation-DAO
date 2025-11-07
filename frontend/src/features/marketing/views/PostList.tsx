@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
-import { fetchBlogPosts } from '../api/blog.client';
+import { fetchBlogPosts, updateBlogPostStatus } from '../api/blog.client';
 import type { Post } from '../lib/blog.types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/components/ui/use-toast';
 
 interface PostListProps {
   onSelectPost?: (post: Post) => void;
@@ -33,8 +34,34 @@ export function PostList({ onSelectPost, onPreview }: PostListProps) {
     queryKey: ['blogPosts'],
     queryFn: fetchBlogPosts,
   });
+  const { toast } = useToast();
 
-  const posts = useMemo(() => data ?? [], [data]);
+  const posts = useMemo(
+    () => (data ?? []).filter((post) => post.status !== 'Archived'),
+    [data],
+  );
+
+  async function handleDelete(post: Post) {
+    const ok = window.confirm(
+      `Delete "${post.title}"?\nThis archives the post and removes it from lists.`,
+    );
+    if (!ok) return;
+    try {
+      await updateBlogPostStatus(post.id, 'Archived', null);
+      toast({
+        title: 'Post archived',
+        description: `"${post.title}" has been removed from the list.`,
+      });
+      await refetch();
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: 'Failed to delete',
+        description: error instanceof Error ? error.message : 'Unknown error occurred.',
+        variant: 'destructive',
+      });
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -86,6 +113,9 @@ export function PostList({ onSelectPost, onPreview }: PostListProps) {
                   </Button>
                   <Button variant="secondary" size="sm" onClick={() => onSelectPost?.(post)}>
                     Edit
+                  </Button>
+                  <Button variant="destructive" size="sm" onClick={() => handleDelete(post)}>
+                    Delete
                   </Button>
                 </TableCell>
               </TableRow>
