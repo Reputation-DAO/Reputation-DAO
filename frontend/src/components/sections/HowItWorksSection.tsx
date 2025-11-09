@@ -1,10 +1,12 @@
 import { motion } from "framer-motion";
-import { Trophy, UserCheck, Unlock, Gauge, Compass } from "lucide-react";
+import { Trophy, UserCheck, Unlock, Gauge, Compass, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { HexagonBackground } from "@/components/ui/HexagonBackground";
+import { TiltCard } from "@/components/ui/TiltCard";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 28 },
@@ -66,23 +68,35 @@ const stats = [
 
 const HowItWorksSection = () => {
   return (
-    <section className="relative z-10 py-6 md:py-7">
-      <div className="mx-auto flex max-w-6xl flex-col gap-14 rounded-[16px] border border-border/70 bg-card/70 px-4 py-12 shadow-xl backdrop-blur-sm sm:px-8 lg:px-12">
+    <section className="relative z-10 py-24 md:py-32 overflow-hidden bg-[#0d1220]">
+      {/* Smooth gradient transition from previous section */}
+      <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-[#0d1220] via-transparent to-transparent z-0 pointer-events-none" />
+      
+      {/* Hexagon background pattern */}
+      <HexagonBackground />
+      
+      {/* Smooth gradient transition to next section */}
+      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-b from-transparent to-[#0d1220] z-0 pointer-events-none" />
+
+      <div className="relative mx-auto flex max-w-7xl flex-col gap-16 px-6 py-16 sm:px-10 lg:px-16">
         <motion.div
-          className="mx-auto max-w-3xl text-center"
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, amount: 0.45 }}
-          custom={0}
-          variants={fadeUp}
+          className="mx-auto max-w-4xl text-center"
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: 0.8 }}
         >
-          <Badge variant="secondary" className="mb-4 px-4 py-2 uppercase tracking-wide">
+          <Badge className="mb-6 px-6 py-2.5 uppercase tracking-wide text-sm font-semibold border-2 border-blue-500/30 bg-blue-500/10 text-blue-400">
+            <Sparkles className="mr-2 h-4 w-4" />
             Step-by-step
           </Badge>
-          <h2 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
-            Three simple layers to build unstoppable reputation
+          <h2 className="text-5xl font-bold tracking-tight text-white sm:text-6xl lg:text-7xl mb-6">
+            Three simple layers to build{" "}
+            <span className="bg-gradient-to-r from-blue-400 to-blue-500 bg-clip-text text-transparent">
+              unstoppable reputation
+            </span>
           </h2>
-          <p className="mt-4 text-lg leading-relaxed text-muted-foreground/90">
+          <p className="mt-6 text-xl leading-relaxed text-gray-400">
             Bring contributors into the flow, anchor their work on-chain, and
             automate access to the experiences they unlock.
           </p>
@@ -101,40 +115,47 @@ const HowItWorksSection = () => {
                   viewport={{ once: true, amount: 0.45 }}
                   custom={0.1 + index * 0.08}
                   variants={fadeUp}
+                  className="group"
+                  style={{ perspective: '1000px' }}
                 >
-                  <Card className="flex h-full flex-col overflow-hidden rounded-[12px] border-2 border-border bg-background/70 shadow-xl">
-                    <CardContent className="flex flex-1 flex-col gap-5 p-6 md:flex-row md:items-start md:gap-8">
-                      <div className="flex flex-col items-center gap-3 md:w-44">
-                        <div className="inline-flex h-14 w-14 items-center justify-center rounded-[6px] bg-primary/10 text-primary">
-                          <Icon className="h-6 w-6" />
+                  <TiltCard className="h-full">
+                    <Card className="flex h-full flex-col overflow-hidden rounded-[24px] border border-blue-500/20 bg-[#0d1220]/80 backdrop-blur-xl shadow-[0_0_40px_rgba(0,102,255,0.1)] hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300">
+                      <CardContent className="flex flex-1 flex-col gap-6 p-8 md:flex-row md:items-start md:gap-10">
+                      <div className="flex flex-col items-center gap-4 md:w-48">
+                        <div className="relative">
+                          <div className="absolute inset-0 bg-blue-500/20 rounded-2xl blur-xl group-hover:bg-blue-500/30 transition-all duration-300" />
+                          <div className="relative inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-400 border-2 border-blue-500/30 group-hover:scale-110 transition-transform duration-300">
+                            <Icon className="h-8 w-8" />
+                          </div>
                         </div>
                         <div className="text-center md:text-left">
-                          <Badge className="mb-1 bg-primary/90 text-primary-foreground">
+                          <Badge className="mb-2 bg-blue-600 text-white px-4 py-1.5 font-bold shadow-[0_0_20px_rgba(0,102,255,0.3)]">
                             {step.number}
                           </Badge>
-                          <p className="text-lg font-semibold text-foreground">
+                          <p className="text-xl font-bold text-white">
                             {step.title}
                           </p>
                         </div>
                       </div>
-                      <div className="flex-1 space-y-4">
-                        <p className="text-base leading-relaxed text-muted-foreground/90">
+                      <div className="flex-1 space-y-5">
+                        <p className="text-lg leading-relaxed text-gray-300">
                           {step.description}
                         </p>
                         <ul className="space-y-3">
                           {step.details.map((detail) => (
                             <li
                               key={detail}
-                              className="flex items-start gap-3 rounded-[4px] bg-muted/30 px-4 py-3 text-sm text-muted-foreground"
+                              className="flex items-start gap-3 rounded-2xl bg-blue-500/5 border border-blue-500/20 px-5 py-4 text-sm text-gray-300 hover:bg-blue-500/10 hover:border-blue-500/30 transition-all duration-300"
                             >
-                              <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary" />
+                              <span className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(0,102,255,0.6)]" />
                               <span>{detail}</span>
                             </li>
                           ))}
                         </ul>
                       </div>
-                    </CardContent>
-                  </Card>
+                      </CardContent>
+                    </Card>
+                  </TiltCard>
                 </motion.div>
               );
             })}
@@ -148,41 +169,44 @@ const HowItWorksSection = () => {
             custom={0.2}
             variants={fadeUp}
           >
-            <Card className="flex flex-col overflow-hidden rounded-[12px] border-2 border-border bg-background/70 shadow-xl lg:flex-1">
-              <CardContent className="flex flex-1 flex-col space-y-5 p-6">
-                <Badge variant="secondary" className="px-3 py-1">
+            <TiltCard className="flex flex-col lg:flex-1 group" glowIntensity={0.2}>
+              <Card className="flex flex-col overflow-hidden rounded-[24px] border border-blue-500/20 bg-[#0d1220]/80 backdrop-blur-xl shadow-[0_0_40px_rgba(0,102,255,0.1)] lg:flex-1 hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300">
+                <CardContent className="flex flex-1 flex-col space-y-6 p-8">
+                <Badge className="w-fit px-4 py-2 bg-blue-500/10 border-2 border-blue-500/30 text-blue-400 font-semibold">
                   Builder tools
                 </Badge>
-                <h3 className="text-2xl font-semibold text-foreground">
+                <h3 className="text-3xl font-bold text-white">
                   Integrate reputation without rethinking your stack
                 </h3>
-                <p className="text-base leading-relaxed text-muted-foreground/90">
+                <p className="text-lg leading-relaxed text-gray-300">
                   Use our SDKs, REST API, or drop-in smart contracts to start
                   consuming reputation instantly. Opt into advanced orchestration
                   only when you need it.
                 </p>
-                <div className="rounded-[6px] border border-dashed border-primary/30 bg-muted/30 px-4 py-4 text-sm text-muted-foreground">
-                  <p className="font-medium text-foreground">
+                <div className="rounded-2xl border-2 border-dashed border-blue-500/30 bg-blue-500/5 px-6 py-5 text-sm text-gray-300">
+                  <p className="font-bold text-white text-base mb-4">
                     Popular automations
                   </p>
-                  <ul className="mt-3 space-y-2">
-                    <li className="flex items-start gap-2">
-                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
+                  <ul className="space-y-3">
+                    <li className="flex items-start gap-3">
+                      <span className="mt-1 h-2 w-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(0,102,255,0.6)]" />
                       <span>Merit-weighted voting and proposals</span>
                     </li>
-                    <li className="flex items-start gap-2">
-                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
+                    <li className="flex items-start gap-3">
+                      <span className="mt-1 h-2 w-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(0,102,255,0.6)]" />
                       <span>Token rewards tied to verified milestones</span>
                     </li>
-                    <li className="flex items-start gap-2">
-                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
+                    <li className="flex items-start gap-3">
+                      <span className="mt-1 h-2 w-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(0,102,255,0.6)]" />
                       <span>Invite flows gated by proven expertise</span>
                     </li>
                   </ul>
                 </div>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-4">
                   <Link to="/auth">
-                    <Button size="lg">Start building</Button>
+                    <Button size="lg" className="px-8 py-6 text-base font-semibold rounded-2xl bg-blue-600 hover:bg-blue-700 text-white shadow-[0_0_40px_rgba(0,102,255,0.3)] hover:shadow-[0_0_60px_rgba(0,102,255,0.5)]">
+                      Start building
+                    </Button>
                   </Link>
                   <a
                     href="https://docs.google.com/document/d/1e03vreMKph3KPX-g8-jlbIAlD8D3PvA8VXPbZNIrT-0/edit?tab=t.0"
@@ -193,33 +217,35 @@ const HowItWorksSection = () => {
                     <Button
                       variant="outline"
                       size="lg"
-                      className="border-primary/40 text-primary hover:bg-primary/10"
+                      className="border-2 border-blue-500/30 text-blue-400 hover:bg-blue-500/10 px-8 py-6 text-base font-semibold rounded-2xl"
                     >
                       Browse docs
                     </Button>
                   </a>
                 </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </TiltCard>
 
-            <Card className="rounded-[12px] border-2 border-border bg-background/70 shadow-xl">
-              <CardContent className="flex flex-col gap-4 p-6">
-                <p className="text-sm font-semibold uppercase tracking-wide text-primary">
+            <TiltCard className="group" glowIntensity={0}>
+              <Card className="rounded-[24px] border border-blue-500/20 bg-[#0d1220]/80 backdrop-blur-xl shadow-[0_0_40px_rgba(0,102,255,0.1)] hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300">
+                <CardContent className="flex flex-col gap-6 p-8">
+                <p className="text-sm font-bold uppercase tracking-wide text-blue-400">
                   Built for production
                 </p>
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-5 sm:grid-cols-2">
                   {stats.map((stat) => {
                     const Icon = stat.icon;
                     return (
                       <div
                         key={stat.title}
-                        className="flex items-start gap-3 rounded-[4px] bg-muted/30 px-4 py-3 text-sm text-muted-foreground"
+                        className="flex items-start gap-4 rounded-2xl bg-blue-500/5 border border-blue-500/20 px-5 py-4 text-sm text-gray-300 hover:bg-blue-500/10 hover:border-blue-500/30 transition-all duration-300"
                       >
-                        <span className="mt-1 inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[6px] bg-primary/10 text-primary">
-                          <Icon className="h-4 w-4" />
+                        <span className="mt-1 inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-400 border border-blue-500/30">
+                          <Icon className="h-5 w-5" />
                         </span>
                         <div>
-                          <p className="font-medium text-foreground">
+                          <p className="font-bold text-white text-base mb-1">
                             {stat.title}
                           </p>
                           <p className="leading-relaxed">{stat.description}</p>
@@ -228,8 +254,9 @@ const HowItWorksSection = () => {
                     );
                   })}
                 </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </TiltCard>
           </motion.div>
         </div>
       </div>

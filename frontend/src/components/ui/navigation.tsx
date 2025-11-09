@@ -68,43 +68,40 @@ const Navigation = () => {
   return (
     <nav className={cn(
       "fixed top-0 w-full z-50 transition-all duration-300",
-      scrolled ? "glass shadow-lg" : "bg-transparent"
+      scrolled ? "bg-[#0a0e1a]/80 backdrop-blur-xl border-b border-blue-500/10" : "bg-transparent"
     )}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="w-full px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          {/* Logo */}
+          {/* Logo - Left */}
           <Link to="/" className="flex items-center gap-2 group">
-            <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary-glow rounded-lg flex items-center justify-center group-hover:animate-pulse-glow transition-all duration-300">
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-all duration-300">
               <Zap className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
+            <span className="text-xl font-bold text-white">
               Reputation DAO
             </span>
           </Link>
 
-          {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-8">
+          {/* Desktop Navigation - Right */}
+          <div className="hidden md:flex items-center gap-6">
             {walletBadge}
             {navItems.map((item) => (
               <Link
                 key={item.name}
                 to={item.href}
                 className={cn(
-                  "text-sm font-medium transition-all duration-300 relative",
-                  "hover:text-primary",
-                  location.pathname === item.href ? "text-primary" : "text-muted-foreground",
-                  "after:content-[''] after:absolute after:w-full after:h-0.5 after:bg-primary after:left-0 after:-bottom-1",
-                  "after:scale-x-0 after:transition-transform after:duration-300 hover:after:scale-x-100",
-                  location.pathname === item.href && "after:scale-x-100"
+                  "text-sm font-medium transition-all duration-300",
+                  "hover:text-blue-400",
+                  location.pathname === item.href ? "text-blue-400" : "text-gray-300"
                 )}
               >
                 {item.name}
               </Link>
             ))}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <ThemeToggle />
               <Link to="/auth">
-                <Button variant="default" className="hover-lift">
+                <Button className="bg-blue-600 hover:bg-blue-700 text-white">
                   Get Started
                 </Button>
               </Link>

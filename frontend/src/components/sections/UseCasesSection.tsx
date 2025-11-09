@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CircuitLines } from "@/components/ui/CircuitLines";
+import { TiltCard } from "@/components/ui/TiltCard";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 24 },
@@ -75,24 +77,37 @@ const integrations = [
 
 const UseCasesSection = () => {
   return (
-    <section className="relative z-10 py-6 md:py-7">
-      <div className="mx-auto flex max-w-6xl flex-col gap-14 rounded-[16px] border border-border/80 bg-card/70 px-4 py-12 shadow-md backdrop-blur-sm sm:px-8 lg:px-12">
+    <section className="relative z-10 py-24 md:py-32 bg-[#0d1220] overflow-hidden">
+      {/* Smooth gradient transition from previous section */}
+      <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-[#0d1220] via-transparent to-transparent z-0 pointer-events-none" />
+      
+      {/* Circuit lines background */}
+      <div className="absolute inset-0 opacity-10">
+        <CircuitLines />
+      </div>
+      
+      {/* Smooth gradient transition to next section */}
+      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-b from-transparent to-[#0d1220] z-0 pointer-events-none" />
+      
+      <div className="relative mx-auto flex max-w-7xl flex-col gap-16 px-6 py-16 sm:px-10 lg:px-16">
         <motion.div
-          className="mx-auto max-w-3xl text-center"
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, amount: 0.45 }}
-          custom={0}
-          variants={fadeUp}
+          className="mx-auto max-w-4xl text-center"
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: 0.8 }}
         >
-          <Badge variant="secondary" className="mb-4 px-4 py-2 uppercase tracking-wide">
-            <Sparkles className="mr-2 h-3.5 w-3.5" />
+          <Badge className="mb-6 px-6 py-2.5 uppercase tracking-wide text-sm font-semibold border-2 border-blue-500/30 bg-blue-500/10 text-blue-400">
+            <Sparkles className="mr-2 h-4 w-4" />
             Where it fits
           </Badge>
-          <h2 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
-            Drop reputation into any product surface
+          <h2 className="text-5xl font-bold tracking-tight text-white sm:text-6xl lg:text-7xl mb-6">
+            Drop reputation into{" "}
+            <span className="bg-gradient-to-r from-blue-400 to-blue-500 bg-clip-text text-transparent">
+              any product surface
+            </span>
           </h2>
-          <p className="mt-4 text-base leading-relaxed text-muted-foreground sm:text-lg">
+          <p className="mt-6 text-xl leading-relaxed text-gray-400">
             The UI is neutral enough to blend with your brand in light and dark
             themes, while the primitives stay powerful under the hood.
           </p>
@@ -154,13 +169,14 @@ const UseCasesSection = () => {
                 custom={0.15 + index * 0.05}
                 variants={fadeUp}
               >
-                <Card className="flex h-full flex-col overflow-hidden rounded-[12px] border-2 border-border bg-background/70 shadow-lg shadow-primary/5">
-                  <CardContent className="flex h-full flex-col space-y-6 p-6 sm:p-8">
+                <TiltCard className="group" style={{ perspective: '1000px' }}>
+                  <Card className="flex h-full flex-col overflow-hidden rounded-[24px] border-2 border-blue-500/20 bg-[#0d1220]/80 backdrop-blur-xl shadow-[0_0_40px_rgba(0,102,255,0.1)] hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300">
+                    <CardContent className="flex h-full flex-col space-y-6 p-6 sm:p-8">
                     <div className="space-y-3">
-                      <Badge className="w-fit bg-primary text-primary-foreground">
+                      <Badge className="w-fit bg-blue-600 text-white shadow-[0_0_20px_rgba(0,102,255,0.3)]">
                         {useCase.title}
                       </Badge>
-                      <h3 className="text-2xl font-semibold text-foreground sm:text-3xl">
+                      <h3 className="text-2xl font-semibold text-white sm:text-3xl">
                         {useCase.description}
                       </h3>
                     </div>
@@ -168,76 +184,84 @@ const UseCasesSection = () => {
                       {useCase.highlights.map((highlight) => (
                         <div
                           key={highlight}
-                          className="flex items-start gap-3 rounded-[4px] bg-muted/40 px-4 py-3 text-sm text-muted-foreground"
+                          className="flex items-start gap-3 rounded-2xl bg-blue-500/5 border border-blue-500/20 px-4 py-3 text-sm text-gray-300 hover:bg-blue-500/10 hover:border-blue-500/30 transition-all duration-300"
                         >
-                          <span className="mt-1 inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                          <span className="mt-1 inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/30">
                             <ArrowRight className="h-3 w-3" />
                           </span>
                           <span>{highlight}</span>
                         </div>
                       ))}
                     </div>
-                    <Button asChild size="lg" className="mt-auto w-full sm:w-auto">
+                    <Button asChild size="lg" className="mt-auto w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white shadow-[0_0_40px_rgba(0,102,255,0.3)] hover:shadow-[0_0_60px_rgba(0,102,255,0.5)] rounded-2xl">
                       <RouterLink to="/auth">{useCase.ctaLabel}</RouterLink>
                     </Button>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+                </TiltCard>
 
-                <Card className="flex h-full flex-col overflow-hidden rounded-[12px] border-2 border-border bg-background/70 shadow-lg shadow-primary/5">
-                  <CardContent className="flex h-full flex-col gap-6 p-6 sm:p-8">
-                    <div className="overflow-hidden rounded-[6px] border border-border bg-muted/40">
+                <TiltCard className="group" style={{ perspective: '1000px' }}>
+                  <Card className="flex h-full flex-col overflow-hidden rounded-[24px] border-2 border-blue-500/20 bg-[#0d1220]/80 backdrop-blur-xl shadow-[0_0_40px_rgba(0,102,255,0.1)] hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300">
+                    <CardContent className="flex h-full flex-col gap-6 p-6 sm:p-8">
+                    <div className="overflow-hidden rounded-2xl border border-blue-500/20 bg-blue-500/5">
                       <img
                         src={useCase.image}
                         alt={useCase.title}
                         className="h-56 w-full object-cover"
                       />
                     </div>
-                    <div className="rounded-[6px] border border-dashed border-primary/25 bg-muted/40 px-4 py-4 text-sm text-muted-foreground">
-                      <p className="font-medium text-foreground">
+                    <div className="rounded-2xl border border-dashed border-blue-500/30 bg-blue-500/5 px-4 py-4 text-sm text-gray-300">
+                      <p className="font-medium text-white">
                         Activation blueprint
                       </p>
                       <p className="mt-2 leading-relaxed">
                         Start with ready-made flows, dashboards, and monitoring
                         checks tailored for {useCase.title.toLowerCase()} teams.
                       </p>
-                    </div>
-                    <div className="grow" />
-                  </CardContent>
-                </Card>
+                      </div>
+                      <div className="grow" />
+                    </CardContent>
+                  </Card>
+                </TiltCard>
               </motion.div>
             </TabsContent>
           ))}
         </Tabs>
 
         <motion.div
-          className="rounded-[8px] border-2 border-border bg-background/70 px-6 py-8 shadow-lg shadow-primary/5"
+          className="group"
           initial="hidden"
           whileInView="show"
           viewport={{ once: true, amount: 0.4 }}
           custom={0.25}
           variants={fadeUp}
+          style={{ perspective: '1000px' }}
         >
-          <div className="flex flex-col gap-6 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
-            <div>
-              <p className="text-lg font-semibold text-foreground">
-                Integrates with the tools you already use
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Compose reputation with your existing wallets, data pipelines,
-                and ops automation without breaking visual consistency.
-              </p>
+          <TiltCard>
+            <div className="rounded-[24px] border-2 border-blue-500/20 bg-[#0d1220]/80 backdrop-blur-xl px-6 py-8 shadow-[0_0_40px_rgba(0,102,255,0.1)] hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300">
+              <div className="flex flex-col gap-6 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
+                <div>
+                  <p className="text-lg font-semibold text-white">
+                    Integrates with the tools you already use
+                  </p>
+                  <p className="mt-1 text-sm text-gray-400">
+                    Compose reputation with your existing wallets, data pipelines,
+                    and ops automation without breaking visual consistency.
+                  </p>
+                </div>
+                <div className="flex flex-wrap justify-center gap-2 sm:max-w-md">
+                  {integrations.map((integration) => (
+                    <span
+                      key={integration}
+                      className="rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-1.5 text-xs font-semibold text-blue-400"
+                    >
+                      {integration}
+                    </span>
+                  ))}
+                </div>
+              </div>
             </div>
-            <div className="flex flex-wrap justify-center gap-2 sm:max-w-md">
-              {integrations.map((integration) => (
-                <span
-                  key={integration}
-                  className="rounded-full border border-border/70 bg-muted/40 px-4 py-1.5 text-xs font-semibold text-muted-foreground"
-                >
-                  {integration}
-                </span>
-              ))}
-            </div>
-          </div>
+          </TiltCard>
         </motion.div>
       </div>
     </section>
