@@ -3,7 +3,6 @@ import { Link, useLocation } from "react-router-dom";
 import { Menu, X, Zap, Copy } from "lucide-react";
 import { Button } from "./button";
 import { cn } from "@/lib/utils";
-import { ThemeToggle } from "./theme-toggle";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
@@ -98,14 +97,11 @@ const Navigation = () => {
                 {item.name}
               </Link>
             ))}
-            <div className="flex items-center gap-3">
-              <ThemeToggle />
-              <Link to="/auth">
-                <Button className="bg-blue-600 hover:bg-blue-700 text-white">
-                  Get Started
-                </Button>
-              </Link>
-            </div>
+            <Link to="/auth">
+              <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+                Get Started
+              </Button>
+            </Link>
           </div>
 
           {/* Mobile menu button */}
@@ -138,14 +134,11 @@ const Navigation = () => {
                   {item.name}
                 </Link>
               ))}
-              <div className="flex items-center gap-2 mt-2">
-                <ThemeToggle />
-                <Link to="/auth">
-                  <Button variant="default">
-                    Get Started
-                  </Button>
-                </Link>
-              </div>
+              <Link to="/auth" className="mt-2">
+                <Button variant="default">
+                  Get Started
+                </Button>
+              </Link>
             </div>
           </div>
         )}

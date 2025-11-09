@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { TiltCard } from "@/components/ui/TiltCard";
 
-const fadeUp = {
+const fadeUp: any = {
   hidden: { opacity: 0, y: 24 },
   show: (delay: number) => ({
     opacity: 1,
@@ -107,7 +107,7 @@ const ResourcesSection = () => {
                 variants={fadeUp}
                 style={{ perspective: '1000px' }}
               >
-                <TiltCard className="h-full">
+                <TiltCard className="h-full rounded-2xl">
                   <Card className="flex h-full flex-col overflow-hidden rounded-[24px] border-2 border-blue-500/20 bg-[#0d1220]/80 backdrop-blur-xl shadow-[0_0_40px_rgba(0,102,255,0.1)] hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300">
                     <CardContent className="flex flex-1 flex-col space-y-4 p-6">
                       <div className="flex items-center gap-3">
@@ -141,7 +141,7 @@ const ResourcesSection = () => {
           variants={fadeUp}
           style={{ perspective: '1000px' }}
         >
-          <TiltCard>
+          <TiltCard className="rounded-2xl">
             <div className="rounded-[24px] border-2 border-blue-500/20 bg-[#0d1220]/80 backdrop-blur-xl px-6 py-8 text-center shadow-[0_0_40px_rgba(0,102,255,0.1)] hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300 sm:text-left">
               <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:justify-between">
                 <div>

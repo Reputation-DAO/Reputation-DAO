@@ -10,6 +10,7 @@ import TechnicalSection from "@/components/sections/TechnicalSection";
 import ResourcesSection from "@/components/sections/ResourcesSection";
 import FAQSection from "@/components/sections/FAQSection";
 import { ParticleBackground } from "@/components/ui/ParticleBackground";
+import CursorSpotlight from "@/components/ui/CursorSpotlight";
 
 const HomePage = () => {
   return (
@@ -18,6 +19,8 @@ const HomePage = () => {
       <div className="fixed inset-0 z-0">
         <ParticleBackground />
       </div>
+      {/* Cursor spotlight overlay */}
+      <CursorSpotlight />
 
       <div className="relative z-20">
         <Navigation />

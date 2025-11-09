@@ -127,12 +127,15 @@ const HeroSection = () => {
         </motion.div>
       </div>
 
+      {/* Smooth gradient transition to next section */}
+      <div className="absolute bottom-0 left-0 right-0 h-80 bg-gradient-to-b from-transparent via-[#0b0f1b]/50 to-[#0d1220] z-0 pointer-events-none" />
+
       {/* Scroll Indicator */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1.5, duration: 1 }}
-        className="absolute bottom-8 left-1/2 transform -translate-x-1/2"
+        className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-20"
       >
         <motion.div
           animate={{ y: [0, 10, 0] }}

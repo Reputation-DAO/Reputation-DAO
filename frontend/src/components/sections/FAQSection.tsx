@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { TiltCard } from "@/components/ui/TiltCard";
 
-const fadeUp = {
+const fadeUp: any = {
   hidden: { opacity: 0, y: 28 },
   show: (delay: number) => ({
     opacity: 1,
@@ -56,9 +56,9 @@ const faqs = [
 
 const FAQSection = () => {
   return (
-    <section id="faq" className="relative z-10 py-24 md:py-32 bg-[#0d1220] overflow-hidden">
+    <section id="faq" className="relative z-10 py-24 md:py-32 bg-background overflow-hidden">
       {/* Smooth gradient transition from previous section */}
-      <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-[#0d1220] via-transparent to-transparent z-0 pointer-events-none" />
+      <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-background via-transparent to-transparent z-0 pointer-events-none" />
       
       <div className="relative mx-auto max-w-7xl px-6 py-16 sm:px-10 lg:px-16">
         <motion.div
@@ -72,13 +72,13 @@ const FAQSection = () => {
             <Sparkles className="mr-2 h-4 w-4" />
             Frequently asked questions
           </Badge>
-          <h2 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-white mb-6">
+          <h2 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-foreground mb-6">
             Clarity around{" "}
             <span className="bg-gradient-to-r from-blue-400 to-blue-500 bg-clip-text text-transparent">
               decentralized reputation
             </span>
           </h2>
-          <p className="mt-6 text-xl leading-relaxed text-gray-400">
+          <p className="mt-6 text-xl leading-relaxed text-muted-foreground">
             Everything you need to know before stitching Reputation DAO into
             your governance, incentive, or community flows.
           </p>
@@ -92,8 +92,8 @@ const FAQSection = () => {
           transition={{ duration: 0.8, delay: 0.2 }}
           style={{ perspective: '1000px' }}
         >
-          <TiltCard className="space-y-4">
-            <div className="rounded-[24px] border border-blue-500/20 bg-[#0d1220]/80 backdrop-blur-xl p-8 shadow-[0_0_40px_rgba(0,102,255,0.1)] hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300 sm:p-10">
+          <TiltCard className="space-y-4 rounded-[24px]">
+            <div className="rounded-[24px] border border-blue-500/20 bg-card backdrop-blur-xl p-8 shadow-[0_0_40px_rgba(0,102,255,0.1)] hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300 sm:p-10">
               <Accordion type="single" collapsible defaultValue={faqs[0]?.question}>
                 {faqs.map((faq, index) => (
                   <AccordionItem
@@ -101,7 +101,7 @@ const FAQSection = () => {
                     value={faq.question}
                     className="border-b border-blue-500/10 last:border-b-0"
                   >
-                    <AccordionTrigger className="text-left text-lg font-semibold text-white transition hover:text-blue-400 data-[state=open]:text-blue-400">
+                    <AccordionTrigger className="text-left text-lg font-semibold text-foreground transition hover:text-blue-400 data-[state=open]:text-blue-400">
                       <div className="flex items-center gap-3">
                         <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-500/10 text-sm font-semibold text-blue-400 border border-blue-500/30">
                           {String(index + 1).padStart(2, "0")}
@@ -109,7 +109,7 @@ const FAQSection = () => {
                         <span>{faq.question}</span>
                       </div>
                     </AccordionTrigger>
-                    <AccordionContent className="text-base leading-relaxed text-gray-400">
+                    <AccordionContent className="text-base leading-relaxed text-muted-foreground">
                       {faq.answer}
                     </AccordionContent>
                   </AccordionItem>
@@ -129,17 +129,17 @@ const FAQSection = () => {
           style={{ perspective: '1000px' }}
         >
           <TiltCard>
-            <Card className="rounded-[24px] border border-blue-500/30 bg-gradient-to-br from-[#0d1220]/90 to-[#0d1220]/70 backdrop-blur-xl shadow-[0_0_60px_rgba(0,102,255,0.15)] hover:shadow-[0_0_80px_rgba(0,102,255,0.25)] hover:border-blue-500/50 transition-all duration-300">
+            <Card className="rounded-[24px] border border-blue-500/30 bg-card backdrop-blur-xl shadow-[0_0_60px_rgba(0,102,255,0.15)] hover:shadow-[0_0_80px_rgba(0,102,255,0.25)] hover:border-blue-500/50 transition-all duration-300">
               <CardContent className="flex flex-col gap-8 p-10 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-4">
-                <span className="inline-flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-[8px] bg-blue-500/10 text-blue-400">
+                <span className="inline-flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-400">
                   <HelpCircle className="h-6 w-6" />
                 </span>
                 <div>
-                  <h3 className="text-xl font-semibold text-white">
+                  <h3 className="text-xl font-semibold text-foreground">
                     Still have a question?
                   </h3>
-                  <p className="mt-2 text-sm leading-relaxed text-gray-400">
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                     Drop into the community or connect with the core contributors
                     for architectural reviews, integration audits, or roadmap
                     alignment.

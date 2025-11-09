@@ -1,4 +1,4 @@
-import { useState, useRef, ReactNode, CSSProperties } from "react";
+import { useState, useRef, type ReactNode, type CSSProperties } from "react";
 
 interface TiltCardProps {
   children: ReactNode;
@@ -58,6 +58,7 @@ export const TiltCard = ({ children, className = "", glowIntensity = 0.15, style
         className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
         style={{
           background: `radial-gradient(circle 200px at ${glowX}% ${glowY}%, rgba(0, 102, 255, ${glowIntensity}), transparent)`,
+          borderRadius: 'inherit',
         }}
       />
       

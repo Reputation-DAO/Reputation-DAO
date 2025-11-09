@@ -108,11 +108,10 @@ const BenefitsSection = () => {
                 className="group"
                 style={{ perspective: '1000px' }}
               >
-                <TiltCard className="h-full">
-                  <Card className="flex h-full flex-col overflow-hidden rounded-[24px] border border-blue-500/20 bg-[#0d1220]/80 backdrop-blur-xl shadow-[0_0_40px_rgba(0,102,255,0.1)] hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300">
+                <TiltCard className="h-full rounded-[24px]">
+                  <Card className="flex h-full flex-col overflow-hidden rounded-[24px] border border-blue-500/20 bg-[#0d1220]/80 shadow-[0_0_40px_rgba(0,102,255,0.1)] hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300">
                     <CardContent className="flex flex-1 flex-col space-y-5 p-8">
                     <div className="relative">
-                      <div className="absolute inset-0 bg-blue-500/20 rounded-2xl blur-xl group-hover:bg-blue-500/30 transition-all duration-300" />
                       <span className="relative inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-400 border-2 border-blue-500/30 group-hover:scale-110 transition-transform duration-300">
                         <Icon className="h-7 w-7" />
                       </span>
@@ -148,14 +147,14 @@ const BenefitsSection = () => {
             </p>
           </div>
           <div className="flex flex-wrap justify-center gap-4">
-            <Button asChild size="lg" className="px-8 py-6 text-base font-semibold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-[0_0_40px_rgba(0,102,255,0.3)] hover:shadow-[0_0_60px_rgba(0,102,255,0.5)]">
+            <Button asChild size="lg" className="px-8 py-6 text-base font-semibold rounded-2xl bg-blue-600 hover:bg-blue-700 text-white shadow-[0_0_40px_rgba(0,102,255,0.3)] hover:shadow-[0_0_60px_rgba(0,102,255,0.5)]">
               <RouterLink to="/auth">Join the beta</RouterLink>
             </Button>
             <Button
               asChild
               variant="outline"
               size="lg"
-              className="border-2 border-blue-500/30 text-blue-400 hover:bg-blue-500/10 px-8 py-6 text-base font-semibold rounded-xl"
+              className="border-2 border-blue-500/30 text-blue-400 hover:bg-blue-500/10 px-8 py-6 text-base font-semibold rounded-2xl"
             >
               <a
                 href="https://docs.google.com/document/d/1e03vreMKph3KPX-g8-jlbIAlD8D3PvA8VXPbZNIrT-0/edit?tab=t.0"

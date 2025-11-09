@@ -85,6 +85,7 @@ const TiltCard = ({ feature, index }: { feature: typeof features[0], index: numb
           className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
           style={{
             background: `radial-gradient(circle 200px at ${glowX}% ${glowY}%, rgba(0, 102, 255, 0.15), transparent)`,
+            borderRadius: 'inherit',
           }}
         />
         
@@ -117,9 +118,10 @@ const TiltCard = ({ feature, index }: { feature: typeof features[0], index: numb
 
 const FeaturesShowcase = () => {
   return (
-    <section className="relative py-32 overflow-hidden bg-[#0d1220]">
-      {/* Smooth gradient transition from hero section */}
-      <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-[#0a0e1a] to-transparent z-0 pointer-events-none" />
+    <section className="relative py-32 overflow-hidden bg-transparent -mt-24 md:-mt-32">
+      {/* Smooth gradient transition from hero section - enhanced for smoother blend */}
+      <div className="absolute -top-28 left-0 right-0 h-72 bg-gradient-to-b from-[#0a0e1a] via-[#0a0e1a]/80 via-[#0b0f1b]/60 via-[#0c111f]/40 to-transparent z-0 pointer-events-none" />
+      <div className="absolute -top-16 left-0 right-0 h-56 bg-gradient-to-b from-[#0a0e1a]/60 to-transparent z-0 pointer-events-none" />
       
       {/* Wave lines background */}
       <div className="absolute inset-0 opacity-20">

@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CircuitLines } from "@/components/ui/CircuitLines";
 import { TiltCard } from "@/components/ui/TiltCard";
 
-const fadeUp = {
+const fadeUp: any = {
   hidden: { opacity: 0, y: 24 },
   show: (delay: number) => ({
     opacity: 1,
@@ -169,8 +169,8 @@ const UseCasesSection = () => {
                 custom={0.15 + index * 0.05}
                 variants={fadeUp}
               >
-                <TiltCard className="group" style={{ perspective: '1000px' }}>
-                  <Card className="flex h-full flex-col overflow-hidden rounded-[24px] border-2 border-blue-500/20 bg-[#0d1220]/80 backdrop-blur-xl shadow-[0_0_40px_rgba(0,102,255,0.1)] hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300">
+                <TiltCard className="group rounded-2xl" style={{ perspective: '1000px' }}>
+                  <Card className="flex h-full flex-col overflow-hidden rounded-2xl border-2 border-blue-500/20 bg-[#0d1220]/80 backdrop-blur-xl shadow-[0_0_40px_rgba(0,102,255,0.1)] hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300">
                     <CardContent className="flex h-full flex-col space-y-6 p-6 sm:p-8">
                     <div className="space-y-3">
                       <Badge className="w-fit bg-blue-600 text-white shadow-[0_0_20px_rgba(0,102,255,0.3)]">
@@ -200,7 +200,7 @@ const UseCasesSection = () => {
                   </Card>
                 </TiltCard>
 
-                <TiltCard className="group" style={{ perspective: '1000px' }}>
+                <TiltCard className="group rounded-[24px]" style={{ perspective: '1000px' }}>
                   <Card className="flex h-full flex-col overflow-hidden rounded-[24px] border-2 border-blue-500/20 bg-[#0d1220]/80 backdrop-blur-xl shadow-[0_0_40px_rgba(0,102,255,0.1)] hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300">
                     <CardContent className="flex h-full flex-col gap-6 p-6 sm:p-8">
                     <div className="overflow-hidden rounded-2xl border border-blue-500/20 bg-blue-500/5">
@@ -237,8 +237,8 @@ const UseCasesSection = () => {
           variants={fadeUp}
           style={{ perspective: '1000px' }}
         >
-          <TiltCard>
-            <div className="rounded-[24px] border-2 border-blue-500/20 bg-[#0d1220]/80 backdrop-blur-xl px-6 py-8 shadow-[0_0_40px_rgba(0,102,255,0.1)] hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300">
+          <TiltCard className="rounded-2xl">
+            <div className="rounded-2xl overflow-hidden border-2 border-blue-500/20 bg-[#0d1220]/80 backdrop-blur-xl px-6 py-8 shadow-[0_0_40px_rgba(0,102,255,0.1)] hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300">
               <div className="flex flex-col gap-6 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
                 <div>
                   <p className="text-lg font-semibold text-white">

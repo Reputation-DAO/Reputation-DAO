@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { HexagonBackground } from "@/components/ui/HexagonBackground";
 import { TiltCard } from "@/components/ui/TiltCard";
 
-const fadeUp = {
+const fadeUp: any = {
   hidden: { opacity: 0, y: 28 },
   show: (delay: number) => ({
     opacity: 1,
@@ -118,12 +118,11 @@ const HowItWorksSection = () => {
                   className="group"
                   style={{ perspective: '1000px' }}
                 >
-                  <TiltCard className="h-full">
-                    <Card className="flex h-full flex-col overflow-hidden rounded-[24px] border border-blue-500/20 bg-[#0d1220]/80 backdrop-blur-xl shadow-[0_0_40px_rgba(0,102,255,0.1)] hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300">
+                  <TiltCard className="h-full rounded-2xl">
+                    <Card className="flex h-full flex-col overflow-hidden rounded-2xl border border-blue-500/20 bg-[#0d1220]/80 shadow-[0_0_40px_rgba(0,102,255,0.1)] hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300">
                       <CardContent className="flex flex-1 flex-col gap-6 p-8 md:flex-row md:items-start md:gap-10">
                       <div className="flex flex-col items-center gap-4 md:w-48">
                         <div className="relative">
-                          <div className="absolute inset-0 bg-blue-500/20 rounded-2xl blur-xl group-hover:bg-blue-500/30 transition-all duration-300" />
                           <div className="relative inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-400 border-2 border-blue-500/30 group-hover:scale-110 transition-transform duration-300">
                             <Icon className="h-8 w-8" />
                           </div>
@@ -162,16 +161,16 @@ const HowItWorksSection = () => {
           </div>
 
           <motion.div
-            className="flex flex-col gap-6 lg:h-full lg:justify-between"
+            className="flex flex-col gap-6"
             initial="hidden"
             whileInView="show"
             viewport={{ once: true, amount: 0.4 }}
             custom={0.2}
             variants={fadeUp}
           >
-            <TiltCard className="flex flex-col lg:flex-1 group" glowIntensity={0.2}>
-              <Card className="flex flex-col overflow-hidden rounded-[24px] border border-blue-500/20 bg-[#0d1220]/80 backdrop-blur-xl shadow-[0_0_40px_rgba(0,102,255,0.1)] lg:flex-1 hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300">
-                <CardContent className="flex flex-1 flex-col space-y-6 p-8">
+            <TiltCard className="flex flex-col group rounded-2xl" glowIntensity={0.2}>
+              <Card className="flex flex-col overflow-hidden rounded-2xl border border-blue-500/20 bg-[#0d1220]/80 shadow-[0_0_40px_rgba(0,102,255,0.1)] hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300">
+                <CardContent className="flex flex-col space-y-6 p-8">
                 <Badge className="w-fit px-4 py-2 bg-blue-500/10 border-2 border-blue-500/30 text-blue-400 font-semibold">
                   Builder tools
                 </Badge>
@@ -227,8 +226,8 @@ const HowItWorksSection = () => {
               </Card>
             </TiltCard>
 
-            <TiltCard className="group" glowIntensity={0}>
-              <Card className="rounded-[24px] border border-blue-500/20 bg-[#0d1220]/80 backdrop-blur-xl shadow-[0_0_40px_rgba(0,102,255,0.1)] hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300">
+            <TiltCard className="group rounded-2xl" glowIntensity={0}>
+              <Card className="rounded-2xl border border-blue-500/20 bg-[#0d1220]/80 shadow-[0_0_40px_rgba(0,102,255,0.1)] hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300">
                 <CardContent className="flex flex-col gap-6 p-8">
                 <p className="text-sm font-bold uppercase tracking-wide text-blue-400">
                   Built for production

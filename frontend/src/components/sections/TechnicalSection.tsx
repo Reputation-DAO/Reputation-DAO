@@ -109,8 +109,8 @@ const TechnicalSection = () => {
             custom={0.1}
             variants={fadeUp}
           >
-            <TiltCard className="group" style={{ perspective: '1000px' }}>
-              <Card className="flex flex-col overflow-hidden rounded-[24px] border-2 border-blue-500/20 bg-[#0d1220]/80 backdrop-blur-xl shadow-[0_0_40px_rgba(0,102,255,0.1)] hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300">
+            <TiltCard className="group rounded-[24px]" style={{ perspective: '1000px' }}>
+              <Card className="flex flex-col overflow-hidden rounded-[24px] border-2 border-blue-500/20 bg-[#0d1220]/80 shadow-[0_0_40px_rgba(0,102,255,0.1)] hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300">
                 <CardContent className="flex flex-1 flex-col space-y-5 p-6 sm:p-8">
                 <Badge className="w-fit bg-blue-600 text-white shadow-[0_0_20px_rgba(0,102,255,0.3)]">
                   Trust by design
@@ -196,6 +196,7 @@ const TechnicalSection = () => {
                 </div>
               </CardContent>
             </Card>
+            </TiltCard>
           </motion.div>
 
           <div className="space-y-6">
@@ -212,8 +213,8 @@ const TechnicalSection = () => {
                   className="group"
                   style={{ perspective: '1000px' }}
                 >
-                  <TiltCard className="h-full">
-                    <Card className="flex flex-col overflow-hidden rounded-[24px] border-2 border-blue-500/20 bg-[#0d1220]/80 backdrop-blur-xl shadow-[0_0_40px_rgba(0,102,255,0.1)] hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300">
+                  <TiltCard className="h-full rounded-[24px]">
+                    <Card className="flex flex-col overflow-hidden rounded-[24px] border-2 border-blue-500/20 bg-[#0d1220]/80 shadow-[0_0_40px_rgba(0,102,255,0.1)] hover:shadow-[0_0_60px_rgba(0,102,255,0.2)] hover:border-blue-500/40 transition-all duration-300">
                       <CardContent className="flex flex-col gap-4 p-6 sm:flex-row sm:items-start sm:gap-6">
                         <span className="inline-flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-400 border border-blue-500/30">
                           <Icon className="h-6 w-6" />
