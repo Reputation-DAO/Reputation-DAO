@@ -32,7 +32,7 @@ const Footer = () => {
   ];
 
   return (
-    <footer className="bg-gradient-to-t from-secondary/30 to-background border-t border-border/50">
+    <footer className="bg-background border-t border-border/50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Main footer content */}
         <div className="py-16">
@@ -63,7 +63,7 @@ const Footer = () => {
                       href={social.href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="w-10 h-10 glass rounded-xl flex items-center justify-center hover:bg-primary/10 hover:text-primary transition-all duration-300 hover:scale-110"
+                      className="w-10 h-10 rounded-xl border border-border/50 bg-secondary/20 flex items-center justify-center hover:bg-primary/10 hover:text-primary transition-all duration-300 hover:scale-110"
                       aria-label={social.label}
                     >
                       <IconComponent className="w-5 h-5" />
@@ -109,7 +109,7 @@ const Footer = () => {
         
         {/* Newsletter signup */}
         <div className="py-8 border-t border-border/50">
-          <div className="glass-card p-8 md:p-10 text-center md:text-left md:flex md:items-center md:justify-between md:gap-8">
+          <div className="rounded-xl border border-border/50 bg-card p-8 md:p-10 text-center md:text-left md:flex md:items-center md:justify-between md:gap-8">
             <div className="md:max-w-xl space-y-3">
               <h3 className="text-2xl font-bold text-foreground">Stay Updated</h3>
               <p className="text-muted-foreground max-w-2xl mx-auto md:mx-0">
@@ -120,7 +120,7 @@ const Footer = () => {
               <input
                 type="email"
                 placeholder="Enter your email"
-                className="flex-1 px-4 py-3 glass rounded-lg border border-border/50 focus:border-primary focus:outline-none transition-colors duration-300"
+                className="flex-1 px-4 py-3 rounded-lg border border-border/50 bg-muted/30 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none transition-colors duration-300"
               />
               <button className="px-6 py-3 bg-gradient-to-r from-primary to-primary-glow text-white rounded-lg hover:scale-105 transition-all duration-300 hover:shadow-[var(--shadow-glow)] whitespace-nowrap">
                 Subscribe
