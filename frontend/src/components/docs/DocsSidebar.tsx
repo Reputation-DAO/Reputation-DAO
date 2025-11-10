@@ -165,7 +165,7 @@ const NavSection = ({ item, level = 0 }: { item: NavItem; level?: number }) => {
 
 const DocsSidebar = () => {
   return (
-    <aside className="w-64 h-[calc(100vh-4rem)] sticky top-16 overflow-y-auto border-r border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <aside className="w-64 shrink-0 sticky top-16 max-h-[calc(100vh-4rem)] overflow-y-auto border-r border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <nav className="p-4 space-y-2">
         {navigation.map((item) => (
           <NavSection key={item.href || item.title} item={item} />
