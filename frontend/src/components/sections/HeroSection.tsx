@@ -69,7 +69,13 @@ const HeroSection = () => {
             <span className="block text-white drop-shadow-[0_0_30px_rgba(0,102,255,0.5)]">
               Reputation
             </span>
-            <span className="block mt-2 bg-gradient-to-r from-blue-400 to-blue-500 bg-clip-text text-transparent drop-shadow-[0_0_40px_rgba(0,102,255,0.5)]">
+            <span className="block mt-2 text-blue-400 drop-shadow-[0_0_40px_rgba(0,102,255,0.5)]" style={{
+              background: 'linear-gradient(to right, #60a5fa, #3b82f6)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              color: '#60a5fa'
+            }}>
               DAO
             </span>
           </motion.h1>
