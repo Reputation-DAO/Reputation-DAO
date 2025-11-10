@@ -150,10 +150,17 @@ html {
     @apply border-border;
   }
 
-  body {
+  html, body, #root {
     @apply bg-background text-foreground font-sans;
-    background: var(--gradient-mesh);
-    background-attachment: fixed;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+  
+  #root {
+    display: flex;
+    flex-direction: column;
   }
 
   /* Smooth scrolling */

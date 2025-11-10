@@ -73,7 +73,7 @@ const TiltCard = ({ feature, index }: { feature: typeof features[0], index: numb
         ref={cardRef}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        className="h-full p-8 rounded-2xl border border-blue-500/20 bg-[#0d1220]/80 backdrop-blur-xl hover:border-blue-500/40 transition-all duration-300 flex flex-col relative overflow-hidden"
+        className="h-full p-8 rounded-2xl border border-blue-500/20 bg-card/80 backdrop-blur-xl hover:border-blue-500/40 transition-all duration-300 flex flex-col relative overflow-hidden"
         style={{
           transform: `rotateX(${rotateX}deg) rotateY(${rotateY}deg)`,
           transition: 'transform 0.1s ease-out, box-shadow 0.3s ease',
@@ -94,11 +94,11 @@ const TiltCard = ({ feature, index }: { feature: typeof features[0], index: numb
             <feature.icon className="w-10 h-10" />
           </div>
           
-          <h3 className="text-2xl font-bold text-white mb-4">
+          <h3 className="text-2xl font-bold text-foreground mb-4">
             {feature.title}
           </h3>
           
-          <p className="text-gray-400 leading-relaxed mb-auto">
+          <p className="text-muted-foreground leading-relaxed mb-auto">
             {feature.description}
           </p>
           
@@ -118,18 +118,11 @@ const TiltCard = ({ feature, index }: { feature: typeof features[0], index: numb
 
 const FeaturesShowcase = () => {
   return (
-    <section className="relative py-32 overflow-hidden bg-transparent -mt-24 md:-mt-32">
-      {/* Smooth gradient transition from hero section - enhanced for smoother blend */}
-      <div className="absolute -top-28 left-0 right-0 h-72 bg-gradient-to-b from-[#0a0e1a] via-[#0a0e1a]/80 via-[#0b0f1b]/60 via-[#0c111f]/40 to-transparent z-0 pointer-events-none" />
-      <div className="absolute -top-16 left-0 right-0 h-56 bg-gradient-to-b from-[#0a0e1a]/60 to-transparent z-0 pointer-events-none" />
-      
+    <section className="relative py-32 overflow-visible bg-gradient-to-b from-slate-50 via-white to-slate-50 dark:from-background dark:via-background dark:to-background">
       {/* Wave lines background */}
-      <div className="absolute inset-0 opacity-20">
+      <div className="absolute inset-0 opacity-10 dark:opacity-20">
         <WaveLines color="#0066FF" lineCount={60} amplitude={80} frequency={0.002} />
       </div>
-      
-      {/* Smooth gradient transition to next section */}
-      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-b from-transparent to-[#0d1220] z-0 pointer-events-none" />
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
@@ -140,13 +133,13 @@ const FeaturesShowcase = () => {
           className="text-center mb-20"
         >
           <h2 className="text-5xl sm:text-6xl lg:text-7xl font-bold mb-6">
-            <span className="text-white">
+            <span className="text-foreground">
               Radically transforming trust,
             </span>
             <br />
             <span className="bg-gradient-to-r from-blue-400 to-blue-500 bg-clip-text text-transparent">on-chain</span>
           </h2>
-          <p className="text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed">
+          <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
             Building a marketplace of verifiable reputation that displaces legacy systems
             and empowers communities at each stage of the trust lifecycle.
           </p>
@@ -173,7 +166,7 @@ const FeaturesShowcase = () => {
           ].map((item) => (
             <div
               key={item.label}
-              className="relative group p-6 rounded-2xl border border-blue-500/20 bg-[#0d1220]/60 backdrop-blur-xl hover:border-blue-500/40 transition-all duration-300"
+              className="relative group p-6 rounded-2xl border border-blue-500/20 bg-card/60 backdrop-blur-xl hover:border-blue-500/40 transition-all duration-300"
             >
               <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               <div className="relative flex items-center gap-4">
@@ -182,7 +175,7 @@ const FeaturesShowcase = () => {
                 </div>
                 <div>
                   <div className="text-sm font-semibold text-blue-400 mb-1">{item.label}</div>
-                  <div className="text-xs text-gray-500">{item.value}</div>
+                  <div className="text-xs text-muted-foreground">{item.value}</div>
                 </div>
               </div>
             </div>

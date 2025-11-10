@@ -3,8 +3,6 @@ import { Play, ArrowRight, Sparkles, ChevronDown } from "lucide-react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import LiquidEther from "../../../@/components/LiquidEther";
-import { CircuitLines } from "@/components/ui/CircuitLines";
-import { ParticleRing } from "@/components/ui/ParticleRing";
 import { GlowingOrb } from "@/components/ui/GlowingOrb";
 
 const HeroSection = () => {
@@ -41,11 +39,6 @@ const HeroSection = () => {
       {/* Glowing Orb - main focal point */}
       <div className="absolute inset-0 z-0 opacity-50">
         <GlowingOrb />
-      </div>
-
-      {/* Particle Ring Effect - subtle */}
-      <div className="absolute inset-0 z-0 opacity-30">
-        <ParticleRing />
       </div>
 
       {/* Main Content */}
@@ -126,26 +119,6 @@ const HeroSection = () => {
 
         </motion.div>
       </div>
-
-      {/* Smooth gradient transition to next section */}
-      <div className="absolute bottom-0 left-0 right-0 h-80 bg-gradient-to-b from-transparent via-[#0b0f1b]/50 to-[#0d1220] z-0 pointer-events-none" />
-
-      {/* Scroll Indicator */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1.5, duration: 1 }}
-        className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-20"
-      >
-        <motion.div
-          animate={{ y: [0, 10, 0] }}
-          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-          className="flex flex-col items-center gap-2 text-muted-foreground"
-        >
-          <span className="text-sm">Scroll to explore</span>
-          <ChevronDown className="w-5 h-5" />
-        </motion.div>
-      </motion.div>
 
       <style>{`
         @keyframes gridMove {
