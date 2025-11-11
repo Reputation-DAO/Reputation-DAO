@@ -78,12 +78,16 @@ export function useSupabaseAssetUrl(asset: MediaAsset | null) {
   return url;
 }
 
-function Heading({ level, children }: { level: number; children: ReactNode }) {
-  const Tag = useMemo(() => {
-    const clamped = Math.min(Math.max(level, 1), 6);
-    return `h${clamped}` as const;
-  }, [level]);
-  return <Tag className="mt-8 text-foreground first:mt-0">{children}</Tag>;
+function Heading({ level, anchor, children }: { level: number; anchor?: string | null; children: ReactNode }) {
+  const clamped = useMemo(() => Math.min(Math.max(level, 1), 6), [level]);
+  const Tag = useMemo(() => `h${clamped}` as const, [clamped]);
+  const typography = headingTypography[`h${clamped}`] ?? headingTypography.h3;
+
+  return (
+    <Tag id={anchor ?? undefined} className={cn('mt-8 text-foreground first:mt-0', typography)}>
+      {children}
+    </Tag>
+  );
 }
 
 interface ContentRendererProps {
@@ -106,7 +110,7 @@ function Block({ block }: { block: ContentBlock }) {
       return <MarkdownBlock text={block.text} />;
     case 'Heading':
       return (
-        <Heading level={block.level}>
+        <Heading level={block.level} anchor={block.anchor}>
           <InlineMarkdown text={block.text} />
         </Heading>
       );
