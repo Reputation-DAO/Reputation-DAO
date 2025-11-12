@@ -28,9 +28,9 @@ const features = [
 
 const FeaturesShowcase = () => {
   return (
-    <section className="relative py-24 md:py-32 overflow-visible bg-gradient-to-b from-white via-slate-50 to-white dark:from-background dark:via-background dark:to-background">
+    <section className="relative py-24 md:py-32 overflow-visible bg-gradient-to-b from-slate-50 via-white to-slate-50 dark:from-[#0a0e1a] dark:via-[#0a0e1a] dark:to-[#0a0e1a]">
       {/* Wave lines background */}
-      <div className="absolute inset-0 opacity-10 dark:opacity-20">
+      <div className="absolute inset-0 opacity-5 dark:opacity-10">
         <WaveLines color="#0066FF" lineCount={60} amplitude={80} frequency={0.002} />
       </div>
 

@@ -68,7 +68,7 @@ const stats = [
 
 const HowItWorksSection = () => {
   return (
-    <section className="relative z-10 py-24 md:py-32 overflow-hidden bg-[#0d1220]">
+    <section className="relative z-10 py-24 md:py-32 overflow-hidden bg-gradient-to-b from-slate-50 via-white to-slate-50 dark:from-[#0a0e1a] dark:via-[#0a0e1a] dark:to-[#0a0e1a]">
       {/* Smooth gradient transition from previous section */}
       <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-[#0d1220] via-transparent to-transparent z-0 pointer-events-none" />
       
