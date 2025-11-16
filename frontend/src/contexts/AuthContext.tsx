@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import type { ReactNode } from 'react';
 import { Principal } from '@dfinity/principal';
 import type { DelegationIdentity } from '@dfinity/identity';
-import { useSiwbIdentity } from 'ic-use-siwb-identity';
+import { useSiwbIdentity } from '@/lib/siwb-identity';
 import {
   ensurePlugAgent,
   getPlugPrincipal,

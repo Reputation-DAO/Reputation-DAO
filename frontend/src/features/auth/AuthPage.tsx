@@ -6,7 +6,7 @@ import { Wallet, Shield, Zap, ArrowRight, CheckCircle, Coins } from "lucide-reac
 import Navigation from "@/components/ui/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRole } from "@/contexts/RoleContext";
-import { useSiwbIdentity, type WalletProviderKey } from "ic-use-siwb-identity";
+import { useSiwbIdentity, type WalletProviderKey } from "@/lib/siwb-identity";
 
 const WalletOption = ({ icon: Icon, name, description, isRecommended, isConnected, onConnect, isLoading }: {
   icon: any;

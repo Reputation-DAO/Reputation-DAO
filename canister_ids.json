@@ -8,6 +8,9 @@
   "frontend": {
     "ic": "37le5-2yaaa-aaaam-qdwhq-cai"
   },
+  "ic_siwb_provider": {
+    "ic": "vrh5i-rqaaa-aaaam-qepla-cai"
+  },
   "reputation_dao": {
     "ic": "owyeu-jiaaa-aaaam-qdvwq-cai"
   }

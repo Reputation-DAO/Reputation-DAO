@@ -3,7 +3,7 @@ import { Toaster, SonnerToaster } from "@/components/ui/composed";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { SiwbIdentityProvider } from "ic-use-siwb-identity";
+import { SiwbIdentityProvider } from "@/lib/siwb-identity";
 
 import { RoleProvider } from "./contexts/RoleContext";
 import { RouteProvider } from "./contexts/RouteContext";
