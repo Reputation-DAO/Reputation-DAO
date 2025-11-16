@@ -17,7 +17,7 @@ serde_cbor = "0.11"
 candid = "0.9.11"
 hex = "0.4.3"
 ic-cdk = "0.11.3"
-ic-cdk-timers = { version = "0.5.1", optional = true }
+ic-cdk-timers = { version = "0.9.1", optional = true }
 icrc-ledger-types = "0.1.4"
 ic-certified-map = "0.4.0"
 url = "2.4.1"
@@ -43,5 +43,4 @@ hex-literal = "0.2.1"
 
 [features]
 nonce = ["rand_chacha", "ic-cdk-timers"]
-
 

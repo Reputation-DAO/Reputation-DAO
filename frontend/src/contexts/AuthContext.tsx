@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Principal } from '@dfinity/principal';
 import type { DelegationIdentity } from '@dfinity/identity';
 import { useSiwbIdentity } from '@/lib/siwb-identity';
+import { useSiweIdentity } from '@/lib/siwe-identity';
 import {
   ensurePlugAgent,
   getPlugPrincipal,
@@ -28,7 +29,7 @@ import {
 } from '@/lib/canisters';
 import type { _SERVICE as FactoriaActor } from '@/declarations/factoria/factoria.did.d.ts';
 
-export type AuthMethod = 'plug' | 'internetIdentity' | 'siwb' | null;
+export type AuthMethod = 'plug' | 'internetIdentity' | 'siwb' | 'siwe' | null;
 
 const STORAGE_KEY = 'repdao:authMethod';
 const DEFAULT_IC_HOST = import.meta.env.VITE_IC_HOST || PLUG_HOST;
@@ -62,7 +63,7 @@ function loadAuthMethod(): AuthMethod {
   if (typeof window === 'undefined') return null;
   try {
     const value = window.localStorage.getItem(STORAGE_KEY);
-    return value === 'plug' || value === 'internetIdentity' || value === 'siwb' ? value : null;
+    return value === 'plug' || value === 'internetIdentity' || value === 'siwb' || value === 'siwe' ? value : null;
   } catch {
     return null;
   }
@@ -75,11 +76,13 @@ interface AuthContextType {
   principal: Principal | null;
   isLoading: boolean;
   btcAddress: string | null;
+  ethAddress: string | null;
   
   // Authentication methods
   loginWithPlug: () => Promise<void>;
   loginWithInternetIdentity: () => Promise<void>;
   loginWithSiwb: () => Promise<void>;
+  loginWithSiwe: () => Promise<void>;
   logout: () => Promise<void>;
   
   // Connection checking
@@ -98,11 +101,13 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const siwb = useSiwbIdentity();
+  const siwe = useSiweIdentity();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authMethod, setAuthMethod] = useState<AuthMethod>(loadAuthMethod());
   const [principal, setPrincipal] = useState<Principal | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [btcAddress, setBtcAddress] = useState<string | null>(null);
+  const [ethAddress, setEthAddress] = useState<string | null>(null);
 
   const resolvePlugPrincipal = useCallback(async (): Promise<Principal | null> => {
     if (!(await isPlugConnected())) return null;
@@ -131,10 +136,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setAuthMethod('siwb');
       setPrincipal(siwbPrincipal);
       setBtcAddress(siwb.identityAddress ?? null);
+      setEthAddress(null);
       saveAuthMethod('siwb');
       setPlugDisabled(true);
     },
     [siwb.identityAddress],
+  );
+
+  const adoptSiweIdentity = useCallback(
+    (identity: DelegationIdentity) => {
+      const siwePrincipal = identity.getPrincipal();
+      setIsAuthenticated(true);
+      setAuthMethod('siwe');
+      setPrincipal(siwePrincipal);
+      setEthAddress(siwe.identityAddress ?? null);
+      setBtcAddress(null);
+      saveAuthMethod('siwe');
+      setPlugDisabled(true);
+    },
+    [siwe.identityAddress],
   );
 
   /**
@@ -144,19 +164,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsLoading(true);
 
     try {
-      if (siwb.isInitializing) {
+      if (siwb.isInitializing || siwe.isInitializing) {
         return;
       }
 
       const last = loadAuthMethod();
-      const order: AuthMethod[] =
-        last === 'plug'
-          ? ['plug', 'internetIdentity', 'siwb']
-          : last === 'internetIdentity'
-          ? ['internetIdentity', 'plug', 'siwb']
-          : last === 'siwb'
-          ? ['siwb', 'plug', 'internetIdentity']
-          : ['plug', 'internetIdentity', 'siwb'];
+      const defaultOrder: AuthMethod[] = ['plug', 'internetIdentity', 'siwb', 'siwe'];
+      const order: AuthMethod[] = last
+        ? ([last, ...defaultOrder.filter(method => method !== last)] as AuthMethod[])
+        : defaultOrder;
 
       for (const method of order) {
         if (method === 'plug') {
@@ -167,6 +183,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             setPrincipal(plugPrincipal);
             saveAuthMethod('plug');
             setBtcAddress(null);
+            setEthAddress(null);
             setPlugDisabled(false);
             console.log('✅ Authenticated with Plug:', plugPrincipal.toString());
             return;
@@ -179,6 +196,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             setPrincipal(iiPrincipal);
             saveAuthMethod('internetIdentity');
             setBtcAddress(null);
+            setEthAddress(null);
             setPlugDisabled(true);
             try {
               await disconnectPlug();
@@ -194,6 +212,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             console.log('✅ Authenticated with SIWB:', siwb.identity.getPrincipal().toString());
             return;
           }
+        } else if (method === 'siwe') {
+          if (siwe.identity) {
+            adoptSiweIdentity(siwe.identity);
+            console.log('✅ Authenticated with SIWE:', siwe.identity.getPrincipal().toString());
+            return;
+          }
         }
       }
 
@@ -201,6 +225,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setAuthMethod(null);
       setPrincipal(null);
       setBtcAddress(null);
+      setEthAddress(null);
       saveAuthMethod(null);
       console.log('ℹ️ No authentication found');
     } catch (error) {
@@ -209,16 +234,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setAuthMethod(null);
       setPrincipal(null);
       setBtcAddress(null);
+      setEthAddress(null);
       saveAuthMethod(null);
     } finally {
       setIsLoading(false);
     }
   }, [
     adoptSiwbIdentity,
+    adoptSiweIdentity,
     resolveInternetIdentityPrincipal,
     resolvePlugPrincipal,
     siwb.identity,
     siwb.isInitializing,
+    siwe.identity,
+    siwe.isInitializing,
   ]);
 
   /**
@@ -297,6 +326,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const loginWithSiwe = async () => {
+    setIsLoading(true);
+    try {
+      const identity = await siwe.login();
+      if (!identity) {
+        throw new Error('SIWE login was cancelled.');
+      }
+      adoptSiweIdentity(identity);
+      console.log('✅ SIWE login successful:', identity.getPrincipal().toString());
+    } catch (error) {
+      console.error('❌ SIWE login failed:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   /**
    * Logout from current authentication method
    */
@@ -310,12 +356,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         await logoutInternetIdentity();
       } else if (authMethod === 'siwb') {
         siwb.clear();
+      } else if (authMethod === 'siwe') {
+        siwe.clear();
       }
 
       setIsAuthenticated(false);
       setAuthMethod(null);
       setPrincipal(null);
-       setBtcAddress(null);
+      setBtcAddress(null);
+      setEthAddress(null);
       saveAuthMethod(null);
       
       console.log('✅ Logout successful');
@@ -345,6 +394,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (!siwb.identity) throw new Error('Bitcoin identity unavailable.');
       return makeChildWithIdentity(siwb.identity, { canisterId, host: DEFAULT_IC_HOST });
     }
+    if (authMethod === 'siwe') {
+      if (!siwe.identity) throw new Error('Ethereum identity unavailable.');
+      return makeChildWithIdentity(siwe.identity, { canisterId, host: DEFAULT_IC_HOST });
+    }
     throw new Error(`Unsupported authentication method: ${authMethod}`);
   };
 
@@ -362,6 +415,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       case 'siwb':
         if (!siwb.identity) throw new Error('Bitcoin identity unavailable.');
         return makeFactoriaWithIdentity({ identity: siwb.identity });
+      case 'siwe':
+        if (!siwe.identity) throw new Error('Ethereum identity unavailable.');
+        return makeFactoriaWithIdentity({ identity: siwe.identity });
       default:
         throw new Error(`Unsupported authentication method: ${authMethod}`);
     }
@@ -388,15 +444,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, [adoptSiwbIdentity, authMethod, siwb.identity, siwb.identityAddress, siwb.isInitializing]);
 
+  useEffect(() => {
+    if (siwe.isInitializing) return;
+    if (siwe.identity) {
+      setEthAddress(siwe.identityAddress ?? null);
+      if (authMethod !== 'siwe') {
+        adoptSiweIdentity(siwe.identity);
+      }
+    } else if (authMethod === 'siwe') {
+      setIsAuthenticated(false);
+      setAuthMethod(null);
+      setPrincipal(null);
+      setEthAddress(null);
+      saveAuthMethod(null);
+    }
+  }, [adoptSiweIdentity, authMethod, siwe.identity, siwe.identityAddress, siwe.isInitializing]);
+
   const value: AuthContextType = {
     isAuthenticated,
     authMethod,
     principal,
     isLoading,
     btcAddress,
+    ethAddress,
     loginWithPlug,
     loginWithInternetIdentity,
     loginWithSiwb,
+    loginWithSiwe,
     logout,
     checkConnection,
     getChildActor,

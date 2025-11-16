@@ -4,6 +4,7 @@ import { Toaster, SonnerToaster } from "@/components/ui/composed";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { SiwbIdentityProvider } from "@/lib/siwb-identity";
+import { SiweIdentityProvider } from "@/lib/siwe-identity";
 
 import { RoleProvider } from "./contexts/RoleContext";
 import { RouteProvider } from "./contexts/RouteContext";
@@ -11,6 +12,8 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { idlFactory as siwbIdlFactory } from "@/declarations/ic_siwb_provider/ic_siwb_provider.did.js";
 import type { _SERVICE as SiwbProvider } from "@/declarations/ic_siwb_provider/ic_siwb_provider.did.d.ts";
+import { idlFactory as siweIdlFactory } from "@/declarations/ic_siwe_provider/ic_siwe_provider.did.js";
+import type { _SERVICE as SiweProvider } from "@/declarations/ic_siwe_provider/ic_siwe_provider.did.d.ts";
 
 import AuthPage from "@/features/auth";
 import { HomePage, BlogPage, CommunityPage, PostViewerPage, CreatorPage } from "@/features/marketing";
@@ -40,6 +43,13 @@ if (!siwbCanisterId) {
 const siwbHost = import.meta.env.VITE_SIWB_PROVIDER_HOST || import.meta.env.VITE_IC_HOST || "https://icp-api.io";
 const SiwbProviderWrapper = SiwbIdentityProvider<SiwbProvider>;
 
+const siweCanisterId = import.meta.env.VITE_SIWE_PROVIDER_CANISTER_ID;
+if (!siweCanisterId) {
+  throw new Error("VITE_SIWE_PROVIDER_CANISTER_ID is required to use SIWE authentication.");
+}
+const siweHost = import.meta.env.VITE_SIWE_PROVIDER_HOST || import.meta.env.VITE_IC_HOST || "https://icp-api.io";
+const SiweProviderWrapper = SiweIdentityProvider<SiweProvider>;
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
@@ -48,47 +58,53 @@ const App = () => (
         canisterId={siwbCanisterId}
         httpAgentOptions={{ host: siwbHost }}
       >
-        <AuthProvider>
-          <BrowserRouter>
-            <RouteProvider>
-              <RoleProvider>
-                <TooltipProvider>
-                  <Toaster />
-                  <SonnerToaster />
-                  <Routes>
-                    {/* Marketing / top-level */}
-                    <Route path="/" element={<HomePage />} />
-                    <Route path="/blog" element={<BlogPage />} />
-                    <Route path="/posts/:id" element={<PostViewerPage />} />
-                    <Route path="/community" element={<CommunityPage />} />
-                    <Route path="/creator" element={<CreatorPage />} />
-                    <Route path="/auth" element={<AuthPage />} />
+        <SiweProviderWrapper
+          idlFactory={siweIdlFactory}
+          canisterId={siweCanisterId}
+          httpAgentOptions={{ host: siweHost }}
+        >
+          <AuthProvider>
+            <BrowserRouter>
+              <RouteProvider>
+                <RoleProvider>
+                  <TooltipProvider>
+                    <Toaster />
+                    <SonnerToaster />
+                    <Routes>
+                      {/* Marketing / top-level */}
+                      <Route path="/" element={<HomePage />} />
+                      <Route path="/blog" element={<BlogPage />} />
+                      <Route path="/posts/:id" element={<PostViewerPage />} />
+                      <Route path="/community" element={<CommunityPage />} />
+                      <Route path="/creator" element={<CreatorPage />} />
+                      <Route path="/auth" element={<AuthPage />} />
 
-                    {/* Docs (all enclosed by DocsLayout) */}
-                    <Route path="/docs" element={<DocsLayout />}>
-                      <Route index element={<DocsIndex />} />
-                      <Route path="*" element={<DocPage />} />
-                    </Route>
+                      {/* Docs (all enclosed by DocsLayout) */}
+                      <Route path="/docs" element={<DocsLayout />}>
+                        <Route index element={<DocsIndex />} />
+                        <Route path="*" element={<DocPage />} />
+                      </Route>
 
-                    {/* App flows */}
-                    <Route path="/org-selector" element={<OrgSelectorPage />} />
-                    <Route path="/dashboard/home/:cid" element={<DashboardPage />} />
-                    <Route path="/dashboard/award-rep/:cid" element={<AwardRepPage />} />
-                    <Route path="/dashboard/revoke-rep/:cid" element={<RevokeRepPage />} />
-                    <Route path="/dashboard/manage-awarders/:cid" element={<ManageAwardersPage />} />
-                    <Route path="/dashboard/view-balances/:cid" element={<ViewBalancesPage />} />
-                    <Route path="/dashboard/transaction-log/:cid" element={<TransactionLogPage />} />
-                    <Route path="/dashboard/decay-system/:cid" element={<DecaySystemPage />} />
-                    <Route path="/dashboard/settings/:cid" element={<SettingsAdminPage />} />
+                      {/* App flows */}
+                      <Route path="/org-selector" element={<OrgSelectorPage />} />
+                      <Route path="/dashboard/home/:cid" element={<DashboardPage />} />
+                      <Route path="/dashboard/award-rep/:cid" element={<AwardRepPage />} />
+                      <Route path="/dashboard/revoke-rep/:cid" element={<RevokeRepPage />} />
+                      <Route path="/dashboard/manage-awarders/:cid" element={<ManageAwardersPage />} />
+                      <Route path="/dashboard/view-balances/:cid" element={<ViewBalancesPage />} />
+                      <Route path="/dashboard/transaction-log/:cid" element={<TransactionLogPage />} />
+                      <Route path="/dashboard/decay-system/:cid" element={<DecaySystemPage />} />
+                      <Route path="/dashboard/settings/:cid" element={<SettingsAdminPage />} />
 
-                    {/* Catch-all */}
-                    <Route path="*" element={<NotFoundPage />} />
-                  </Routes>
-                </TooltipProvider>
-              </RoleProvider>
-            </RouteProvider>
-          </BrowserRouter>
-        </AuthProvider>
+                      {/* Catch-all */}
+                      <Route path="*" element={<NotFoundPage />} />
+                    </Routes>
+                  </TooltipProvider>
+                </RoleProvider>
+              </RouteProvider>
+            </BrowserRouter>
+          </AuthProvider>
+        </SiweProviderWrapper>
       </SiwbProviderWrapper>
     </ThemeProvider>
   </QueryClientProvider>

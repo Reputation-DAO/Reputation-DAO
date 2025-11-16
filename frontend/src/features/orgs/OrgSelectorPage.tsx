@@ -37,13 +37,14 @@ import { principalToAccountIdentifier } from "@/utils/accountIdentifier";
 
 // ---------------- Wallet Badge (tiny) ----------------
 const WalletDisplay = () => {
-  const { isAuthenticated, principal, authMethod, btcAddress } = useAuth();
+  const { isAuthenticated, principal, authMethod, btcAddress, ethAddress } = useAuth();
   if (!isAuthenticated || !principal) return null;
   const text = principal.toText();
   const short = `${text.slice(0, 8)}...${text.slice(-8)}`;
   const btcShort = btcAddress ? `${btcAddress.slice(0, 6)}...${btcAddress.slice(-4)}` : null;
+  const ethShort = ethAddress ? `${ethAddress.slice(0, 6)}...${ethAddress.slice(-4)}` : null;
   const label =
-    authMethod === "internetIdentity" ? "II" : authMethod === "siwb" ? "BTC" : "Plug";
+    authMethod === "internetIdentity" ? "II" : authMethod === "siwb" ? "BTC" : authMethod === "siwe" ? "ETH" : "Plug";
 
   const handleCopy = async () => {
     try {
@@ -71,6 +72,9 @@ const WalletDisplay = () => {
         </span>
         {authMethod === "siwb" && btcShort && (
           <span className="text-xs text-muted-foreground/80">BTC · {btcShort}</span>
+        )}
+        {authMethod === "siwe" && ethShort && (
+          <span className="text-xs text-muted-foreground/80">ETH · {ethShort}</span>
         )}
       </div>
       <Button

@@ -25,6 +25,11 @@
       "type": "rust",
       "package": "ic_siwb_provider",
       "candid": "src/siwb/ic_siwb_provider/ic_siwb_provider.did"
+    },
+    "ic_siwe_provider": {
+      "type": "rust",
+      "package": "ic_siwe_provider",
+      "candid": "src/siwe/ic_siwe_provider/ic_siwe_provider.did"
     }
   },
   "dfx": "0.27.0",
