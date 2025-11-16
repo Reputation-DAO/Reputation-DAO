@@ -1,6 +1,8 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { Principal } from '@dfinity/principal';
+import type { DelegationIdentity } from '@dfinity/identity';
+import { useSiwbIdentity } from 'ic-use-siwb-identity';
 import {
   ensurePlugAgent,
   getPlugPrincipal,
@@ -20,13 +22,16 @@ import {
   type ChildActor,
   makeFactoriaWithPlug,
   makeFactoriaWithInternetIdentity,
+  makeChildWithIdentity,
+  makeFactoriaWithIdentity,
   getFactoriaCanisterId,
 } from '@/lib/canisters';
 import type { _SERVICE as FactoriaActor } from '@/declarations/factoria/factoria.did.d.ts';
 
-export type AuthMethod = 'plug' | 'internetIdentity' | null;
+export type AuthMethod = 'plug' | 'internetIdentity' | 'siwb' | null;
 
 const STORAGE_KEY = 'repdao:authMethod';
+const DEFAULT_IC_HOST = import.meta.env.VITE_IC_HOST || PLUG_HOST;
 const setPlugDisabled = (disabled: boolean) => {
   if (typeof window === 'undefined') return;
   try {
@@ -57,7 +62,7 @@ function loadAuthMethod(): AuthMethod {
   if (typeof window === 'undefined') return null;
   try {
     const value = window.localStorage.getItem(STORAGE_KEY);
-    return value === 'plug' || value === 'internetIdentity' ? value : null;
+    return value === 'plug' || value === 'internetIdentity' || value === 'siwb' ? value : null;
   } catch {
     return null;
   }
@@ -69,10 +74,12 @@ interface AuthContextType {
   authMethod: AuthMethod;
   principal: Principal | null;
   isLoading: boolean;
+  btcAddress: string | null;
   
   // Authentication methods
   loginWithPlug: () => Promise<void>;
   loginWithInternetIdentity: () => Promise<void>;
+  loginWithSiwb: () => Promise<void>;
   logout: () => Promise<void>;
   
   // Connection checking
@@ -90,12 +97,14 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  const siwb = useSiwbIdentity();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authMethod, setAuthMethod] = useState<AuthMethod>(loadAuthMethod());
   const [principal, setPrincipal] = useState<Principal | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [btcAddress, setBtcAddress] = useState<string | null>(null);
 
-  const resolvePlugPrincipal = async (): Promise<Principal | null> => {
+  const resolvePlugPrincipal = useCallback(async (): Promise<Principal | null> => {
     if (!(await isPlugConnected())) return null;
     try {
       return await getPlugPrincipal();
@@ -103,9 +112,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.error('Failed to read Plug principal:', err);
       return null;
     }
-  };
+  }, []);
 
-  const resolveInternetIdentityPrincipal = async (): Promise<Principal | null> => {
+  const resolveInternetIdentityPrincipal = useCallback(async (): Promise<Principal | null> => {
     try {
       if (!(await isInternetIdentityAuthenticated())) return null;
       return await getInternetIdentityPrincipal();
@@ -113,22 +122,41 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.error('Failed to read Internet Identity principal:', err);
       return null;
     }
-  };
+  }, []);
+
+  const adoptSiwbIdentity = useCallback(
+    (identity: DelegationIdentity) => {
+      const siwbPrincipal = identity.getPrincipal();
+      setIsAuthenticated(true);
+      setAuthMethod('siwb');
+      setPrincipal(siwbPrincipal);
+      setBtcAddress(siwb.identityAddress ?? null);
+      saveAuthMethod('siwb');
+      setPlugDisabled(true);
+    },
+    [siwb.identityAddress],
+  );
 
   /**
    * Check current authentication status
    */
-  const checkConnection = async () => {
+  const checkConnection = useCallback(async () => {
     setIsLoading(true);
 
     try {
+      if (siwb.isInitializing) {
+        return;
+      }
+
       const last = loadAuthMethod();
       const order: AuthMethod[] =
         last === 'plug'
-          ? ['plug', 'internetIdentity']
+          ? ['plug', 'internetIdentity', 'siwb']
           : last === 'internetIdentity'
-          ? ['internetIdentity', 'plug']
-          : ['plug', 'internetIdentity'];
+          ? ['internetIdentity', 'plug', 'siwb']
+          : last === 'siwb'
+          ? ['siwb', 'plug', 'internetIdentity']
+          : ['plug', 'internetIdentity', 'siwb'];
 
       for (const method of order) {
         if (method === 'plug') {
@@ -138,6 +166,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             setAuthMethod('plug');
             setPrincipal(plugPrincipal);
             saveAuthMethod('plug');
+            setBtcAddress(null);
             setPlugDisabled(false);
             console.log('✅ Authenticated with Plug:', plugPrincipal.toString());
             return;
@@ -149,6 +178,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             setAuthMethod('internetIdentity');
             setPrincipal(iiPrincipal);
             saveAuthMethod('internetIdentity');
+            setBtcAddress(null);
             setPlugDisabled(true);
             try {
               await disconnectPlug();
@@ -158,12 +188,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             console.log('✅ Authenticated with Internet Identity:', iiPrincipal.toString());
             return;
           }
+        } else if (method === 'siwb') {
+          if (siwb.identity) {
+            adoptSiwbIdentity(siwb.identity);
+            console.log('✅ Authenticated with SIWB:', siwb.identity.getPrincipal().toString());
+            return;
+          }
         }
       }
 
       setIsAuthenticated(false);
       setAuthMethod(null);
       setPrincipal(null);
+      setBtcAddress(null);
       saveAuthMethod(null);
       console.log('ℹ️ No authentication found');
     } catch (error) {
@@ -171,11 +208,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsAuthenticated(false);
       setAuthMethod(null);
       setPrincipal(null);
+      setBtcAddress(null);
       saveAuthMethod(null);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [
+    adoptSiwbIdentity,
+    resolveInternetIdentityPrincipal,
+    resolvePlugPrincipal,
+    siwb.identity,
+    siwb.isInitializing,
+  ]);
 
   /**
    * Login with Plug wallet
@@ -236,6 +280,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const loginWithSiwb = async () => {
+    setIsLoading(true);
+    try {
+      const identity = await siwb.login();
+      if (!identity) {
+        throw new Error('SIWB login was cancelled.');
+      }
+      adoptSiwbIdentity(identity);
+      console.log('✅ SIWB login successful:', identity.getPrincipal().toString());
+    } catch (error) {
+      console.error('❌ SIWB login failed:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   /**
    * Logout from current authentication method
    */
@@ -247,11 +308,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         await disconnectPlug();
       } else if (authMethod === 'internetIdentity') {
         await logoutInternetIdentity();
+      } else if (authMethod === 'siwb') {
+        siwb.clear();
       }
 
       setIsAuthenticated(false);
       setAuthMethod(null);
       setPrincipal(null);
+       setBtcAddress(null);
       saveAuthMethod(null);
       
       console.log('✅ Logout successful');
@@ -272,8 +336,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
     if (authMethod === 'plug') {
       await ensurePlugAgent({ host: PLUG_HOST, whitelist: [canisterId] });
+      return makeChildActor('plug', { canisterId });
     }
-    return makeChildActor(authMethod, { canisterId });
+    if (authMethod === 'internetIdentity') {
+      return makeChildActor('internetIdentity', { canisterId });
+    }
+    if (authMethod === 'siwb') {
+      if (!siwb.identity) throw new Error('Bitcoin identity unavailable.');
+      return makeChildWithIdentity(siwb.identity, { canisterId, host: DEFAULT_IC_HOST });
+    }
+    throw new Error(`Unsupported authentication method: ${authMethod}`);
   };
 
   const getFactoriaActor = async () => {
@@ -287,6 +359,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return makeFactoriaWithPlug();
       case 'internetIdentity':
         return makeFactoriaWithInternetIdentity();
+      case 'siwb':
+        if (!siwb.identity) throw new Error('Bitcoin identity unavailable.');
+        return makeFactoriaWithIdentity({ identity: siwb.identity });
       default:
         throw new Error(`Unsupported authentication method: ${authMethod}`);
     }
@@ -295,15 +370,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Check connection on mount
   useEffect(() => {
     checkConnection();
-  }, []);
+  }, [checkConnection]);
+
+  useEffect(() => {
+    if (siwb.isInitializing) return;
+    if (siwb.identity) {
+      setBtcAddress(siwb.identityAddress ?? null);
+      if (authMethod !== 'siwb') {
+        adoptSiwbIdentity(siwb.identity);
+      }
+    } else if (authMethod === 'siwb') {
+      setIsAuthenticated(false);
+      setAuthMethod(null);
+      setPrincipal(null);
+      setBtcAddress(null);
+      saveAuthMethod(null);
+    }
+  }, [adoptSiwbIdentity, authMethod, siwb.identity, siwb.identityAddress, siwb.isInitializing]);
 
   const value: AuthContextType = {
     isAuthenticated,
     authMethod,
     principal,
     isLoading,
+    btcAddress,
     loginWithPlug,
     loginWithInternetIdentity,
+    loginWithSiwb,
     logout,
     checkConnection,
     getChildActor,

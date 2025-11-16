@@ -1,0 +1,19 @@
+/home/kali/Desktop/Reputation-Dao/target/wasm32-unknown-unknown/release/deps/ic_siwb-198742b041936824.d: src/siwb/ic_siwb/src/lib.rs src/siwb/ic_siwb/src/delegation.rs src/siwb/ic_siwb/src/error.rs src/siwb/ic_siwb/src/hash.rs src/siwb/ic_siwb/src/init.rs src/siwb/ic_siwb/src/login.rs src/siwb/ic_siwb/src/macros.rs src/siwb/ic_siwb/src/rand.rs src/siwb/ic_siwb/src/settings.rs src/siwb/ic_siwb/src/signature_map.rs src/siwb/ic_siwb/src/siwb.rs src/siwb/ic_siwb/src/time.rs src/siwb/ic_siwb/src/utils.rs
+
+/home/kali/Desktop/Reputation-Dao/target/wasm32-unknown-unknown/release/deps/libic_siwb-198742b041936824.rlib: src/siwb/ic_siwb/src/lib.rs src/siwb/ic_siwb/src/delegation.rs src/siwb/ic_siwb/src/error.rs src/siwb/ic_siwb/src/hash.rs src/siwb/ic_siwb/src/init.rs src/siwb/ic_siwb/src/login.rs src/siwb/ic_siwb/src/macros.rs src/siwb/ic_siwb/src/rand.rs src/siwb/ic_siwb/src/settings.rs src/siwb/ic_siwb/src/signature_map.rs src/siwb/ic_siwb/src/siwb.rs src/siwb/ic_siwb/src/time.rs src/siwb/ic_siwb/src/utils.rs
+
+/home/kali/Desktop/Reputation-Dao/target/wasm32-unknown-unknown/release/deps/libic_siwb-198742b041936824.rmeta: src/siwb/ic_siwb/src/lib.rs src/siwb/ic_siwb/src/delegation.rs src/siwb/ic_siwb/src/error.rs src/siwb/ic_siwb/src/hash.rs src/siwb/ic_siwb/src/init.rs src/siwb/ic_siwb/src/login.rs src/siwb/ic_siwb/src/macros.rs src/siwb/ic_siwb/src/rand.rs src/siwb/ic_siwb/src/settings.rs src/siwb/ic_siwb/src/signature_map.rs src/siwb/ic_siwb/src/siwb.rs src/siwb/ic_siwb/src/time.rs src/siwb/ic_siwb/src/utils.rs
+
+src/siwb/ic_siwb/src/lib.rs:
+src/siwb/ic_siwb/src/delegation.rs:
+src/siwb/ic_siwb/src/error.rs:
+src/siwb/ic_siwb/src/hash.rs:
+src/siwb/ic_siwb/src/init.rs:
+src/siwb/ic_siwb/src/login.rs:
+src/siwb/ic_siwb/src/macros.rs:
+src/siwb/ic_siwb/src/rand.rs:
+src/siwb/ic_siwb/src/settings.rs:
+src/siwb/ic_siwb/src/signature_map.rs:
+src/siwb/ic_siwb/src/siwb.rs:
+src/siwb/ic_siwb/src/time.rs:
+src/siwb/ic_siwb/src/utils.rs:

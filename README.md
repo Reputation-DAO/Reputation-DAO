@@ -206,14 +206,25 @@ Refer to `src/reputation_dao/main.mo` for complete signatures and inline documen
 - Role detection & access control: `frontend/src/contexts/RoleContext.tsx` queries the factory and child to determine admin / awarder / member roles.
 - Key pages:
   - Dashboard flows in `frontend/src/pages/Dashboard.tsx` and route-specific views (`AwardRep`, `RevokeRep`, `ManageAwarders`, `ViewBalances`, `TransactionLog`, `DecaySystem`).
-  - Documentation and quickstart content in `frontend/src/pages/Docs.tsx` (`components/docs/*`).
-  - Community hub at `frontend/src/pages/Community.tsx` linking demos, Figma artifacts, governance calls, and onboarding resources.
-  - Blog experience under `frontend/src/components/blog/` backed by the `blog_backend` canister.
+- Documentation and quickstart content in `frontend/src/pages/Docs.tsx` (`components/docs/*`).
+- Community hub at `frontend/src/pages/Community.tsx` linking demos, Figma artifacts, governance calls, and onboarding resources.
+- Blog experience under `frontend/src/components/blog/` backed by the `blog_backend` canister.
 - Styling: Tailwind CSS, shadcn/ui components, Radix primitives, Material UI fragments, and custom overrides in `frontend/src/theme.ts`.
 - NPM scripts:
   - `npm run dev` – local dev server.
   - `npm run build` / `npm run preview` – production build and preview.
   - `npm run lint` – ESLint configuration (see `eslint.config.js`).
+
+### Bitcoin Sign-In (SIWB)
+
+- The frontend now supports Sign-In with Bitcoin (SIWB) via the [Astrox SIWB provider](https://github.com/AstroxNetwork/ic-siwb). Wraps the global app with `SiwbIdentityProvider` so React components can call `useSiwbIdentity()` alongside the existing Plug and Internet Identity flows (`frontend/src/App.tsx`).
+- Deploy the `ic_siwb_provider` canister (Rust) once per environment and configure it with your frontend domain, URI, salt, and allowed target canisters. Record its principal plus RPC host inside `.env`:
+  ```
+  VITE_SIWB_PROVIDER_CANISTER_ID=be2us-64aaa-aaaaa-qaabq-cai
+  VITE_SIWB_PROVIDER_HOST=https://icp-api.io   # or http://127.0.0.1:4943 for local
+  ```
+- `AuthContext` understands a third `authMethod` (`'siwb'`), surfaces the caller’s Bitcoin address, and builds Motoko actors by injecting the SIWB `DelegationIdentity`. Wallets that speak the LaserEyes API (Xverse, Unisat, OKX, etc.) can now connect through the `/auth` page’s “Sign in with Bitcoin” card.
+- No Motoko changes are required if SIWB is only used for authentication. If you need a BTC ↔ principal mapping, read it from the provider canister via `get_address` / `get_principal` or persist it inside the child canisters.
 
 ## Deployment Targets
 

@@ -1,0 +1,6 @@
+[workspace]
+resolver = "2"
+members = [
+    "src/siwb/ic_siwb",
+    "src/siwb/ic_siwb_provider",
+]
