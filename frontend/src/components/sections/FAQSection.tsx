@@ -56,9 +56,9 @@ const faqs = [
 
 const FAQSection = () => {
   return (
-    <section id="faq" className="relative z-10 py-24 md:py-32 bg-background overflow-hidden">
+    <section id="faq" className="relative z-10 py-24 md:py-32 bg-gradient-to-b from-slate-50 via-white to-slate-50 dark:from-[#0a0e1a] dark:via-[#0a0e1a] dark:to-[#0a0e1a] overflow-hidden">
       {/* Smooth gradient transition from previous section */}
-      <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-background via-transparent to-transparent z-0 pointer-events-none" />
+      <div className="absolute top-0 left-0 right-0 h-48 bg-gradient-to-b from-slate-50 via-slate-100/50 to-transparent dark:from-[#0a0e1a] dark:via-[#0a0e1a]/50 dark:to-transparent z-0 pointer-events-none" />
       
       <div className="relative mx-auto max-w-7xl px-6 py-16 sm:px-10 lg:px-16">
         <motion.div
