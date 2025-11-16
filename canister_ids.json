@@ -11,6 +11,9 @@
   "ic_siwb_provider": {
     "ic": "vrh5i-rqaaa-aaaam-qepla-cai"
   },
+  "ic_siwe_provider": {
+    "ic": "uopo7-siaaa-aaaam-qeppq-cai"
+  },
   "reputation_dao": {
     "ic": "owyeu-jiaaa-aaaam-qdvwq-cai"
   }

@@ -208,6 +208,8 @@ const UseCasesSection = () => {
                         src={useCase.image}
                         alt={useCase.title}
                         className="h-56 w-full object-cover"
+                        loading="lazy"
+                        decoding="async"
                       />
                     </div>
                     <div className="rounded-2xl border border-dashed border-blue-500/30 bg-blue-500/5 px-4 py-4 text-sm text-gray-300">

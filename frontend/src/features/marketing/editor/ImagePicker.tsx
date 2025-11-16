@@ -91,7 +91,13 @@ export function ImagePicker({
         <div className="grid gap-4 md:grid-cols-[200px,1fr] md:gap-6">
           <div className="overflow-hidden rounded-md border border-border">
             {previewUrl ? (
-              <img src={previewUrl} alt={value.alt} className="h-48 w-full object-cover" />
+              <img
+                src={previewUrl}
+                alt={value.alt}
+                className="h-48 w-full object-cover"
+                loading="lazy"
+                decoding="async"
+              />
             ) : (
               <div className="grid h-48 place-items-center bg-muted">
                 <span className="text-xs text-muted-foreground">Awaiting Supabase URL</span>

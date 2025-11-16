@@ -75,8 +75,11 @@ const Navigation = () => {
           <Link to="/" className="flex items-center gap-2 group">
             <img 
               src="/main.png" 
-              alt="Reputation DAO" 
+              alt="Reputation DAO logo" 
               className="w-8 h-8 rounded-lg group-hover:scale-110 transition-all duration-300"
+              width="32"
+              height="32"
+              decoding="async"
             />
             <span className="text-xl font-bold text-white">
               Reputation DAO
@@ -113,6 +116,7 @@ const Navigation = () => {
               size="sm"
               onClick={() => setIsOpen(!isOpen)}
               className="text-foreground"
+              aria-label={isOpen ? "Close navigation menu" : "Open navigation menu"}
             >
               {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </Button>

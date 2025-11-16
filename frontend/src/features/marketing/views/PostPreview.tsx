@@ -18,7 +18,13 @@ export function PostPreview({ post, showMeta = true }: PostPreviewProps) {
       {post.hero?.media && (
         <div className="overflow-hidden rounded-lg border border-border">
           {heroUrl ? (
-            <img src={heroUrl} alt={post.hero.media.alt} className="h-80 w-full object-cover" />
+            <img
+              src={heroUrl}
+              alt={post.hero.media.alt}
+              className="h-80 w-full object-cover"
+              loading="lazy"
+              decoding="async"
+            />
           ) : (
             <div className="grid h-80 w-full place-items-center bg-muted">
               <span className="text-muted-foreground">Hero image unavailable</span>

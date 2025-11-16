@@ -186,6 +186,8 @@ function ImageBlock({ asset, fullWidth }: { asset: MediaAsset; fullWidth: boolea
           src={url}
           alt={asset.alt}
           className={cn('rounded-md border border-muted object-cover', fullWidth ? 'w-full' : '')}
+          loading="lazy"
+          decoding="async"
         />
       ) : (
         <div className="grid h-64 place-items-center rounded-md border border-dashed border-muted">
