@@ -21,6 +21,11 @@
       "main": "src/blog_backend/main.mo",
       "id": "oy2j4-syaaa-aaaam-qdvxq-cai"
     },
+    "treasury": {
+      "type": "motoko",
+      "main": "src/treasury/main.mo"
+     
+    },
     "ic_siwb_provider": {
       "type": "rust",
       "package": "ic_siwb_provider",

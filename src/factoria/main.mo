@@ -950,5 +950,76 @@ public shared({ caller }) func adminForceArchive(canister_id : Principal) : asyn
   }
 };
 
+  /// Admin: reattach a canister that is not (or no longer) tracked in byId/store.
+  /// This lets the factory "remember" an orphan child and optionally add it to the reuse pool.
+  public shared({ caller }) func adminReattachChild(
+    canister_id : Principal,
+    owner       : Principal,
+    note        : Text,
+    visibility  : Visibility,
+    plan        : Plan,
+    status      : ?Status,   // if null -> default to #Archived
+    expires_opt : ?Nat64,    // if null or 0 -> use now + MONTH_NS
+    addToPool   : Bool
+  ) : async Text {
+    requireAdmin(caller);
+
+    // Best-effort: ensure Factory (and optionally owner) are controllers.
+    // If Factory isn't a controller anymore, this may fail, but we ignore errors.
+    try {
+      await IC.update_settings({
+        canister_id;
+        settings = {
+          controllers = ?[Principal.fromActor(ReputationFactory), owner];
+          compute_allocation = null;
+          memory_allocation  = null;
+          freezing_threshold = null;
+        };
+      });
+    } catch (_) {};
+
+    let now = nowNs();
+
+    let finalStatus : Status = switch (status) {
+      case (?s) s;
+      case null #Archived;
+    };
+
+    let expBase : Nat64 = switch (expires_opt) {
+      case (?e) {
+        if (e == 0) now else e;
+      };
+      case null now;
+    };
+
+    let c : Child = {
+      id         = canister_id;
+      owner      = owner;
+      created_at = now;                 // we don't know the old created_at; treat this as reattached time
+      note       = note;
+      status     = finalStatus;
+      visibility = visibility;
+      plan       = plan;
+      expires_at = expBase + MONTH_NS;  // give it a sane window
+    };
+
+    // This updates byId, store, and storeOwnerPairs (dedup aware)
+    recordOrRefresh(c);
+
+    if (addToPool) {
+      var already : Bool = false;
+      for (x in pool.vals()) {
+        if (x == canister_id) {
+          already := true;
+        };
+      };
+      if (not already) {
+        pool.add(canister_id);
+        storePool := Buffer.toArray(pool);
+      };
+    };
+
+    "Success: reattached child " # Principal.toText(canister_id)
+  };
 
 }
