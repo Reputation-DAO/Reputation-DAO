@@ -68,6 +68,15 @@ module {
     tags : [Text];
   };
 
+  public type SpendControl = {
+    usdCapE8s : ?Nat;
+    railDailyCaps : {
+      btc : ?Nat;
+      icp : ?Nat;
+      eth : ?Nat;
+    };
+  };
+
   public type OrgConfig = {
     rails : RailsEnabled;
     microTips : MicroTipConfig;
@@ -75,5 +84,6 @@ module {
     deadman : DeadManConfig;
     thresholds : RailThresholds;
     compliance : ComplianceRule;
+    spendControl : ?SpendControl;
   };
 };

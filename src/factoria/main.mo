@@ -358,6 +358,7 @@ actor ReputationFactory {
     deadman = { enabled = false; inactivityThresholdSeconds = 0 };
     thresholds = { btcMin = 0; icpMin = 0; ethMin = 0 };
     compliance = { kycRequired = false; tagWhitelist = [] };
+    spendControl = null;
   };
 
   func treasuryActor() : ?TreasuryActor =
@@ -464,6 +465,16 @@ actor ReputationFactory {
     logEvent(caller, null, "factory.setAdmin", Principal.toText(p));
   };
   public query func getAdmin() : async Principal { admin };
+  public shared({ caller }) func setBasicPrice(newPriceE8s : Nat) : async Text {
+    requireAdmin(caller);
+    if (newPriceE8s <= FEE_E8S) {
+      return "Error: price must be greater than fee";
+    };
+    basicPriceE8s := newPriceE8s;
+    logEvent(caller, null, "factory.setBasicPrice", "price=" # Nat.toText(newPriceE8s));
+    "Success: basic plan price updated"
+  };
+  public query func getBasicPrice() : async Nat { basicPriceE8s };
   public shared({ caller }) func setTreasuryPrincipal(p : ?Principal) : async Text {
     requireAdmin(caller);
     treasuryPrincipal := p;
@@ -536,7 +547,7 @@ actor ReputationFactory {
 
   let TREASURY_SUB : Blob = Blob.fromArray(Array.tabulate<Nat8>(32, func _ { 0 }));
 
-  let PRICE_E8S : Nat = 100_000_000; // ≈ 1 ICP (tune to your target)
+  stable var basicPriceE8s : Nat = 100_000_000; // e8s, default ≈ 1 ICP (tune to your target)
   let FEE_E8S   : Nat = 10_000;
 
   type BasicPayInfo = {
@@ -558,12 +569,11 @@ actor ReputationFactory {
   };
 
 public query func getBasicPayInfoForChild(cid : Principal) : async BasicPayInfo {
-  // validate child exists
   ignore childOrTrap(cid);
   {
     account_owner = Principal.fromActor(ReputationFactory);
     subaccount = subaccountForCid(cid);
-    amount_e8s = PRICE_E8S;
+    amount_e8s = basicPriceE8s;
     memo = "Basic plan deposit";
   }
 };
@@ -590,16 +600,21 @@ public query func getBasicPayInfoForChild(cid : Principal) : async BasicPayInfo 
         let depAcc = icrcAccount(Principal.fromActor(ReputationFactory), depSub);
 
         // Check subaccount balance
+        let price = basicPriceE8s;
         let bal = await Ledger.icrc1_balance_of(depAcc);
-        if (bal < PRICE_E8S) {
-          return #err ("deposit too low: have=" # Nat.toText(bal) # " need=" # Nat.toText(PRICE_E8S));
+        if (bal < price) {
+          return #err ("deposit too low: have=" # Nat.toText(bal) # " need=" # Nat.toText(price));
         };
 
         // Sweep from the child’s subaccount to treasury
+        if (price <= FEE_E8S) {
+          Debug.trap("basic price must exceed transfer fee");
+        };
+        let sweepAmount = price - FEE_E8S;
         let res = await Ledger.icrc1_transfer({
           from_subaccount = ?depSub;
           to              = icrcAccount(Principal.fromActor(ReputationFactory), TREASURY_SUB);
-          amount          = PRICE_E8S - FEE_E8S;
+          amount          = sweepAmount;
           fee             = ?FEE_E8S;
           memo            = null;
           created_at_time = null
@@ -837,14 +852,14 @@ public query func getBasicPayInfoForChild(cid : Principal) : async BasicPayInfo 
       expires_at = 0;
     };
     updateChild(pending);
-    logEvent(caller, ?cid, "child.createBasicPending", "note=" # note # ";amount=" # Nat.toText(PRICE_E8S));
+        logEvent(caller, ?cid, "child.createBasicPending", "note=" # note # ";amount=" # Nat.toText(basicPriceE8s));
 
     {
       cid;
       payment = {
         account_owner = Principal.fromActor(ReputationFactory);
         subaccount = subaccountForCid(cid);
-        amount_e8s = PRICE_E8S;
+        amount_e8s = basicPriceE8s;
         memo = "Basic plan deposit";
       };
     }
