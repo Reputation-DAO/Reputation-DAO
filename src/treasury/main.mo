@@ -16,6 +16,7 @@ import Nat64 "mo:base/Nat64";
 import Nat8 "mo:base/Nat8";
 import Array "mo:base/Array";
 import Debug "mo:base/Debug";
+import TreasuryTypes "../common/TreasuryTypes";
 
 actor Treasury {
   // ------------- Constants -------------
@@ -25,65 +26,22 @@ actor Treasury {
   let PAYOUT_LOG_LIMIT : Nat = 1_000;
 
   // ------------- Type aliases & records -------------
-  public type OrgId = Principal;
-  public type UserId = Principal;
-
-  public type Rail = { #BTC; #ICP; #ETH };
-  public type RailsEnabled = { btc : Bool; icp : Bool; eth : Bool };
-
-  public type MicroTipConfig = {
-    enabled : Bool;
-    btcTipAmount : Nat;
-    icpTipAmount : Nat;
-    ethTipAmount : Nat;
-    maxBtcPerPeriod : Nat;
-    maxIcpPerPeriod : Nat;
-    maxEthPerPeriod : Nat;
-    maxEventsPerWindow : Nat;
-  };
-
-  public type PayoutFrequency = { #Weekly; #Monthly; #CustomDays : Nat };
-  public type Tier = { #Bronze; #Silver; #Gold; #Custom : Text };
-
-  public type TierPayout = {
-    tier : Tier;
-    btcAmount : Nat;
-    icpAmount : Nat;
-    ethAmount : Nat;
-  };
-
-  public type ScheduledPayoutConfig = {
-    enabled : Bool;
-    frequency : PayoutFrequency;
-    maxBtcPerCycle : Nat;
-    maxIcpPerCycle : Nat;
-    maxEthPerCycle : Nat;
-    tiers : [TierPayout];
-  };
-
-  public type DeadManConfig = {
-    enabled : Bool;
-    inactivityThresholdSeconds : Nat;
-  };
-
-  public type RailThresholds = { btcMin : Nat; icpMin : Nat; ethMin : Nat };
-
-  public type ComplianceRule = {
-    kycRequired : Bool;
-    tagWhitelist : [Text];
-  };
-
-  public type Badge = { name : Text; rail : ?Rail };
-  public type UserBadges = [Badge];
-
-  public type OrgConfig = {
-    rails : RailsEnabled;
-    microTips : MicroTipConfig;
-    scheduled : ScheduledPayoutConfig;
-    deadman : DeadManConfig;
-    thresholds : RailThresholds;
-    compliance : ComplianceRule;
-  };
+  public type OrgId = TreasuryTypes.OrgId;
+  public type UserId = TreasuryTypes.UserId;
+  public type Rail = TreasuryTypes.Rail;
+  public type RailsEnabled = TreasuryTypes.RailsEnabled;
+  public type MicroTipConfig = TreasuryTypes.MicroTipConfig;
+  public type PayoutFrequency = TreasuryTypes.PayoutFrequency;
+  public type Tier = TreasuryTypes.Tier;
+  public type TierPayout = TreasuryTypes.TierPayout;
+  public type ScheduledPayoutConfig = TreasuryTypes.ScheduledPayoutConfig;
+  public type DeadManConfig = TreasuryTypes.DeadManConfig;
+  public type RailThresholds = TreasuryTypes.RailThresholds;
+  public type ComplianceRule = TreasuryTypes.ComplianceRule;
+  public type Badge = TreasuryTypes.Badge;
+  public type UserBadges = TreasuryTypes.UserBadges;
+  public type UserCompliance = TreasuryTypes.UserCompliance;
+  public type OrgConfig = TreasuryTypes.OrgConfig;
 
   public type OrgState = {
     config : OrgConfig;
@@ -121,8 +79,6 @@ actor Treasury {
     success : Bool;
     error : ?Text;
   };
-
-  public type UserCompliance = { kycVerified : Bool; tags : [Text] };
 
   public type TransferArgs = {
     from_subaccount : ?Blob;
@@ -316,6 +272,26 @@ var payoutEvents : [PayoutEvent] = payoutLogStore;
     true
   };
 
+  func purgeOrgMaps(org : OrgId) {
+    let badgeKeys = Buffer.Buffer<BadgeKey>(0);
+    for ((key, _) in badgeMap.entries()) {
+      if (Principal.equal(key.org, org)) badgeKeys.add(key);
+    };
+    for (key in badgeKeys.vals()) { ignore badgeMap.remove(key) };
+
+    let complianceKeys = Buffer.Buffer<BadgeKey>(0);
+    for ((key, _) in complianceMap.entries()) {
+      if (Principal.equal(key.org, org)) complianceKeys.add(key);
+    };
+    for (key in complianceKeys.vals()) { ignore complianceMap.remove(key) };
+
+    let usageKeys = Buffer.Buffer<TipUsageKey>(0);
+    for ((key, _) in tipUsageMap.entries()) {
+      if (Principal.equal(key.org, org)) usageKeys.add(key);
+    };
+    for (key in usageKeys.vals()) { ignore tipUsageMap.remove(key) };
+  };
+
   func calcNextDue(now : Nat, cfg : ScheduledPayoutConfig) : Nat {
     if (not cfg.enabled) return 0;
     let step = switch (cfg.frequency) {
@@ -470,6 +446,28 @@ var payoutEvents : [PayoutEvent] = payoutLogStore;
       tipEventsInWindow = 0;
     });
     putVault(org, { btc = 0; icp = 0; eth = 0 });
+  };
+
+  public shared ({ caller }) func resetOrgState(org : OrgId, cfg : OrgConfig, adminPrincipal : Principal) : async () {
+    ensureFactoryOnly(caller);
+    switch (orgs.get(org)) {
+      case (?_) { await sweepOrgFunds(org) };
+      case null {};
+    };
+    purgeOrgMaps(org);
+    let now = nowSeconds();
+    orgs.put(org, {
+      config = cfg;
+      lastActiveTimestamp = now;
+      archived = false;
+      child = org;
+      lastPayoutTimestamp = 0;
+      nextPayoutDue = calcNextDue(now, cfg.scheduled);
+      tipWindowStart = now;
+      tipEventsInWindow = 0;
+    });
+    putVault(org, { btc = 0; icp = 0; eth = 0 });
+    orgAdmins.put(org, adminPrincipal);
   };
 
   public shared ({ caller }) func updateOrgConfig(org : OrgId, newConfig : OrgConfig) : async () {

@@ -23,8 +23,8 @@
     },
     "treasury": {
       "type": "motoko",
-      "main": "src/treasury/main.mo"
-     
+      "main": "src/treasury/main.mo",
+      "id": "qyncc-5qaaa-aaaam-qeqsq-cai"
     },
     "ic_siwb_provider": {
       "type": "rust",
