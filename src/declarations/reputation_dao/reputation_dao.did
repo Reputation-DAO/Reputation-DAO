@@ -5,6 +5,12 @@ type UserDecayInfo =
    registrationTime: nat;
    totalDecayed: nat;
  };
+type UserCompliance = 
+ record {
+   kycVerified: bool;
+   tags: vec text;
+ };
+type UserBadges = vec Badge;
 type TransactionType = 
  variant {
    Award;
@@ -24,9 +30,47 @@ type Transaction =
 type TopUp = 
  record {
    amount: nat;
-   from: principal;
+   from: opt principal;
    id: nat;
    timestamp: nat;
+ };
+type TierRule = 
+ record {
+   maxPoints: opt nat;
+   minPoints: nat;
+   tier: Tier;
+ };
+type TierPayout = 
+ record {
+   btcAmount: nat;
+   ethAmount: nat;
+   icpAmount: nat;
+   tier: Tier;
+ };
+type Tier = 
+ variant {
+   Bronze;
+   Custom: text;
+   Gold;
+   Silver;
+ };
+type SpendControl = 
+ record {
+   railDailyCaps: record {
+                    btc: opt nat;
+                    eth: opt nat;
+                    icp: opt nat;
+                  };
+   usdCapE8s: opt nat;
+ };
+type ScheduledPayoutConfig = 
+ record {
+   enabled: bool;
+   frequency: PayoutFrequency;
+   maxBtcPerCycle: nat;
+   maxEthPerCycle: nat;
+   maxIcpPerCycle: nat;
+   tiers: vec TierPayout;
  };
 type ReputationChild = 
  service {
@@ -35,6 +79,9 @@ type ReputationChild =
    awardRep: (to: principal, amount: nat, reason: opt text) -> (text);
    awarderStats: (awardee: principal) -> (vec AwarderBreakdown) query;
    blacklist: (user: principal, on: bool) -> (text);
+   blacklistWithReason: (user: principal, on: bool, reason: opt text) ->
+    (text);
+   configureAutoAwarder: (enable: bool) -> (text);
    configureDecay: (decayRate: nat, decayInterval: nat, minThreshold: 
     nat, gracePeriod: nat, enabled: bool) -> (text);
    cycles_balance: () -> (nat) query;
@@ -49,6 +96,12 @@ type ReputationChild =
        pendingDecay: nat;
        rawBalance: nat;
      }) query;
+   getBlacklistEntry: (user: principal) ->
+    (opt record {
+           active: bool;
+           reason: opt text;
+           updatedAt: nat;
+         }) query;
    getDecayConfig: () -> (DecayConfig) query;
    getDecayStatistics: () ->
     (record {
@@ -56,6 +109,8 @@ type ReputationChild =
        lastGlobalDecayProcess: nat;
        totalDecayedPoints: nat;
      }) query;
+   getEventsPaged: (offset: nat, limit: nat) -> (vec Event) query;
+   getTierRules: () -> (vec TierRule) query;
    getTopUpCount: () -> (nat) query;
    getTopUpsPaged: (offset: nat, limit: nat) -> (vec TopUp) query;
    getTransactionById: (id: nat) -> (opt Transaction) query;
@@ -63,8 +118,25 @@ type ReputationChild =
    getTransactionHistory: () -> (vec Transaction) query;
    getTransactionsByUser: (user: principal) -> (vec Transaction) query;
    getTransactionsPaged: (offset: nat, limit: nat) -> (vec Transaction) query;
+   getTreasuryLink: () -> (opt principal) query;
+   getTreasuryStats: () ->
+    (record {
+       events: nat;
+       failures: nat;
+       treasury: opt principal;
+     }) query;
    getTrustedAwarders: () -> (vec Awarder) query;
    getUserDecayInfo: (p: principal) -> (opt UserDecayInfo) query;
+   getUserTier: (user: principal) -> (Tier) query;
+   getUsersByTier: () -> (vec record {
+                                principal;
+                                Tier;
+                              }) query;
+   getUsersByTierPaged: (offset: nat, limit: nat) ->
+    (vec record {
+           principal;
+           Tier;
+         }) query;
    health: () ->
     (record {
        cycles: nat;
@@ -93,6 +165,7 @@ type ReputationChild =
        totalDecayed: nat;
      }) query;
    nominateOwner: (candidate: principal) -> (text);
+   notifyTreasuryDeposit: (rail: Rail, amount: nat, memo: opt text) -> (text);
    orgPulse: (since: nat) ->
     (record {
        awards: nat;
@@ -109,17 +182,77 @@ type ReputationChild =
    /// Returns the number of cycles successfully transferred.
    returnCyclesToFactory: (minRemain: nat) -> (nat);
    revokeRep: (from: principal, amount: nat, reason: opt text) -> (text);
+   runTreasuryPayoutCycle: () -> (text);
    setDailyMintLimit: (limit: nat) -> (text);
+   setDecayBatchSize: (size: nat) -> (text);
    setMinCyclesAlert: (threshold: nat) -> (text);
    setParent: (canisterId: principal) -> (text);
    setPerAwarderDailyLimit: (awardee: principal, limit: nat) -> (text);
+   setTierRules: (rules: vec TierRule) -> (text);
+   setTreasuryBadges: (user: principal, badges: UserBadges) -> (text);
+   setTreasuryCompliance: (user: principal, info: UserCompliance) -> (text);
+   setTreasuryLink: (target: opt principal) -> (text);
+   setTreasuryRails: (rails: RailsEnabled) -> (text);
    snapshotHash: () -> (nat) query;
+   syncTreasuryConfig: (cfg: OrgConfig) -> (text);
    topUp: () -> (nat);
    transferOwnership: (newOwner: principal) -> (text);
    triggerManualDecay: () -> (text);
    version: () -> (text) query;
    wallet_receive: () -> (nat);
    withdrawCycles: (to: principal, amount: nat) -> (text);
+ };
+type RailsEnabled = 
+ record {
+   btc: bool;
+   eth: bool;
+   icp: bool;
+ };
+type RailThresholds = 
+ record {
+   btcMin: nat;
+   ethMin: nat;
+   icpMin: nat;
+ };
+type Rail = 
+ variant {
+   BTC;
+   ETH;
+   ICP;
+ };
+type PayoutFrequency = 
+ variant {
+   CustomDays: nat;
+   Monthly;
+   Weekly;
+ };
+type OrgConfig = 
+ record {
+   compliance: ComplianceRule;
+   deadman: DeadManConfig;
+   microTips: MicroTipConfig;
+   rails: RailsEnabled;
+   scheduled: ScheduledPayoutConfig;
+   spendControl: opt SpendControl;
+   thresholds: RailThresholds;
+ };
+type MicroTipConfig = 
+ record {
+   btcTipAmount: nat;
+   enabled: bool;
+   ethTipAmount: nat;
+   icpTipAmount: nat;
+   maxBtcPerPeriod: nat;
+   maxEthPerPeriod: nat;
+   maxEventsPerWindow: nat;
+   maxIcpPerPeriod: nat;
+ };
+type Event = 
+ record {
+   id: nat;
+   kind: text;
+   payload: blob;
+   timestamp: nat;
  };
 type DecayConfig = 
  record {
@@ -128,6 +261,21 @@ type DecayConfig =
    enabled: bool;
    gracePeriod: nat;
    minThreshold: nat;
+ };
+type DeadManConfig = 
+ record {
+   enabled: bool;
+   inactivityThresholdSeconds: nat;
+ };
+type ComplianceRule = 
+ record {
+   kycRequired: bool;
+   tagWhitelist: vec text;
+ };
+type Badge = 
+ record {
+   name: text;
+   rail: opt Rail;
  };
 type AwarderBreakdown = 
  record {
