@@ -1,5 +1,5 @@
 // src/pages/TransactionLog.tsx
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 import { type ChildActor } from "@/lib/canisters";
@@ -12,34 +12,31 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DashboardLayout, SidebarTrigger } from "@/components/layout/DashboardLayout";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import WalletCopyBadge from "../components/WalletCopyBadge";
 import { toast } from "sonner";
 
+import { cn } from "@/lib/utils";
+
 import {
-  parseTransactionType, // optional if you want to keep using your helper; we compute directly below
-  convertTimestampToDate,
-  getTransactionTypeDescription,
-  formatTransactionAmount,
   formatDateTimeForDisplay,
 } from "@/utils/transactionUtils";
 
 import {
   FileText,
   Search,
-  Calendar,
   Award,
   UserMinus,
-  Clock,
   Download,
-  Eye,
   ExternalLink,
-  TrendingUp,
-  TrendingDown,
-  Activity,
+  DollarSign,
   AlertTriangle,
+  RefreshCw,
+  TrendingUp,
 } from "lucide-react";
 
 type TxKind = "award" | "revoke" | "decay";
@@ -52,25 +49,21 @@ interface TransactionUI {
   toUser: string;
   toPrincipal: string;
   reason: string;
-  category: string;
   timestamp: Date;
-  blockHeight?: number;
-  transactionHash?: string;
   status: "completed" | "pending" | "failed";
 }
 
-const getTransactionIcon = (type: TxKind) => {
-  switch (type) {
-    case "award":
-      return <Award className="w-4 h-4 text-green-600" />;
-    case "revoke":
-      return <UserMinus className="w-4 h-4 text-red-600" />;
-    case "decay":
-      return <Clock className="w-4 h-4 text-orange-600" />;
-    default:
-      return <Activity className="w-4 h-4 text-blue-600" />;
-  }
-};
+type TreasuryEventType = "MICRO_TIP" | "CYCLE_PAYOUT" | "ADMIN_WITHDRAW";
+type RailSymbol = "BTC" | "ICP" | "ETH";
+
+interface TreasuryEvent {
+  id: string;
+  ts: number;
+  type: TreasuryEventType;
+  rail: RailSymbol;
+  amount: string;
+  user: string;
+}
 
 const getTransactionTypeBgClass = (type: TxKind) => {
   switch (type) {
@@ -92,21 +85,21 @@ const TransactionLogPage: React.FC = () => {
   const { userRole, currentPrincipal, userName: roleUserName, loading: roleLoading } = useRole();
   const userDisplay = getUserDisplayData(currentPrincipal || null);
   const principalText = currentPrincipal?.toString() || userDisplay.userPrincipal;
-  const sidebarUserName = roleUserName || (principalText ? `User ${principalText.slice(0, 8)}` : '');
+  const sidebarUserName = roleUserName || (principalText ? `User ${principalText.slice(0, 8)}` : "");
   const sidebarPrincipal = principalText;
 
   const [child, setChild] = useState<ChildActor | null>(null);
   const [connecting, setConnecting] = useState(true);
   const [connectError, setConnectError] = useState<string | null>(null);
-
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filterType, setFilterType] = useState<"all" | TxKind>("all");
-  const [filterStatus, setFilterStatus] = useState<"all" | "completed" | "pending" | "failed">("all");
-  const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month">("all");
   const [transactions, setTransactions] = useState<TransactionUI[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // --- Build child actor from :cid (no plug hook / no services) ---
+  const {
+    events: treasuryEvents,
+    loading: treasuryLoading,
+    refresh: refreshTreasury,
+  } = useTreasuryEvents(cid);
+
   useEffect(() => {
     (async () => {
       try {
@@ -124,14 +117,11 @@ const TransactionLogPage: React.FC = () => {
     })();
   }, [cid, getChildActor, isAuthenticated]);
 
-  // --- Load transactions from child canister ---
   useEffect(() => {
     const load = async () => {
       if (!child) return;
       try {
         setLoading(true);
-
-        // Backend returns newest-first; be defensive anyway
         const raw = await child.getTransactionHistory();
         const arr = Array.isArray(raw) ? raw : [];
 
@@ -157,20 +147,16 @@ const TransactionLogPage: React.FC = () => {
             id: tx?.id?.toString?.() ?? `tx-${i}`,
             type,
             amount,
-            fromUser: `User ${fromStr.slice(0, 8)}`,
+            fromUser: fromStr ? `User ${fromStr.slice(0, 8)}` : "Unknown",
             fromPrincipal: fromStr,
-            toUser: `User ${toStr.slice(0, 8)}`,
+            toUser: toStr ? `User ${toStr.slice(0, 8)}` : "Unknown",
             toPrincipal: toStr,
             reason: reason || "No reason provided",
-            category: "General",
             timestamp: ts,
-            blockHeight: undefined, // unknown on-chain field here; keep placeholders off unless you have real data
-            transactionHash: undefined,
             status: "completed",
           };
         });
 
-        // Ensure newest-first
         ui.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
         setTransactions(ui);
       } catch (err) {
@@ -184,18 +170,105 @@ const TransactionLogPage: React.FC = () => {
     load();
   }, [child]);
 
-  // --- Derived stats ---
-  const stats = {
-    totalTransactions: transactions.length,
-    totalRepAwarded: transactions.filter((t) => t.type === "award").reduce((s, t) => s + t.amount, 0),
-    totalRepRevoked: transactions.filter((t) => t.type === "revoke").reduce((s, t) => s + t.amount, 0),
-    pendingTransactions: transactions.filter((t) => t.status === "pending").length, // placeholder: all completed in mapping
-  };
-
   const handleDisconnect = () => navigate("/auth");
 
-  // --- Filtering ---
-  const filteredTransactions = React.useMemo(() => {
+  if (connecting) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <div className="text-sm text-muted-foreground">Connecting to organization…</div>
+      </div>
+    );
+  }
+
+  if (!cid || connectError) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <Card className="glass-card p-6">
+          <AlertTriangle className="w-6 h-6 text-orange-500 mb-2" />
+          <p className="text-sm text-muted-foreground">{connectError || "No organization selected."}</p>
+          <div className="mt-3">
+            <Button onClick={() => navigate("/org-selector")} variant="outline">
+              Choose Org
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  if (roleLoading) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <div className="inline-flex items-center gap-2 text-muted-foreground text-sm">
+          <div className="w-4 h-4 border-2 border-primary border-r-transparent rounded-full animate-spin" />
+          Determining access…
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <InnerTransactionLog
+      cid={cid}
+      userRole={userRole}
+      userDisplay={{
+        userName: sidebarUserName,
+        userPrincipal: sidebarPrincipal,
+        displayName: userDisplay.displayName,
+      }}
+      handleDisconnect={handleDisconnect}
+      transactions={transactions}
+      repLoading={loading}
+      treasuryEvents={treasuryEvents}
+      treasuryLoading={treasuryLoading}
+      refreshTreasury={refreshTreasury}
+    />
+  );
+};
+
+interface InnerProps {
+  cid: string;
+  userRole: string;
+  userDisplay: {
+    userName: string;
+    userPrincipal: string;
+    displayName: string;
+  };
+  handleDisconnect: () => void;
+  transactions: TransactionUI[];
+  repLoading: boolean;
+  treasuryEvents: TreasuryEvent[];
+  treasuryLoading: boolean;
+  refreshTreasury: () => void;
+}
+
+function InnerTransactionLog({
+  cid,
+  userRole,
+  userDisplay,
+  handleDisconnect,
+  transactions,
+  repLoading,
+  treasuryEvents,
+  treasuryLoading,
+  refreshTreasury,
+}: InnerProps) {
+  const normalizedRole = (userRole || "").toLowerCase();
+  const sidebarRole: "admin" | "awarder" | "member" =
+    normalizedRole === "admin"
+      ? "admin"
+      : normalizedRole === "awarder"
+      ? "awarder"
+      : "member";
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterType, setFilterType] = useState<"all" | TxKind>("all");
+  const [filterStatus, setFilterStatus] = useState<"all" | "completed" | "pending" | "failed">("all");
+  const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month">("all");
+  const [activeTab, setActiveTab] = useState<"reputation" | "treasury">("reputation");
+  const [railFilter, setRailFilter] = useState<"all" | RailSymbol>("all");
+
+  const filteredTransactions = useMemo(() => {
     let filtered = [...transactions];
 
     if (searchQuery) {
@@ -242,93 +315,19 @@ const TransactionLogPage: React.FC = () => {
     return filtered.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
   }, [transactions, searchQuery, filterType, filterStatus, dateFilter]);
 
-  // --- Connect-state UI ---
-  if (connecting) {
-    return (
-      <div className="min-h-screen grid place-items-center">
-        <div className="text-sm text-muted-foreground">Connecting to organization…</div>
-      </div>
-    );
-  }
+  const filteredTreasuryEvents = useMemo(() => {
+    const events = [...treasuryEvents].sort((a, b) => b.ts - a.ts);
+    if (railFilter === "all") return events;
+    return events.filter((event) => event.rail === railFilter);
+  }, [treasuryEvents, railFilter]);
 
-  if (!cid || connectError) {
-    return (
-      <div className="min-h-screen grid place-items-center">
-        <Card className="glass-card p-6">
-          <AlertTriangle className="w-6 h-6 text-orange-500 mb-2" />
-          <p className="text-sm text-muted-foreground">{connectError || "No organization selected."}</p>
-          <div className="mt-3">
-            <Button onClick={() => navigate("/org-selector")} variant="outline">
-              Choose Org
-            </Button>
-          </div>
-        </Card>
-      </div>
-    );
-  }
-
-  if (roleLoading) {
-    return (
-      <div className="min-h-screen grid place-items-center">
-        <div className="inline-flex items-center gap-2 text-muted-foreground text-sm">
-          <div className="w-4 h-4 border-2 border-primary border-r-transparent rounded-full animate-spin" />
-          Determining access…
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <InnerTransactionLog
-      cid={cid}
-      userRole={userRole}
-      userDisplay={{
-        userName: sidebarUserName,
-        userPrincipal: sidebarPrincipal,
-        displayName: userDisplay.displayName,
-      }}
-      handleDisconnect={handleDisconnect}
-      stats={stats}
-      filteredTransactions={filteredTransactions}
-      loading={loading}
-      setSearchQuery={setSearchQuery}
-      searchQuery={searchQuery}
-      filterType={filterType}
-      setFilterType={setFilterType}
-      filterStatus={filterStatus}
-      setFilterStatus={setFilterStatus}
-      dateFilter={dateFilter}
-      setDateFilter={setDateFilter}
-    />
-  );
-};
-
-function InnerTransactionLog(props: any) {
-  const {
-    cid,
-    userRole,
-    userDisplay,
-    handleDisconnect,
-    stats,
-    filteredTransactions,
-    loading,
-    setSearchQuery,
-    searchQuery,
-    filterType,
-    setFilterType,
-    filterStatus,
-    setFilterStatus,
-    dateFilter,
-    setDateFilter,
-  } = props;
-
-  const normalizedRole = (userRole || "").toLowerCase();
-  const sidebarRole: "admin" | "awarder" | "member" =
-    normalizedRole === "admin"
-      ? "admin"
-      : normalizedRole === "awarder"
-      ? "awarder"
-      : "member";
+  const stats = {
+    totalTransactions: transactions.length,
+    totalRepAwarded: transactions.filter((t) => t.type === "award").reduce((s, t) => s + t.amount, 0),
+    totalRepRevoked: transactions.filter((t) => t.type === "revoke").reduce((s, t) => s + t.amount, 0),
+    pendingTransactions: transactions.filter((t) => t.status === "pending").length,
+    treasuryEvents: treasuryEvents.length,
+  };
 
   return (
     <DashboardLayout
@@ -340,231 +339,343 @@ function InnerTransactionLog(props: any) {
       }}
     >
       <header className="h-16 border-b border-border/40 flex items-center justify-between px-6 glass-header">
-          <div className="flex items-center gap-3">
-            <SidebarTrigger className="mr-4" />
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-600/20 flex items-center justify-center">
-              <FileText className="w-4 h-4 text-blue-600" />
-            </div>
-            <div>
-              <h1 className="text-lg font-semibold text-foreground">Transaction Log</h1>
-              <p className="text-xs text-muted-foreground">Org: {cid}</p>
-            </div>
+        <div className="flex items-center gap-3">
+          <SidebarTrigger className="mr-4" />
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-600/20 flex items-center justify-center">
+            <FileText className="w-4 h-4 text-blue-600" />
           </div>
+          <div>
+            <h1 className="text-lg font-semibold text-foreground">Transaction Log</h1>
+            <p className="text-xs text-muted-foreground">Org: {cid}</p>
+          </div>
+        </div>
 
         <div className="flex items-center gap-2">
           <WalletCopyBadge />
-          <Button
-            variant="outline"
-            className="group"
-            onClick={() => toast.info("CSV export not wired to backend in this view")}
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Export CSV
-          </Button>
-            <ThemeToggle />
+          <ThemeToggle />
+        </div>
+      </header>
+
+      <main className="p-6">
+        <div className="max-w-7xl mx-auto space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard title="Total transactions" value={stats.totalTransactions} icon={<TrendingUp className="w-6 h-6 text-primary" />} />
+            <StatCard title="REP awarded" value={`${stats.totalRepAwarded} REP`} icon={<Award className="w-6 h-6 text-green-500" />} />
+            <StatCard title="REP revoked" value={`${stats.totalRepRevoked} REP`} icon={<UserMinus className="w-6 h-6 text-red-500" />} />
+            <StatCard title="Treasury events" value={stats.treasuryEvents} icon={<DollarSign className="w-6 h-6 text-amber-500" />} />
           </div>
-        </header>
 
-        <main className="p-6">
-          <div className="max-w-7xl mx-auto space-y-6">
-            {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card className="glass-card p-4 animate-fade-in">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Total Transactions</p>
-                    <p className="text-2xl font-bold text-foreground">{stats.totalTransactions}</p>
-                  </div>
-                  <Activity className="w-8 h-8 text-primary" />
-                </div>
-              </Card>
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "reputation" | "treasury")}>
+            <TabsList className="bg-muted/40 border border-border/60">
+              <TabsTrigger value="reputation">Reputation</TabsTrigger>
+              <TabsTrigger value="treasury">Treasury</TabsTrigger>
+            </TabsList>
 
-              <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.1s" }}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">REP Awarded</p>
-                    <p className="text-2xl font-bold text-foreground">{stats.totalRepAwarded}</p>
-                  </div>
-                  <TrendingUp className="w-8 h-8 text-green-500" />
-                </div>
-              </Card>
-
-              <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.2s" }}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">REP Revoked</p>
-                    <p className="text-2xl font-bold text-foreground">{stats.totalRepRevoked}</p>
-                  </div>
-                  <TrendingDown className="w-8 h-8 text-red-500" />
-                </div>
-              </Card>
-
-              <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.3s" }}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Today's Activity</p>
-                    <p className="text-2xl font-bold text-foreground">{stats.pendingTransactions}</p>
-                  </div>
-                  <Clock className="w-8 h-8 text-orange-500" />
-                </div>
-              </Card>
-            </div>
-
-            {/* Filters */}
-            <Card className="glass-card p-4 animate-fade-in" style={{ animationDelay: "0.4s" }}>
-              <div className="flex flex-col lg:flex-row gap-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search transactions..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 glass-input"
-                  />
-                </div>
-
-                <div className="flex gap-2">
-                  <Select value={filterType} onValueChange={(v: any) => setFilterType(v)}>
-                    <SelectTrigger className="w-32 glass-input">
-                      <SelectValue placeholder="Type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Types</SelectItem>
-                      <SelectItem value="award">Awards</SelectItem>
-                      <SelectItem value="revoke">Revocations</SelectItem>
-                      <SelectItem value="decay">Decay</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  <Select value={filterStatus} onValueChange={(v: any) => setFilterStatus(v)}>
-                    <SelectTrigger className="w-32 glass-input">
-                      <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Status</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="failed">Failed</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  <Select value={dateFilter} onValueChange={(v: any) => setDateFilter(v)}>
-                    <SelectTrigger className="w-32 glass-input">
-                      <SelectValue placeholder="Date" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Time</SelectItem>
-                      <SelectItem value="today">Today</SelectItem>
-                      <SelectItem value="week">This Week</SelectItem>
-                      <SelectItem value="month">This Month</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </Card>
-
-            {/* Transactions */}
-            <Card className="glass-card p-6 animate-fade-in" style={{ animationDelay: "0.5s" }}>
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-semibold text-foreground">Transaction History</h2>
-                <Badge variant="secondary" className="font-mono">
-                  {filteredTransactions.length} transactions
-                </Badge>
-              </div>
-
-              <div className="space-y-3">
-                {loading ? (
-                  <div className="text-center py-12 text-muted-foreground">Loading…</div>
-                ) : filteredTransactions.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                    <p className="text-lg font-medium mb-2">No transactions found</p>
-                    <p className="text-sm">Try adjusting your search or filters</p>
-                  </div>
-                ) : (
-                  filteredTransactions.map((tx, idx) => (
-                    <div
-                      key={tx.id}
-                      className="flex items-center justify-between p-4 glass-card rounded-lg hover:shadow-md transition-all duration-200 animate-fade-in"
-                      style={{ animationDelay: `${0.6 + idx * 0.05}s` }}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${getTransactionTypeBgClass(tx.type)}`}>
-                          {getTransactionIcon(tx.type)}
-                        </div>
-
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="font-medium text-foreground text-lg">
-                              {formatTransactionAmount(tx.type, tx.amount)} REP
-                            </span>
-                            <Badge variant="outline" className="text-xs capitalize">
-                              {getTransactionTypeDescription(tx.type)}
-                            </Badge>
-                            <Badge
-                              variant={
-                                tx.status === "completed"
-                                  ? "default"
-                                  : tx.status === "pending"
-                                  ? "secondary"
-                                  : "destructive"
-                              }
-                              className="text-xs"
-                            >
-                              {tx.status}
-                            </Badge>
-                          </div>
-
-                          <div className="mb-2">
-                            <p className="text-sm text-muted-foreground mb-1">
-                              <span className="font-medium">{tx.fromUser}</span>
-                              {" → "}
-                              <span className="font-medium">{tx.toUser}</span>
-                            </p>
-
-                            <div className="bg-muted/30 rounded-lg p-3 mb-2">
-                              <p className="text-sm font-medium text-foreground mb-1">Reason:</p>
-                              <p className="text-sm text-muted-foreground break-words">{tx.reason}</p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                            <div className="flex items-center gap-1">
-                              <Calendar className="w-3 h-3" />
-                              {formatDateTimeForDisplay(tx.timestamp)}
-                            </div>
-                            {tx.category && (
-                              <Badge variant="outline" className="text-xs">
-                                {tx.category}
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {tx.blockHeight && (
-                          <Button variant="ghost" size="sm" className="text-xs">
-                            <Eye className="w-3 h-3 mr-1" />
-                            Block {tx.blockHeight}
-                          </Button>
-                        )}
-                        {tx.transactionHash && (
-                          <Button variant="ghost" size="sm" className="text-xs">
-                            <ExternalLink className="w-3 h-3 mr-1" />
-                            View Hash
-                          </Button>
-                        )}
-                      </div>
+            <TabsContent value="reputation" className="mt-6 space-y-6">
+              <Card className="glass-card p-6">
+                <div className="flex flex-col lg:flex-row gap-6 lg:items-center">
+                  <div className="flex-1 space-y-2">
+                    <Label className="text-sm text-muted-foreground">Search</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search users, principals, or transaction IDs"
+                        className="pl-9"
+                      />
                     </div>
-                  ))
-                )}
-              </div>
-            </Card>
-          </div>
-        </main>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 flex-1">
+                    <FilterSelect
+                      label="Type"
+                      value={filterType}
+                      onChange={setFilterType}
+                      options={[
+                        { label: "All types", value: "all" },
+                        { label: "Awards", value: "award" },
+                        { label: "Revocations", value: "revoke" },
+                        { label: "Decay", value: "decay" },
+                      ]}
+                    />
+                    <FilterSelect
+                      label="Status"
+                      value={filterStatus}
+                      onChange={setFilterStatus}
+                      options={[
+                        { label: "Any status", value: "all" },
+                        { label: "Completed", value: "completed" },
+                        { label: "Pending", value: "pending" },
+                        { label: "Failed", value: "failed" },
+                      ]}
+                    />
+                    <FilterSelect
+                      label="Date"
+                      value={dateFilter}
+                      onChange={setDateFilter}
+                      options={[
+                        { label: "All time", value: "all" },
+                        { label: "Today", value: "today" },
+                        { label: "Last 7 days", value: "week" },
+                        { label: "Last 30 days", value: "month" },
+                      ]}
+                    />
+                  </div>
+                </div>
+              </Card>
+
+              <ReputationLogTable transactions={filteredTransactions} loading={repLoading} />
+            </TabsContent>
+
+            <TabsContent value="treasury" className="mt-6 space-y-6">
+              <Card className="glass-card p-6">
+                <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+                  <div className="w-full md:w-1/3">
+                    <Label className="text-sm text-muted-foreground">Rail</Label>
+                    <Select value={railFilter} onValueChange={(v) => setRailFilter(v as typeof railFilter)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All rails" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All rails</SelectItem>
+                        <SelectItem value="BTC">BTC</SelectItem>
+                        <SelectItem value="ICP">ICP</SelectItem>
+                        <SelectItem value="ETH">ETH</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button variant="outline" onClick={refreshTreasury} disabled={treasuryLoading}>
+                    {treasuryLoading ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                        Refreshing…
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Refresh
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </Card>
+
+              <TreasuryLogTable events={filteredTreasuryEvents} loading={treasuryLoading} />
+            </TabsContent>
+          </Tabs>
+        </div>
+      </main>
     </DashboardLayout>
   );
+}
+
+function StatCard({ title, value, icon }: { title: string; value: string | number; icon: React.ReactNode }) {
+  return (
+    <Card className="glass-card p-4 animate-fade-in">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-muted-foreground">{title}</p>
+          <p className="text-2xl font-bold text-foreground">{value}</p>
+        </div>
+        {icon}
+      </div>
+    </Card>
+  );
+}
+
+function FilterSelect<T extends string>({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: T;
+  onChange: (value: T) => void;
+  options: { label: string; value: T }[];
+}) {
+  return (
+    <div className="space-y-2">
+      <Label className="text-sm text-muted-foreground">{label}</Label>
+      <Select value={value} onValueChange={(v) => onChange(v as T)}>
+        <SelectTrigger>
+          <SelectValue placeholder="Select" />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function ReputationLogTable({ transactions, loading }: { transactions: TransactionUI[]; loading: boolean }) {
+  if (loading) {
+    return (
+      <Card className="glass-card p-6 text-center">
+        <div className="inline-flex items-center gap-2 text-muted-foreground text-sm">
+          <div className="w-4 h-4 border-2 border-primary border-r-transparent rounded-full animate-spin" />
+          Loading reputation history…
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="glass-card p-6 overflow-x-auto space-y-4">
+      {transactions.map((tx) => (
+        <div
+          key={tx.id}
+          className="grid gap-4 sm:grid-cols-[1fr,1fr,1fr,auto] items-center border border-border/60 rounded-xl p-4 hover:border-border transition"
+        >
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Badge className={`text-xs capitalize ${getTransactionTypeBgClass(tx.type)}`}>
+                {tx.type}
+              </Badge>
+              <span className="text-xs text-muted-foreground">{tx.id}</span>
+            </div>
+            <p className="text-sm text-foreground">{tx.reason}</p>
+            <p className="text-xs text-muted-foreground">
+              {formatDateTimeForDisplay(tx.timestamp.toISOString())}
+            </p>
+          </div>
+
+          <div className="text-sm">
+            <p className="text-muted-foreground">From</p>
+            <p className="font-medium text-foreground">{tx.fromUser}</p>
+            <p className="text-xs text-muted-foreground">{tx.fromPrincipal}</p>
+          </div>
+
+          <div className="text-sm">
+            <p className="text-muted-foreground">To</p>
+            <p className="font-medium text-foreground">{tx.toUser}</p>
+            <p className="text-xs text-muted-foreground">{tx.toPrincipal}</p>
+          </div>
+
+          <div className="flex items-center gap-3 justify-end">
+            <div className="text-right">
+              <p className="text-sm font-semibold text-foreground">{tx.amount} REP</p>
+              <p className="text-xs text-muted-foreground">{tx.status}</p>
+            </div>
+            <Button variant="ghost" size="icon">
+              <ExternalLink className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      ))}
+
+      {!transactions.length && (
+        <div className="text-center py-10 text-muted-foreground">
+          <p>No transactions found for the selected filters.</p>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function TreasuryLogTable({ events, loading }: { events: TreasuryEvent[]; loading: boolean }) {
+  if (loading) {
+    return (
+      <Card className="glass-card p-6 text-center">
+        <div className="inline-flex items-center gap-2 text-muted-foreground text-sm">
+          <div className="w-4 h-4 border-2 border-primary border-r-transparent rounded-full animate-spin" />
+          Loading treasury events…
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="glass-card p-6 overflow-x-auto space-y-4">
+      {events.map((event) => (
+        <div
+          key={event.id}
+          className="grid gap-4 sm:grid-cols-[1fr,1fr,auto] items-center border border-border/60 rounded-xl p-4"
+        >
+          <div>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="uppercase text-xs">
+                {event.type}
+              </Badge>
+              <Badge>{event.rail}</Badge>
+            </div>
+            <p className="text-sm text-muted-foreground mt-1">{new Date(event.ts).toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Recipient</p>
+            <p className="text-sm font-medium">{event.user}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-base font-semibold">
+              {event.amount} {event.rail}
+            </p>
+          </div>
+        </div>
+      ))}
+
+      {!events.length && (
+        <div className="text-center py-10 text-muted-foreground">
+          <p>No treasury events for the selected rail.</p>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function useTreasuryEvents(cid?: string) {
+  const [events, setEvents] = useState<TreasuryEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    // TODO: Replace with Treasury canister lookup once API is ready.
+    const timer = setTimeout(() => {
+      setEvents([
+        {
+          id: "pay-001",
+          ts: Date.now() - 1000 * 60 * 60,
+          type: "MICRO_TIP",
+          rail: "BTC",
+          amount: "0.0002",
+          user: "user-aaabbb",
+        },
+        {
+          id: "pay-002",
+          ts: Date.now() - 1000 * 60 * 120,
+          type: "CYCLE_PAYOUT",
+          rail: "ICP",
+          amount: "12.5",
+          user: "user-ccddee",
+        },
+        {
+          id: "pay-003",
+          ts: Date.now() - 1000 * 60 * 300,
+          type: "ADMIN_WITHDRAW",
+          rail: "ETH",
+          amount: "0.08",
+          user: "treasury-admin",
+        },
+      ]);
+      setLoading(false);
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [cid]);
+
+  const refresh = () => {
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+    }, 400);
+  };
+
+  return { events, loading, refresh };
 }
 
 export default TransactionLogPage;

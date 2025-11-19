@@ -31,6 +31,8 @@ const ViewBalancesPage = lazy(() => import("@/features/dashboard/pages/ViewBalan
 const TransactionLogPage = lazy(() => import("@/features/dashboard/pages/TransactionLogPage"));
 const DecaySystemPage = lazy(() => import("@/features/dashboard/pages/DecaySystemPage"));
 const SettingsAdminPage = lazy(() => import("@/features/dashboard/pages/SettingsPage"));
+const EconomySettingsPage = lazy(() => import("@/features/dashboard/pages/EconomySettingsPage"));
+const MyEarningsPage = lazy(() => import("@/features/dashboard/pages/MyEarningsPage"));
 const NotFoundPage = lazy(() => import("@/features/common/NotFoundPage"));
 
 // docs layout + sections
@@ -99,6 +101,8 @@ const App = () => (
                         <Route path="/dashboard/transaction-log/:cid" element={<TransactionLogPage />} />
                         <Route path="/dashboard/decay-system/:cid" element={<DecaySystemPage />} />
                         <Route path="/dashboard/settings/:cid" element={<SettingsAdminPage />} />
+                        <Route path="/dashboard/economy-settings/:cid" element={<EconomySettingsPage />} />
+                        <Route path="/dashboard/my-earnings/:cid" element={<MyEarningsPage />} />
 
                         {/* Catch-all */}
                         <Route path="*" element={<NotFoundPage />} />

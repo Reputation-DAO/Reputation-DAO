@@ -7,3 +7,5 @@ export { default as ViewBalancesPage } from "./pages/ViewBalancesPage";
 export { default as TransactionLogPage } from "./pages/TransactionLogPage";
 export { default as DecaySystemPage } from "./pages/DecaySystemPage";
 export { default as SettingsAdminPage } from "./pages/SettingsPage";
+export { default as EconomySettingsPage } from "./pages/EconomySettingsPage";
+export { default as MyEarningsPage } from "./pages/MyEarningsPage";
