@@ -373,7 +373,7 @@ function InnerManageAwarders(props: InnerManageAwardersProps) {
               <Dialog open={isAddingAwarder} onOpenChange={setIsAddingAwarder}>
                 <DialogTrigger asChild>
                   <Button variant="hero" className="group">
-                    <UserPlus className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
+                    <UserPlus className="w-4 h-4 mr-2" />
                     Add Awarder
                   </Button>
                 </DialogTrigger>

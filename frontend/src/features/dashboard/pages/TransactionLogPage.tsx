@@ -358,9 +358,9 @@ function InnerTransactionLog(props: any) {
             className="group"
             onClick={() => toast.info("CSV export not wired to backend in this view")}
           >
-              <Download className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
-              Export CSV
-            </Button>
+            <Download className="w-4 h-4 mr-2" />
+            Export CSV
+          </Button>
             <ThemeToggle />
           </div>
         </header>
