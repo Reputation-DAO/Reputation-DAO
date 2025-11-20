@@ -115,6 +115,7 @@ const VAULT_KEY: Record<RailSymbol, "btc" | "icp" | "eth"> = { BTC: "btc", ICP: 
 const RAIL_TAG: Record<RailSymbol, number> = { BTC: 0, ICP: 1, ETH: 2 };
 
 const treasuryCanisterId = getTreasuryCanisterId();
+const ECONOMY_SCROLL_KEY = "economy-settings:scroll";
 
 const toDefaultSubaccountHex = (orgId: string, rail: RailSymbol) => {
   try {
@@ -432,6 +433,37 @@ export default function EconomySettingsPage() {
     memo: "",
   }));
 
+  const restoreScrollPosition = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const stored = sessionStorage.getItem(ECONOMY_SCROLL_KEY);
+    if (!stored) return;
+    const parsed = parseInt(stored, 10);
+    if (Number.isNaN(parsed)) return;
+    requestAnimationFrame(() => window.scrollTo(0, parsed));
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    restoreScrollPosition();
+    const handleScroll = () => {
+      sessionStorage.setItem(ECONOMY_SCROLL_KEY, String(window.scrollY));
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        restoreScrollPosition();
+      }
+    };
+    const handleFocus = () => restoreScrollPosition();
+    window.addEventListener("scroll", handleScroll);
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [restoreScrollPosition]);
+
   const {
     config,
     loading,
@@ -446,18 +478,33 @@ export default function EconomySettingsPage() {
     refreshVault,
   } = useOrgEconomyConfig(cid);
 
+  useEffect(() => {
+    if (!roleLoading && !loading) {
+      restoreScrollPosition();
+    }
+  }, [roleLoading, loading, restoreScrollPosition]);
+
   const sidebarPrincipal = currentPrincipal?.toText() || principal?.toText() || "";
   const depositDetails = useMemo(() => {
     if (!cid) return null;
     const subaccountHex = toDefaultSubaccountHex(cid, depositForm.rail);
     if (!subaccountHex) return null;
     const owner = treasuryCanisterId;
-    const accountId =
-      depositForm.rail === "ICP" || depositForm.rail === "BTC"
-        ? principalToAccountIdentifier(owner, subaccountHex)
-        : null;
+    const supportsAccountId = depositForm.rail === "ICP" || depositForm.rail === "BTC" || depositForm.rail === "ETH";
+    const accountId = supportsAccountId ? principalToAccountIdentifier(owner, subaccountHex) : null;
     return { owner, subaccountHex, accountId };
   }, [cid, depositForm.rail]);
+
+  const depositAssetLabel = useMemo(() => {
+    switch (depositForm.rail) {
+      case "BTC":
+        return "ckBTC";
+      case "ETH":
+        return "ckETH";
+      default:
+        return "ICP";
+    }
+  }, [depositForm.rail]);
   const copyToClipboard = useCallback((label: string, value: string) => {
     if (!value) return;
     navigator.clipboard
@@ -1029,7 +1076,7 @@ export default function EconomySettingsPage() {
               {depositDetails && (
                 <div className="rounded-lg border border-border/50 bg-muted/30 p-4 space-y-3 text-sm">
                   <p className="text-muted-foreground">
-                    Send {depositForm.rail} to this treasury account (owner + subaccount) using your wallet/ledger, then
+                    Send {depositAssetLabel} to this treasury account (owner + subaccount) using your wallet/ledger, then
                     record the transaction above.
                   </p>
                   <div className="grid md:grid-cols-2 gap-3">
