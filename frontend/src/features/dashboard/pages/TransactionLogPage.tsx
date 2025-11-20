@@ -1,8 +1,9 @@
 // src/pages/TransactionLog.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 import { type ChildActor } from "@/lib/canisters";
+import type { PayoutEvent as TreasuryPayoutEvent, Rail as TreasuryRail, TipEvent as TreasuryTipEvent } from "@/declarations/treasury/treasury.did";
 
 import { useRole } from "@/contexts/RoleContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -53,7 +54,7 @@ interface TransactionUI {
   status: "completed" | "pending" | "failed";
 }
 
-type TreasuryEventType = "MICRO_TIP" | "CYCLE_PAYOUT" | "ADMIN_WITHDRAW";
+type TreasuryEventType = "MICRO_TIP" | "CYCLE_PAYOUT";
 type RailSymbol = "BTC" | "ICP" | "ETH";
 
 interface TreasuryEvent {
@@ -64,6 +65,41 @@ interface TreasuryEvent {
   amount: string;
   user: string;
 }
+
+type RawTransaction = {
+  id?: { toString?: () => string } | bigint | number | string;
+  transactionType?: { Revoke?: null } | { Decay?: null } | { Award?: null };
+  amount?: number | bigint;
+  timestamp?: number | bigint;
+  from?: { toString?: () => string };
+  to?: { toString?: () => string };
+  reason?: string[] | string;
+};
+
+const RAIL_DECIMALS: Record<RailSymbol, number> = {
+  BTC: 8,
+  ICP: 8,
+  ETH: 18,
+};
+
+const railFromVariant = (rail: TreasuryRail): RailSymbol => {
+  if ("BTC" in rail) return "BTC";
+  if ("ICP" in rail) return "ICP";
+  return "ETH";
+};
+
+const formatAmount = (value: bigint, decimals: number) => {
+  if (decimals === 0) return value.toString();
+  const negative = value < 0n;
+  const absValue = negative ? -value : value;
+  const str = absValue.toString().padStart(decimals + 1, "0");
+  const integerPart = str.slice(0, -decimals) || "0";
+  const fraction = str.slice(-decimals).replace(/0+$/, "");
+  const formatted = fraction ? `${integerPart}.${fraction}` : integerPart;
+  return negative ? `-${formatted}` : formatted;
+};
+
+const formatNat = (value: bigint, symbol: RailSymbol = "ICP") => formatAmount(value ?? 0n, RAIL_DECIMALS[symbol]);
 
 const getTransactionTypeBgClass = (type: TxKind) => {
   switch (type) {
@@ -109,8 +145,9 @@ const TransactionLogPage: React.FC = () => {
         }
         const actor = await getChildActor(cid);
         setChild(actor);
-      } catch (e: any) {
-        setConnectError(e?.message || "Failed to connect to org canister");
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Failed to connect to org canister";
+        setConnectError(message);
       } finally {
         setConnecting(false);
       }
@@ -123,11 +160,11 @@ const TransactionLogPage: React.FC = () => {
       try {
         setLoading(true);
         const raw = await child.getTransactionHistory();
-        const arr = Array.isArray(raw) ? raw : [];
+        const arr: RawTransaction[] = Array.isArray(raw) ? (raw as RawTransaction[]) : [];
 
         const toNum = (v: number | bigint) => (typeof v === "bigint" ? Number(v) : v);
 
-        const ui: TransactionUI[] = arr.map((tx: any, i: number) => {
+        const ui: TransactionUI[] = arr.map((tx, i) => {
           let type: TxKind = "award";
           if (tx?.transactionType) {
             if ("Revoke" in tx.transactionType) type = "revoke";
@@ -628,54 +665,78 @@ function TreasuryLogTable({ events, loading }: { events: TreasuryEvent[]; loadin
   );
 }
 
+function mapTipEvents(raw: TreasuryTipEvent[], orgFilter: string): TreasuryEvent[] {
+  return raw
+    .filter((event) => event.org?.toText?.() === orgFilter)
+    .map((event) => {
+      const rail = railFromVariant(event.rail);
+      const amount = BigInt(event.amount ?? 0n);
+      const timestamp = Number(event.timestamp ?? 0n) * 1000;
+      const user = event.user?.toText?.() ?? "Unknown";
+      return {
+        id: `tip-${event.id.toString()}`,
+        ts: timestamp,
+        type: "MICRO_TIP" as TreasuryEventType,
+        rail,
+        amount: formatNat(amount, rail),
+        user,
+      };
+    });
+}
+
+function mapPayoutEvents(raw: TreasuryPayoutEvent[], orgFilter: string): TreasuryEvent[] {
+  return raw
+    .filter((event) => event.org?.toText?.() === orgFilter)
+    .map((event) => {
+      const rail = railFromVariant(event.rail);
+      const timestamp = Number(event.timestamp ?? 0n) * 1000;
+      const total = BigInt(event.totalAmount ?? 0n);
+      return {
+        id: `payout-${event.id.toString()}`,
+        ts: timestamp,
+        type: "CYCLE_PAYOUT" as TreasuryEventType,
+        rail,
+        amount: formatNat(total, rail),
+        user: `${event.recipients?.toString?.() ?? "0"} recipients`,
+      };
+    });
+}
+
 function useTreasuryEvents(cid?: string) {
+  const { getTreasuryActor, isAuthenticated } = useAuth();
   const [events, setEvents] = useState<TreasuryEvent[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!cid || !isAuthenticated) {
+      setEvents([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const treasury = await getTreasuryActor();
+      const [tipEvents, payoutEvents] = await Promise.all([
+        treasury.listTipEvents(0n, 200n),
+        treasury.listPayoutEvents(0n, 100n),
+      ]);
+      const mapped = [...mapTipEvents(tipEvents, cid), ...mapPayoutEvents(payoutEvents, cid)].sort(
+        (a, b) => b.ts - a.ts
+      );
+      setEvents(mapped);
+    } catch (err) {
+      console.error("Failed to load treasury events", err);
+      setEvents([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [cid, getTreasuryActor, isAuthenticated]);
 
   useEffect(() => {
-    setLoading(true);
-    // TODO: Replace with Treasury canister lookup once API is ready.
-    const timer = setTimeout(() => {
-      setEvents([
-        {
-          id: "pay-001",
-          ts: Date.now() - 1000 * 60 * 60,
-          type: "MICRO_TIP",
-          rail: "BTC",
-          amount: "0.0002",
-          user: "user-aaabbb",
-        },
-        {
-          id: "pay-002",
-          ts: Date.now() - 1000 * 60 * 120,
-          type: "CYCLE_PAYOUT",
-          rail: "ICP",
-          amount: "12.5",
-          user: "user-ccddee",
-        },
-        {
-          id: "pay-003",
-          ts: Date.now() - 1000 * 60 * 300,
-          type: "ADMIN_WITHDRAW",
-          rail: "ETH",
-          amount: "0.08",
-          user: "treasury-admin",
-        },
-      ]);
-      setLoading(false);
-    }, 400);
+    load();
+  }, [load]);
 
-    return () => clearTimeout(timer);
-  }, [cid]);
-
-  const refresh = () => {
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-    }, 400);
-  };
-
-  return { events, loading, refresh };
+  return { events, loading, refresh: load };
 }
 
 export default TransactionLogPage;
