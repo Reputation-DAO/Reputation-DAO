@@ -26,8 +26,13 @@ import {
   makeChildWithIdentity,
   makeFactoriaWithIdentity,
   getFactoriaCanisterId,
+  makeTreasuryWithPlug,
+  makeTreasuryWithInternetIdentity,
+  makeTreasuryWithIdentity,
+  getTreasuryCanisterId,
 } from '@/lib/canisters';
 import type { _SERVICE as FactoriaActor } from '@/declarations/factoria/factoria.did.d.ts';
+import type { _SERVICE as TreasuryActor } from '@/declarations/treasury/treasury.did.d.ts';
 
 export type AuthMethod = 'plug' | 'internetIdentity' | 'siwb' | 'siwe' | null;
 
@@ -91,6 +96,7 @@ interface AuthContextType {
   // Actor access
   getChildActor: (canisterId: string) => Promise<ChildActor>;
   getFactoriaActor: () => Promise<FactoriaActor>;
+  getTreasuryActor: () => Promise<TreasuryActor>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -423,6 +429,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const getTreasuryActor = async () => {
+    if (!isAuthenticated || !authMethod) {
+      throw new Error('Not authenticated. Please login first.');
+    }
+    const canisterId = getTreasuryCanisterId();
+    switch (authMethod) {
+      case 'plug':
+        await ensurePlugAgent({ host: PLUG_HOST, whitelist: [canisterId] });
+        return makeTreasuryWithPlug();
+      case 'internetIdentity':
+        return makeTreasuryWithInternetIdentity();
+      case 'siwb':
+        if (!siwb.identity) throw new Error('Bitcoin identity unavailable.');
+        return makeTreasuryWithIdentity({ identity: siwb.identity });
+      case 'siwe':
+        if (!siwe.identity) throw new Error('Ethereum identity unavailable.');
+        return makeTreasuryWithIdentity({ identity: siwe.identity });
+      default:
+        throw new Error(`Unsupported authentication method: ${authMethod}`);
+    }
+  };
+
   // Check connection on mount
   useEffect(() => {
     checkConnection();
@@ -475,6 +503,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     checkConnection,
     getChildActor,
     getFactoriaActor,
+    getTreasuryActor,
   };
 
   return (

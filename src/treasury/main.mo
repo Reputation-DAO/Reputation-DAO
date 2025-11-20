@@ -149,6 +149,7 @@ actor Treasury {
   type BadgeKey = { org : OrgId; user : UserId };
   type TipUsageKey = { org : OrgId; user : UserId; rail : Rail };
   type SubaccountKey = { org : OrgId; rail : Rail };
+  type UserRailKey = { org : OrgId; user : UserId; rail : Rail };
 
   // ------------- Stable storage -------------
   stable var admin : ?Principal = null;
@@ -184,6 +185,12 @@ actor Treasury {
   stable var nextNativeDepositId : Nat = 1;
   stable var subaccountStore : [(SubaccountKey, Blob)] = [];
   stable var spendStore : [(OrgId, SpendWindow)] = [];
+  stable var userBalanceStore : [(UserRailKey, Nat)] = [];
+  stable var conversionSourceStore : [(Nat, Bool)] = [];
+
+  let HASH_MODULUS : Nat = 4_294_967_296;
+
+  func clamp32(n : Nat) : Nat32 = Nat32.fromNat(n % HASH_MODULUS);
 
 func principalHash(p : Principal) : Nat32 = Principal.hash(p);
 
@@ -193,18 +200,20 @@ func badgeKeyEq(a : BadgeKey, b : BadgeKey) : Bool =
 func badgeKeyHash(k : BadgeKey) : Nat32 {
   let a = Nat32.toNat(Principal.hash(k.org));
   let b = Nat32.toNat(Principal.hash(k.user));
-  Nat32.fromNat((a * 1_678_123) + b);
+  clamp32((a * 1_678_123) + b);
 };
 
 func railTag(r : Rail) : Nat =
   switch (r) { case (#BTC) 0; case (#ICP) 1; case (#ETH) 2 };
+
+func natHash(n : Nat) : Nat32 { clamp32(n) };
 
 func tipKeyEq(a : TipUsageKey, b : TipUsageKey) : Bool =
   badgeKeyEq({ org = a.org; user = a.user }, { org = b.org; user = b.user }) and railTag(a.rail) == railTag(b.rail);
 
 func tipKeyHash(k : TipUsageKey) : Nat32 {
   let base = Nat32.toNat(badgeKeyHash({ org = k.org; user = k.user }));
-  Nat32.fromNat(base * 31 + railTag(k.rail));
+  clamp32(base * 31 + railTag(k.rail));
 };
 
 func subKeyEq(a : SubaccountKey, b : SubaccountKey) : Bool =
@@ -212,7 +221,15 @@ func subKeyEq(a : SubaccountKey, b : SubaccountKey) : Bool =
 
 func subKeyHash(k : SubaccountKey) : Nat32 {
   let base = Nat32.toNat(Principal.hash(k.org));
-  Nat32.fromNat(base * 17 + railTag(k.rail));
+  clamp32(base * 17 + railTag(k.rail));
+};
+
+func userRailKeyEq(a : UserRailKey, b : UserRailKey) : Bool =
+  Principal.equal(a.org, b.org) and Principal.equal(a.user, b.user) and railTag(a.rail) == railTag(b.rail);
+
+func userRailKeyHash(k : UserRailKey) : Nat32 {
+  let base = Nat32.toNat(badgeKeyHash({ org = k.org; user = k.user }));
+  clamp32(base + railTag(k.rail) + 1);
 };
 
 // ------------- Runtime collections -------------
@@ -230,6 +247,8 @@ for (intent in conversionStore.vals()) { conversionBuffer.add(intent) };
 for (entry in nativeDepositStore.vals()) { nativeDepositsBuf.add(entry) };
 var subaccountMap = HashMap.HashMap<SubaccountKey, Blob>(0, subKeyEq, subKeyHash);
 var spendMap = HashMap.HashMap<OrgId, SpendWindow>(0, Principal.equal, principalHash);
+var userBalances = HashMap.HashMap<UserRailKey, Nat>(0, userRailKeyEq, userRailKeyHash);
+var userConversionFlags = HashMap.HashMap<Nat, Bool>(0, Nat.equal, natHash);
 
   // ------------- Upgrade hooks -------------
   system func postupgrade() {
@@ -247,6 +266,8 @@ var spendMap = HashMap.HashMap<OrgId, SpendWindow>(0, Principal.equal, principal
     for (entry in nativeDepositStore.vals()) { nativeDepositsBuf.add(entry) };
     subaccountMap := HashMap.fromIter(subaccountStore.vals(), subaccountStore.size(), subKeyEq, subKeyHash);
     spendMap := HashMap.fromIter(spendStore.vals(), spendStore.size(), Principal.equal, principalHash);
+    userBalances := HashMap.fromIter(userBalanceStore.vals(), userBalanceStore.size(), userRailKeyEq, userRailKeyHash);
+    userConversionFlags := HashMap.fromIter(conversionSourceStore.vals(), conversionSourceStore.size(), Nat.equal, natHash);
   };
 
   system func preupgrade() {
@@ -262,6 +283,8 @@ var spendMap = HashMap.HashMap<OrgId, SpendWindow>(0, Principal.equal, principal
     nativeDepositStore := Buffer.toArray(nativeDepositsBuf);
     subaccountStore := Iter.toArray(subaccountMap.entries());
     spendStore := Iter.toArray(spendMap.entries());
+    userBalanceStore := Iter.toArray(userBalances.entries());
+    conversionSourceStore := Iter.toArray(userConversionFlags.entries());
   };
 
   // ------------- Helper functions -------------
@@ -425,8 +448,13 @@ var spendMap = HashMap.HashMap<OrgId, SpendWindow>(0, Principal.equal, principal
   };
 
   func conversionFailure(idx : Nat, intent : ConversionIntent, reason : Text) {
-    creditVault(intent.org, intent.rail, intent.amount);
-    rollbackRailSpend(intent.org, intent.rail, intent.amount);
+    if (isUserConversion(intent.id)) {
+      clearUserConversionFlag(intent.id);
+      restoreUserBalance(intent.org, intent.user, intent.rail, intent.amount);
+    } else {
+      creditVault(intent.org, intent.rail, intent.amount);
+      rollbackRailSpend(intent.org, intent.rail, intent.amount);
+    };
     conversionBuffer.put(idx, { intent with status = #Failed({ reason }) });
   };
 
@@ -454,6 +482,7 @@ var spendMap = HashMap.HashMap<OrgId, SpendWindow>(0, Principal.equal, principal
               switch (res) {
                 case (#Ok blockIndex) {
                   conversionBuffer.put(index, { intent with status = #Completed({ txid = ?("block#" # Nat.toText(blockIndex)) }) });
+                  clearUserConversionFlag(intent.id);
                 };
                 case (#Err err) {
                   conversionFailure(index, intent, "ckBTC minter error: " # err.message);
@@ -481,6 +510,7 @@ var spendMap = HashMap.HashMap<OrgId, SpendWindow>(0, Principal.equal, principal
               switch (res) {
                 case (#Ok txid) {
                   conversionBuffer.put(index, { intent with status = #Completed({ txid = ?txid }) });
+                  clearUserConversionFlag(intent.id);
                 };
                 case (#Err err) {
                   conversionFailure(index, intent, "ckETH minter error: " # err.message);
@@ -718,6 +748,109 @@ var spendMap = HashMap.HashMap<OrgId, SpendWindow>(0, Principal.equal, principal
     appendPayoutLog(ev);
   };
 
+  func userBalanceKey(org : OrgId, user : UserId, rail : Rail) : UserRailKey = { org; user; rail };
+
+  func getUserRailBalance(org : OrgId, user : UserId, rail : Rail) : Nat {
+    switch (userBalances.get(userBalanceKey(org, user, rail))) {
+      case (?bal) bal;
+      case null 0;
+    }
+  };
+
+  func creditUserBalance(org : OrgId, user : UserId, rail : Rail, amount : Nat) : Bool {
+    switch (orgs.get(org)) {
+      case (?state) creditUserBalanceWithState(org, user, rail, amount, state, true);
+      case null false;
+    }
+  };
+
+  func creditUserBalanceWithState(org : OrgId, user : UserId, rail : Rail, amount : Nat, state : OrgState, debitVaultNow : Bool) : Bool {
+    if (amount == 0) return true;
+    if (debitVaultNow) {
+      if (not hasLiquidity(org, state, rail, amount)) return false;
+      if (not debitVault(org, rail, amount)) return false;
+    };
+    let key = userBalanceKey(org, user, rail);
+    let current = switch (userBalances.get(key)) { case (?bal) bal; case null 0 };
+    userBalances.put(key, Nat.add(current, amount));
+    true
+  };
+
+  func restoreUserBalance(org : OrgId, user : UserId, rail : Rail, amount : Nat) {
+    if (amount == 0) return;
+    let key = userBalanceKey(org, user, rail);
+    let current = switch (userBalances.get(key)) { case (?bal) bal; case null 0 };
+    userBalances.put(key, Nat.add(current, amount));
+  };
+
+  func debitUserBalance(org : OrgId, user : UserId, rail : Rail, amount : Nat) : Bool {
+    if (amount == 0) return true;
+    let key = userBalanceKey(org, user, rail);
+    switch (userBalances.get(key)) {
+      case (?bal) {
+        if (bal < amount) return false;
+        let remaining = Nat.sub(bal, amount);
+        if (remaining == 0) {
+          ignore userBalances.remove(key);
+        } else {
+          userBalances.put(key, remaining);
+        };
+        true
+      };
+      case null false;
+    }
+  };
+
+  func markConversionFromUser(id : Nat) { userConversionFlags.put(id, true) };
+
+  func isUserConversion(id : Nat) : Bool =
+    switch (userConversionFlags.get(id)) {
+      case (?flag) flag;
+      case null false;
+    };
+
+  func clearUserConversionFlag(id : Nat) { ignore userConversionFlags.remove(id) };
+
+  func queueConversionIntent(
+    org : OrgId,
+    user : UserId,
+    rail : Rail,
+    amount : Nat,
+    destination : Text,
+    memo : ?Text,
+    state : OrgState,
+    debitVaultNow : Bool,
+    fromUserBalance : Bool,
+  ) : async Nat {
+    if (amount == 0) Debug.trap("amount must be > 0");
+    if (rail == #ICP) Debug.trap("Native conversions not supported for ICP");
+    if (debitVaultNow) {
+      guardRailSpend(org, state, rail, amount);
+      if (not hasLiquidity(org, state, rail, amount)) Debug.trap("Insufficient vault balance");
+      if (not debitVault(org, rail, amount)) Debug.trap("Insufficient vault balance");
+      recordRailSpend(org, state, rail, amount);
+    };
+    let intent : ConversionIntent = {
+      id = nextConversionId;
+      org;
+      user;
+      rail;
+      direction = #ToNative;
+      amount;
+      targetAddress = destination;
+      memo;
+      createdAt = nowSeconds();
+      status = #Pending;
+    };
+    nextConversionId += 1;
+    conversionBuffer.add(intent);
+    if (fromUserBalance) {
+      markConversionFromUser(intent.id);
+    };
+    await maybeSubmitConversion(conversionBuffer.size() - 1);
+    intent.id
+  };
+
   // ------------- Governance & setup -------------
   public shared ({ caller }) func setAdmin(newAdmin : Principal) : async () {
     ensureAdmin(caller);
@@ -872,6 +1005,18 @@ var spendMap = HashMap.HashMap<OrgId, SpendWindow>(0, Principal.equal, principal
     recordTipEvent(org, org, rail, amount, true, txMemo);
   };
 
+  public shared ({ caller }) func recordOrgDeposit(org : OrgId, rail : Rail, amount : Nat, memo : ?Text) : async Text {
+    ensureOrgCaller(org, caller);
+    assert (amount > 0);
+    switch (orgs.get(org)) {
+      case (?_) {};
+      case null Debug.trap("Unknown org");
+    };
+    creditVault(org, rail, amount);
+    recordTipEvent(org, org, rail, amount, true, memo);
+    "Success: deposit recorded"
+  };
+
   public shared ({ caller }) func recordNativeDeposit(org : OrgId, rail : Rail, amount : Nat, txid : Text, memo : ?Text) : async Nat {
     ensurePrivileged(caller);
     assert (amount > 0);
@@ -905,25 +1050,144 @@ var spendMap = HashMap.HashMap<OrgId, SpendWindow>(0, Principal.equal, principal
     };
     if (state.archived) Debug.trap("Org archived");
     if (not railEnabled(state.config.rails, rail)) Debug.trap("Rail disabled");
-    guardRailSpend(org, state, rail, amount);
-    if (not debitVault(org, rail, amount)) Debug.trap("Insufficient vault balance");
-    let intent : ConversionIntent = {
-      id = nextConversionId;
-      org;
-      user;
-      rail;
-      direction = #ToNative;
-      amount;
-      targetAddress = destination;
-      memo;
-      createdAt = nowSeconds();
-      status = #Pending;
+    await queueConversionIntent(org, user, rail, amount, destination, memo, state, true, false)
+  };
+
+  public shared ({ caller }) func withdrawMy(org : OrgId, rail : Rail, amount : Nat, destination : Text, memo : ?Text) : async Text {
+    let user = caller;
+    if (amount == 0) return "Error: amount must be > 0";
+    let state = switch (orgs.get(org)) {
+      case (?s) s;
+      case null return "Error: unknown org";
     };
-    nextConversionId += 1;
-    conversionBuffer.add(intent);
-    recordRailSpend(org, state, rail, amount);
-    ignore maybeSubmitConversion(conversionBuffer.size() - 1);
-    intent.id
+    if (state.archived) return "Error: org archived";
+    if (not railEnabled(state.config.rails, rail)) return "Error: rail disabled";
+    if (not ensureCompliance(org, user, state.config.compliance)) return "Error: compliance check failed";
+    if (getUserRailBalance(org, user, rail) < amount) return "Error: insufficient balance";
+    if (not debitUserBalance(org, user, rail, amount)) return "Error: insufficient balance";
+
+    switch (rail) {
+      case (#ICP) {
+        let recipientPrincipal =
+          if (destination.size() == 0) {
+            user
+          } else {
+            try {
+              Principal.fromText(destination)
+            } catch (_) {
+              restoreUserBalance(org, user, rail, amount);
+              return "Error: invalid ICP destination";
+            }
+          };
+        let memoBlob : ?Blob = switch (memo) {
+          case (?m) ?Text.encodeUtf8(m);
+          case null null;
+        };
+        let success = await sendRailPayment(#ICP, org, Principal.toBlob(recipientPrincipal), amount, memoBlob);
+        if (success) {
+          "Success: withdrawal sent"
+        } else {
+          restoreUserBalance(org, user, rail, amount);
+          "Error: ledger transfer failed"
+        }
+      };
+      case (#BTC) {
+        if (ckbtcMinterPrincipal == null) {
+          restoreUserBalance(org, user, rail, amount);
+          return "Error: ckBTC minter not configured";
+        };
+        if (destination.size() == 0) {
+          restoreUserBalance(org, user, rail, amount);
+          return "Error: destination is required";
+        };
+        let conversionId = await queueConversionIntent(org, user, rail, amount, destination, memo, state, false, true);
+        "Success: withdrawal scheduled (conversion #" # Nat.toText(conversionId) # ")"
+      };
+      case (#ETH) {
+        if (ckethMinterPrincipal == null) {
+          restoreUserBalance(org, user, rail, amount);
+          return "Error: ckETH minter not configured";
+        };
+        if (destination.size() == 0) {
+          restoreUserBalance(org, user, rail, amount);
+          return "Error: destination is required";
+        };
+        let conversionId = await queueConversionIntent(org, user, rail, amount, destination, memo, state, false, true);
+        "Success: withdrawal scheduled (conversion #" # Nat.toText(conversionId) # ")"
+      };
+    }
+  };
+
+  public shared ({ caller }) func withdrawOrgVault(org : OrgId, rail : Rail, amount : Nat, destination : Text, memo : ?Text) : async Text {
+    ensurePrivileged(caller);
+    if (amount == 0) return "Error: amount must be > 0";
+    let state = switch (orgs.get(org)) {
+      case (?s) s;
+      case null return "Error: unknown org";
+    };
+    if (state.config.microTips.enabled or state.config.scheduled.enabled) {
+      return "Error: disable micro-tips and scheduled payouts before withdrawing";
+    };
+    if (railEnabled(state.config.rails, rail)) {
+      return "Error: disable the rail before withdrawing";
+    };
+    let vault = getVault(org);
+    let available = switch (rail) {
+      case (#BTC) vault.btc;
+      case (#ICP) vault.icp;
+      case (#ETH) vault.eth;
+    };
+    if (available < amount) return "Error: insufficient vault balance";
+
+    switch (rail) {
+      case (#ICP) {
+        let recipient : Principal =
+          if (destination.size() == 0) {
+            caller
+          } else {
+            try {
+              Principal.fromText(destination)
+            } catch (_) {
+              return "Error: invalid ICP destination";
+            }
+          };
+        if (not debitVault(org, #ICP, amount)) return "Error: vault underflow";
+        let memoBlob : ?Blob = switch (memo) {
+          case (?m) ?Text.encodeUtf8(m);
+          case null null;
+        };
+        if (await sendRailPayment(#ICP, org, Principal.toBlob(recipient), amount, memoBlob)) {
+          "Success: ICP withdrawn"
+        } else {
+          creditVault(org, #ICP, amount);
+          "Error: ledger transfer failed";
+        }
+      };
+      case (#BTC) {
+        if (ckbtcMinterPrincipal == null) return "Error: ckBTC minter not configured";
+        if (destination.size() == 0) return "Error: destination is required";
+        if (not debitVault(org, #BTC, amount)) return "Error: vault underflow";
+        try {
+          let conversionId = await queueConversionIntent(org, caller, #BTC, amount, destination, memo, state, false, false);
+          "Success: withdrawal scheduled (conversion #" # Nat.toText(conversionId) # ")"
+        } catch (err) {
+          creditVault(org, #BTC, amount);
+          "Error: " # Error.message(err);
+        }
+      };
+      case (#ETH) {
+        if (ckethMinterPrincipal == null) return "Error: ckETH minter not configured";
+        if (destination.size() == 0) return "Error: destination is required";
+        if (not debitVault(org, #ETH, amount)) return "Error: vault underflow";
+        try {
+          let conversionId = await queueConversionIntent(org, caller, #ETH, amount, destination, memo, state, false, false);
+          "Success: withdrawal scheduled (conversion #" # Nat.toText(conversionId) # ")"
+        } catch (err) {
+          creditVault(org, #ETH, amount);
+          "Error: " # Error.message(err);
+        }
+      };
+    }
   };
 
   public shared ({ caller }) func submitPendingConversions(limit : Nat) : async Nat {
@@ -963,6 +1227,7 @@ var spendMap = HashMap.HashMap<OrgId, SpendWindow>(0, Principal.equal, principal
       case (?idx) {
         let intent = getConversion(idx);
         conversionBuffer.put(idx, { intent with status = #Completed({ txid }) });
+        clearUserConversionFlag(intent.id);
         "Success: conversion completed"
       };
       case null "Error: unknown conversion";
@@ -974,7 +1239,11 @@ var spendMap = HashMap.HashMap<OrgId, SpendWindow>(0, Principal.equal, principal
     switch (findConversionIndex(conversionId)) {
       case (?idx) {
         let intent = getConversion(idx);
-        if (refundVault) {
+        let userConversion = isUserConversion(intent.id);
+        if (userConversion) {
+          clearUserConversionFlag(intent.id);
+          restoreUserBalance(intent.org, intent.user, intent.rail, intent.amount);
+        } else if (refundVault) {
           creditVault(intent.org, intent.rail, intent.amount);
           rollbackRailSpend(intent.org, intent.rail, intent.amount);
         };
@@ -1065,29 +1334,23 @@ var spendMap = HashMap.HashMap<OrgId, SpendWindow>(0, Principal.equal, principal
       return;
     };
 
-    if (not debitVault(org, rail, amount)) {
-      recordTipEvent(org, user, rail, amount, false, ?"vault underflow");
-      return;
-    };
-
-    if (await sendRailPayment(rail, org, user, amount)) {
+    if (creditUserBalanceWithState(org, user, rail, amount, state, true)) {
       tipUsageMap.put(key, { amount = projected; windowStart = usage.windowStart });
       recordRailSpend(org, state, rail, amount);
       recordTipEvent(org, user, rail, amount, true, null);
     } else {
-      creditVault(org, rail, amount);
-      recordTipEvent(org, user, rail, amount, false, ?"ledger transfer failed");
+      recordTipEvent(org, user, rail, amount, false, ?"vault underflow");
     };
   };
 
-  func sendRailPayment(rail : Rail, org : OrgId, recipient : UserId, amount : Nat) : async Bool {
+  func sendRailPayment(rail : Rail, org : OrgId, toAccount : Blob, amount : Nat, memo : ?Blob) : async Bool {
     if (amount == 0) return true;
     let args : TransferArgs = {
       from_subaccount = ?orgRailSubaccount(org, rail);
-      to = Principal.toBlob(recipient);
+      to = toAccount;
       amount;
       fee = null;
-      memo = null;
+      memo;
       created_at_time = ?Nat64.fromNat(nowSeconds());
     };
     let missing : TransferResult = #Err({ code = 500; message = "ledger not configured" });
@@ -1170,39 +1433,27 @@ var spendMap = HashMap.HashMap<OrgId, SpendWindow>(0, Principal.equal, principal
           case (?tp) {
             if (rails.btc and tp.btcAmount > 0) {
               guardRailSpend(org, state, #BTC, tp.btcAmount);
-            };
-            if (rails.btc and tp.btcAmount > 0 and hasLiquidity(org, state, #BTC, tp.btcAmount)) {
-              if (debitVault(org, #BTC, tp.btcAmount)) {
-                if (await sendRailPayment(#BTC, org, user, tp.btcAmount)) {
-                  paidBtc += tp.btcAmount;
-                  recordRailSpend(org, state, #BTC, tp.btcAmount);
-                } else creditVault(org, #BTC, tp.btcAmount);
+              if (hasLiquidity(org, state, #BTC, tp.btcAmount) and creditUserBalanceWithState(org, user, #BTC, tp.btcAmount, state, true)) {
+                paidBtc += tp.btcAmount;
+                recordRailSpend(org, state, #BTC, tp.btcAmount);
               };
-          };
-          if (rails.icp and tp.icpAmount > 0) {
-            guardRailSpend(org, state, #ICP, tp.icpAmount);
-          };
-          if (rails.icp and tp.icpAmount > 0 and hasLiquidity(org, state, #ICP, tp.icpAmount)) {
-            if (debitVault(org, #ICP, tp.icpAmount)) {
-              if (await sendRailPayment(#ICP, org, user, tp.icpAmount)) {
+            };
+            if (rails.icp and tp.icpAmount > 0) {
+              guardRailSpend(org, state, #ICP, tp.icpAmount);
+              if (hasLiquidity(org, state, #ICP, tp.icpAmount) and creditUserBalanceWithState(org, user, #ICP, tp.icpAmount, state, true)) {
                 paidIcp += tp.icpAmount;
                 recordRailSpend(org, state, #ICP, tp.icpAmount);
-              } else creditVault(org, #ICP, tp.icpAmount);
+              };
             };
-          };
-          if (rails.eth and tp.ethAmount > 0) {
-            guardRailSpend(org, state, #ETH, tp.ethAmount);
-          };
-          if (rails.eth and tp.ethAmount > 0 and hasLiquidity(org, state, #ETH, tp.ethAmount)) {
-            if (debitVault(org, #ETH, tp.ethAmount)) {
-              if (await sendRailPayment(#ETH, org, user, tp.ethAmount)) {
+            if (rails.eth and tp.ethAmount > 0) {
+              guardRailSpend(org, state, #ETH, tp.ethAmount);
+              if (hasLiquidity(org, state, #ETH, tp.ethAmount) and creditUserBalanceWithState(org, user, #ETH, tp.ethAmount, state, true)) {
                 paidEth += tp.ethAmount;
                 recordRailSpend(org, state, #ETH, tp.ethAmount);
-              } else creditVault(org, #ETH, tp.ethAmount);
+              };
             };
           };
-        };
-        case null {};
+          case null {};
         };
       };
     };
@@ -1290,6 +1541,20 @@ var spendMap = HashMap.HashMap<OrgId, SpendWindow>(0, Principal.equal, principal
   public query func getOrgVaultBalance(org : OrgId) : async VaultBalance { getVault(org) };
   public query func getFactoryVaultBalance() : async VaultBalance { factoryVault };
   public query func getOrgSpendSnapshot(org : OrgId) : async SpendSnapshot { snapshotSpendWindow(org) };
+  public query func getUserOrgBalances(org : OrgId, user : UserId) : async { btc : Nat; icp : Nat; eth : Nat } {
+    {
+      btc = getUserRailBalance(org, user, #BTC);
+      icp = getUserRailBalance(org, user, #ICP);
+      eth = getUserRailBalance(org, user, #ETH);
+    }
+  };
+  public shared ({ caller }) func myOrgBalances(org : OrgId) : async { btc : Nat; icp : Nat; eth : Nat } {
+    {
+      btc = getUserRailBalance(org, caller, #BTC);
+      icp = getUserRailBalance(org, caller, #ICP);
+      eth = getUserRailBalance(org, caller, #ETH);
+    }
+  };
 
   public query func getRailHealth(org : OrgId, rail : Rail) : async ?RailHealth {
     switch (orgs.get(org)) {

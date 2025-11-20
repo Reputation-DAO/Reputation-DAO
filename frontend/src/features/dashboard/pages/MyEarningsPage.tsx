@@ -1,6 +1,7 @@
 // src/features/dashboard/pages/MyEarningsPage.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { Principal } from "@dfinity/principal";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useRole } from "@/contexts/RoleContext";
@@ -12,6 +13,8 @@ import WalletCopyBadge from "../components/WalletCopyBadge";
 import { AlertTriangle, Coins, Wallet, ArrowDownToLine } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import type { Rail as TreasuryRail, TipEvent } from "@/declarations/treasury/treasury.did";
 
 export type RailSymbol = "BTC" | "ICP" | "ETH";
 
@@ -19,6 +22,7 @@ export type MyRailEarnings = {
   symbol: RailSymbol;
   available: string;
   pending: string;
+  rawAvailable: bigint;
 };
 
 export type MyEarningsEvent = {
@@ -35,58 +39,187 @@ export type MyEarningsSummary = {
   history: MyEarningsEvent[];
 };
 
+const RAILS: RailSymbol[] = ["BTC", "ICP", "ETH"];
+
+const railVariant = (symbol: RailSymbol): TreasuryRail =>
+  symbol === "BTC" ? { BTC: null } : symbol === "ICP" ? { ICP: null } : { ETH: null };
+
+const railFromVariant = (rail: TreasuryRail): RailSymbol => {
+  if ("BTC" in rail) return "BTC";
+  if ("ICP" in rail) return "ICP";
+  return "ETH";
+};
+
+const RAIL_DECIMALS: Record<RailSymbol, number> = {
+  BTC: 8,
+  ICP: 8,
+  ETH: 18,
+};
+
+const formatAmount = (value: bigint, decimals: number) => {
+  if (decimals === 0) return value.toString();
+  const negative = value < 0n;
+  const absValue = negative ? -value : value;
+  const str = absValue.toString().padStart(decimals + 1, "0");
+  const integerPart = str.slice(0, -decimals) || "0";
+  const fraction = str.slice(-decimals).replace(/0+$/, "");
+  const formatted = fraction ? `${integerPart}.${fraction}` : integerPart;
+  return negative ? `-${formatted}` : formatted;
+};
+
+const formatNat = (value?: bigint | null, symbol: RailSymbol = "ICP") =>
+  formatAmount(value ?? 0n, RAIL_DECIMALS[symbol]);
+
 function useMyEarnings(cid?: string) {
   const [summary, setSummary] = useState<MyEarningsSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { isAuthenticated, principal, getTreasuryActor } = useAuth();
+
+  const load = useCallback(async () => {
+    if (!cid || !isAuthenticated || !principal) {
+      setSummary(null);
+      setLoading(false);
+      setError(!principal ? "Connect a wallet to view earnings." : null);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      let orgPrincipal: Principal;
+      try {
+        orgPrincipal = Principal.fromText(cid);
+      } catch {
+        throw new Error("Invalid organization id");
+      }
+      const treasury = await getTreasuryActor();
+      let balances: { btc: bigint; icp: bigint; eth: bigint } | null = null;
+      if ("myOrgBalances" in treasury) {
+        balances = await (treasury as any).myOrgBalances(orgPrincipal);
+      } else if ("getUserOrgBalances" in treasury) {
+        balances = await (treasury as any).getUserOrgBalances(orgPrincipal, principal);
+      }
+      if (!balances) {
+        throw new Error("Treasury API missing balance query");
+      }
+      const rails: MyRailEarnings[] = RAILS.map((symbol) => {
+        const raw =
+          symbol === "BTC"
+            ? (balances.btc as bigint)
+            : symbol === "ICP"
+            ? (balances.icp as bigint)
+            : (balances.eth as bigint);
+        return {
+          symbol,
+          available: formatNat(raw, symbol),
+          pending: "0",
+          rawAvailable: raw ?? 0n,
+        };
+      });
+
+      let history: MyEarningsEvent[] = [];
+      try {
+        const tipEvents = await treasury.listTipEvents(0n, 200n);
+        const principalText = principal?.toText();
+        history = tipEvents
+          .filter((event) => {
+            const orgMatches = event.org?.toText?.() === cid;
+            const userMatches = principalText ? event.user?.toText?.() === principalText : true;
+            return orgMatches && userMatches;
+          })
+          .map((event) => {
+            const amount = event.amount as bigint;
+            const ts = Number(event.timestamp ?? 0n) * 1000;
+            const reason =
+              Array.isArray(event.error) && event.error.length > 0
+                ? event.error[0] || "Micro-tip"
+                : "Micro-tip";
+            return {
+              id: event.id.toString(),
+              ts,
+              reason,
+              rail: railFromVariant(event.rail),
+              amount: formatNat(amount, railFromVariant(event.rail)),
+              status: event.success ? "paid" : "pending",
+            };
+          })
+          .sort((a, b) => b.ts - a.ts);
+      } catch (historyErr) {
+        console.warn("Failed to load reward history", historyErr);
+      }
+
+      setSummary({ rails, history });
+    } catch (err: any) {
+      setError(err?.message || "Failed to load earnings");
+      setSummary({
+        rails: RAILS.map((symbol) => ({
+          symbol,
+          available: "0",
+          pending: "0",
+          rawAvailable: 0n,
+        })),
+        history: [],
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [cid, getTreasuryActor, isAuthenticated, principal]);
 
   useEffect(() => {
-    setLoading(true);
-    // TODO: replace with Treasury canister query scoped to the caller + org.
-    const timer = setTimeout(() => {
-      setSummary({
-        rails: [
-          { symbol: "BTC", available: "0.0012", pending: "0.0003" },
-          { symbol: "ICP", available: "54.2", pending: "12.0" },
-          { symbol: "ETH", available: "0.085", pending: "0.010" },
-        ],
-        history: [
-          {
-            id: "evt-001",
-            ts: Date.now() - 1000 * 60 * 60,
-            reason: "Awarded for proposal review",
-            rail: "BTC",
-            amount: "0.0002",
-            status: "paid",
-          },
-          {
-            id: "evt-002",
-            ts: Date.now() - 1000 * 60 * 120,
-            reason: "Contributor payout",
-            rail: "ICP",
-            amount: "10",
-            status: "pending",
-          },
-          {
-            id: "evt-003",
-            ts: Date.now() - 1000 * 60 * 200,
-            reason: "Cycle bonus",
-            rail: "ETH",
-            amount: "0.02",
-            status: "paid",
-          },
-        ],
-      });
-      setLoading(false);
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [cid]);
+    load();
+  }, [load]);
 
-  const withdraw = async (rail: RailSymbol) => {
-    // TODO: wire to treasury withdraw endpoint.
-    console.log(`Withdraw from ${rail}`);
-  };
+  const withdraw = useCallback(
+    async (rail: MyRailEarnings, cid?: string) => {
+      if (!cid) return;
+      if (rail.rawAvailable === 0n) {
+        toast.info(`No ${rail.symbol} available to withdraw.`);
+        return;
+      }
+      try {
+        const treasury = await getTreasuryActor();
+        const orgPrincipal = Principal.fromText(cid);
 
-  return { summary, loading, withdraw };
+        let destination = "";
+        if (rail.symbol === "ICP") {
+          const defaultPrincipal = principal?.toText() ?? "";
+          const promptMessage =
+            "Enter the destination principal for this ICP withdrawal (leave blank to use your current wallet).";
+          destination = window.prompt(promptMessage, defaultPrincipal)?.trim() ?? defaultPrincipal;
+          if (!destination) {
+            toast.message("Withdrawal cancelled");
+            return;
+          }
+        } else {
+          const promptMessage =
+            rail.symbol === "BTC"
+              ? "Enter destination BTC address (ckBTC withdrawal)"
+              : "Enter destination ETH / ckETH address";
+          destination = window.prompt(promptMessage, "")?.trim() ?? "";
+          if (!destination) {
+            toast.message("Withdrawal cancelled");
+            return;
+          }
+        }
+
+        const res = await treasury.withdrawMy(
+          orgPrincipal,
+          railVariant(rail.symbol),
+          rail.rawAvailable,
+          destination,
+          []
+        );
+        toast.success(res);
+        await load();
+      } catch (err: any) {
+        console.error(err);
+        toast.error(err?.message || "Failed to submit withdrawal");
+      }
+    },
+    [getTreasuryActor, load, principal]
+  );
+
+  return { summary, loading, error, withdraw };
 }
 
 export default function MyEarningsPage() {
@@ -95,7 +228,7 @@ export default function MyEarningsPage() {
   const { isAuthenticated, principal } = useAuth();
   const { userRole, loading: roleLoading, currentPrincipal, userName } = useRole();
   const sidebarPrincipal = currentPrincipal?.toText() || principal?.toText() || "";
-  const { summary, loading, withdraw } = useMyEarnings(cid);
+  const { summary, loading, error, withdraw } = useMyEarnings(cid);
 
   if (!cid || !isAuthenticated) {
     return (
@@ -159,6 +292,11 @@ export default function MyEarningsPage() {
 
       <main className="p-6">
         <div className="max-w-6xl mx-auto space-y-8">
+          {error && (
+            <Card className="border border-destructive/40 bg-destructive/5 text-sm text-destructive px-4 py-3">
+              {error}
+            </Card>
+          )}
           <div className="grid gap-4 md:grid-cols-3">
             {summary.rails.map((rail) => (
               <Card key={rail.symbol} className="glass-card border border-border/60 p-5 space-y-4">
@@ -177,7 +315,7 @@ export default function MyEarningsPage() {
                   <p className="text-xs text-muted-foreground">Pending</p>
                   <p className="text-lg text-muted-foreground">{rail.pending}</p>
                 </div>
-                <Button className="w-full gap-2" onClick={() => withdraw(rail.symbol)}>
+                <Button className="w-full gap-2" onClick={() => withdraw(rail, cid)}>
                   <ArrowDownToLine className="w-4 h-4" />
                   Withdraw
                 </Button>

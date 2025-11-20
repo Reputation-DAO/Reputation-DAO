@@ -166,6 +166,10 @@ export interface _SERVICE {
   'getRailHealth' : ActorMethod<[OrgId, Rail], [] | [RailHealth]>,
   'getUserBadges' : ActorMethod<[OrgId, UserId], UserBadges>,
   'getUserCompliance' : ActorMethod<[OrgId, UserId], [] | [UserCompliance]>,
+  'getUserOrgBalances' : ActorMethod<
+    [OrgId, UserId],
+    { 'btc' : bigint, 'eth' : bigint, 'icp' : bigint }
+  >,
   'isOrgArchived' : ActorMethod<[OrgId], boolean>,
   'listConversionIntents' : ActorMethod<
     [bigint, bigint],
@@ -177,6 +181,10 @@ export interface _SERVICE {
   'listTipEvents' : ActorMethod<[bigint, bigint], Array<TipEvent>>,
   'markConversionCompleted' : ActorMethod<[bigint, [] | [string]], string>,
   'markConversionFailed' : ActorMethod<[bigint, string, boolean], string>,
+  'myOrgBalances' : ActorMethod<
+    [OrgId],
+    { 'btc' : bigint, 'eth' : bigint, 'icp' : bigint }
+  >,
   'notifyLedgerDeposit' : ActorMethod<
     [OrgId, Rail, bigint, [] | [string]],
     undefined
@@ -184,6 +192,10 @@ export interface _SERVICE {
   'recordNativeDeposit' : ActorMethod<
     [OrgId, Rail, bigint, string, [] | [string]],
     bigint
+  >,
+  'recordOrgDeposit' : ActorMethod<
+    [OrgId, Rail, bigint, [] | [string]],
+    string
   >,
   'recordOrgHeartbeat' : ActorMethod<[OrgId], undefined>,
   'registerOrg' : ActorMethod<[OrgId, OrgConfig], undefined>,
@@ -213,6 +225,14 @@ export interface _SERVICE {
   'setUserCompliance' : ActorMethod<[OrgId, UserId, UserCompliance], undefined>,
   'submitPendingConversions' : ActorMethod<[bigint], bigint>,
   'updateOrgConfig' : ActorMethod<[OrgId, OrgConfig], undefined>,
+  'withdrawMy' : ActorMethod<
+    [OrgId, Rail, bigint, string, [] | [string]],
+    string
+  >,
+  'withdrawOrgVault' : ActorMethod<
+    [OrgId, Rail, bigint, string, [] | [string]],
+    string
+  >,
 }
 export declare const idlFactory: IDL.InterfaceFactory;
 export declare const init: (args: { IDL: typeof IDL }) => IDL.Type[];

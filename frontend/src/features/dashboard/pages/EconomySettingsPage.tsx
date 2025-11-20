@@ -1,6 +1,9 @@
 // src/features/dashboard/pages/EconomySettingsPage.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { Principal } from "@dfinity/principal";
+import { Buffer } from "buffer";
+import { toast } from "sonner";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useRole } from "@/contexts/RoleContext";
@@ -13,9 +16,12 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import WalletCopyBadge from "../components/WalletCopyBadge";
-import { AlertTriangle, Coins, RefreshCw, Save } from "lucide-react";
+import { AlertTriangle, Coins, RefreshCw, Save, ArrowDownToLine, Copy } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import type { OrgConfig as TreasuryOrgConfig } from "@/declarations/treasury/treasury.did";
+import { getTreasuryCanisterId } from "@/lib/canisters";
+import { principalToAccountIdentifier } from "@/utils/accountIdentifier";
 
 type RailToggle = { btc: boolean; icp: boolean; eth: boolean };
 type Thresholds = { btcMin: string; icpMin: string; ethMin: string };
@@ -52,31 +58,204 @@ export type OrgEconomyConfig = {
   compliance: ComplianceConfig;
 };
 
-const mockConfig: OrgEconomyConfig = {
-  rails: { btc: true, icp: true, eth: false },
-  thresholds: { btcMin: "1000", icpMin: "200000000", ethMin: "0" },
+const defaultTreasuryConfig: TreasuryOrgConfig = {
+  rails: { btc: false, icp: false, eth: false },
+  thresholds: { btcMin: 0n, icpMin: 0n, ethMin: 0n },
   microTips: {
-    enabled: true,
-    btcTipAmount: "5000",
-    icpTipAmount: "10000000",
-    ethTipAmount: "2000000000000000",
-    maxBtcPerPeriod: "500000",
-    maxIcpPerPeriod: "2500000000",
-    maxEthPerPeriod: "100000000000000000",
-    maxEventsPerWindow: "25",
+    enabled: false,
+    btcTipAmount: 0n,
+    icpTipAmount: 0n,
+    ethTipAmount: 0n,
+    maxBtcPerPeriod: 0n,
+    maxIcpPerPeriod: 0n,
+    maxEthPerPeriod: 0n,
+    maxEventsPerWindow: 0n,
   },
   scheduled: {
-    enabled: true,
-    frequency: "Monthly",
-    maxBtcPerCycle: "1500000",
-    maxIcpPerCycle: "7500000000",
-    maxEthPerCycle: "200000000000000000",
+    enabled: false,
+    frequency: { Monthly: null },
+    maxBtcPerCycle: 0n,
+    maxIcpPerCycle: 0n,
+    maxEthPerCycle: 0n,
+    tiers: [],
   },
   compliance: {
     kycRequired: false,
-    tagWhitelist: ["core", "trusted"],
+    tagWhitelist: [],
   },
+  deadman: {
+    enabled: false,
+    inactivityThresholdSeconds: 0n,
+  },
+  spendControl: [],
 };
+
+const numericMask = (value: string, allowDecimal = false) => {
+  const pattern = allowDecimal ? /[^\d.]/g : /[^\d]/g;
+  const cleaned = value.replace(pattern, "");
+  if (!allowDecimal) return cleaned;
+  const parts = cleaned.split(".");
+  if (parts.length <= 1) return cleaned;
+  return `${parts[0]}.${parts.slice(1).join("")}`;
+};
+
+const digitsOnly = (value: string) => numericMask(value, false);
+
+const RAIL_DECIMALS: Record<RailSymbol, number> = {
+  BTC: 8,
+  ICP: 8,
+  ETH: 18,
+};
+const RAILS: RailSymbol[] = ["BTC", "ICP", "ETH"];
+const VAULT_KEY: Record<RailSymbol, "btc" | "icp" | "eth"> = { BTC: "btc", ICP: "icp", ETH: "eth" };
+const RAIL_TAG: Record<RailSymbol, number> = { BTC: 0, ICP: 1, ETH: 2 };
+
+const treasuryCanisterId = getTreasuryCanisterId();
+
+const toDefaultSubaccountHex = (orgId: string, rail: RailSymbol) => {
+  try {
+    const principal = Principal.fromText(orgId);
+    const orgBytes = Array.from(principal.toUint8Array());
+    const buf = new Uint8Array(32);
+    for (let i = 0; i < 31; i++) {
+      buf[i] = orgBytes[i] ?? 0;
+    }
+    buf[31] = RAIL_TAG[rail] ?? 0;
+    return Buffer.from(buf).toString("hex").toUpperCase();
+  } catch {
+    return "";
+  }
+};
+
+const formatDecimal = (value: bigint, decimals: number) => {
+  if (decimals <= 0) return value.toString();
+  const negative = value < 0n;
+  const absValue = negative ? -value : value;
+  const str = absValue.toString().padStart(decimals + 1, "0");
+  const integerPart = str.slice(0, -decimals) || "0";
+  let fraction = str.slice(-decimals).replace(/0+$/, "");
+  const formatted = fraction ? `${integerPart}.${fraction}` : integerPart;
+  return negative ? `-${formatted}` : formatted;
+};
+
+const parseDecimalInput = (value: string, decimals: number) => {
+  const sanitized = numericMask(value, decimals > 0);
+  if (!sanitized) return 0n;
+  if (decimals === 0) {
+    try {
+      return BigInt(sanitized);
+    } catch {
+      return 0n;
+    }
+  }
+  const [wholeRaw, fractionRaw = ""] = sanitized.split(".");
+  const whole = wholeRaw || "0";
+  const trimmedFraction = fractionRaw.slice(0, decimals);
+  const paddedFraction = trimmedFraction.padEnd(decimals, "0");
+  const combined = `${whole}${paddedFraction}`;
+  try {
+    return BigInt(combined.replace(/^0+(?=\d)/, ""));
+  } catch {
+    return 0n;
+  }
+};
+
+const decimalsForKey = (key: string): number => {
+  const lower = key.toLowerCase();
+  if (lower.includes("btc")) return RAIL_DECIMALS.BTC;
+  if (lower.includes("eth")) return RAIL_DECIMALS.ETH;
+  if (lower.includes("icp")) return RAIL_DECIMALS.ICP;
+  return 0;
+};
+
+const formatAmountForKey = (value: bigint, key: string) => formatDecimal(value ?? 0n, decimalsForKey(key));
+const parseAmountForKey = (value: string, key: string) => parseDecimalInput(value, decimalsForKey(key));
+const railsAllowDecimal = (key: string) => decimalsForKey(key) > 0;
+type RailSymbol = "BTC" | "ICP" | "ETH";
+
+const railVariant = (symbol: RailSymbol) =>
+  symbol === "BTC" ? ({ BTC: null } as const) : symbol === "ICP" ? ({ ICP: null } as const) : ({ ETH: null } as const);
+
+const normalizeOrgConfig = (cfg?: TreasuryOrgConfig | null): TreasuryOrgConfig => {
+  const base = cfg ?? defaultTreasuryConfig;
+  return {
+    rails: { ...defaultTreasuryConfig.rails, ...base.rails },
+    thresholds: { ...defaultTreasuryConfig.thresholds, ...base.thresholds },
+    microTips: { ...defaultTreasuryConfig.microTips, ...base.microTips },
+    scheduled: {
+      ...defaultTreasuryConfig.scheduled,
+      ...base.scheduled,
+      tiers: (base.scheduled?.tiers ?? []).map((tier) => ({ ...tier })),
+    },
+    compliance: { ...defaultTreasuryConfig.compliance, ...base.compliance },
+    deadman: { ...defaultTreasuryConfig.deadman, ...base.deadman },
+    spendControl: base.spendControl ? [...base.spendControl] : [],
+  };
+};
+
+const mapOrgConfigToUi = (cfg: TreasuryOrgConfig): OrgEconomyConfig => ({
+  rails: { ...cfg.rails },
+  thresholds: {
+    btcMin: formatAmountForKey(cfg.thresholds.btcMin, "btcMin"),
+    icpMin: formatAmountForKey(cfg.thresholds.icpMin, "icpMin"),
+    ethMin: formatAmountForKey(cfg.thresholds.ethMin, "ethMin"),
+  },
+  microTips: {
+    enabled: cfg.microTips.enabled,
+    btcTipAmount: formatAmountForKey(cfg.microTips.btcTipAmount, "btcTipAmount"),
+    icpTipAmount: formatAmountForKey(cfg.microTips.icpTipAmount, "icpTipAmount"),
+    ethTipAmount: formatAmountForKey(cfg.microTips.ethTipAmount, "ethTipAmount"),
+    maxBtcPerPeriod: formatAmountForKey(cfg.microTips.maxBtcPerPeriod, "maxBtcPerPeriod"),
+    maxIcpPerPeriod: formatAmountForKey(cfg.microTips.maxIcpPerPeriod, "maxIcpPerPeriod"),
+    maxEthPerPeriod: formatAmountForKey(cfg.microTips.maxEthPerPeriod, "maxEthPerPeriod"),
+    maxEventsPerWindow: formatAmountForKey(cfg.microTips.maxEventsPerWindow, "maxEventsPerWindow"),
+  },
+  scheduled: {
+    enabled: cfg.scheduled.enabled,
+    frequency: "Monthly",
+    maxBtcPerCycle: formatAmountForKey(cfg.scheduled.maxBtcPerCycle, "maxBtcPerCycle"),
+    maxIcpPerCycle: formatAmountForKey(cfg.scheduled.maxIcpPerCycle, "maxIcpPerCycle"),
+    maxEthPerCycle: formatAmountForKey(cfg.scheduled.maxEthPerCycle, "maxEthPerCycle"),
+  },
+  compliance: {
+    kycRequired: cfg.compliance.kycRequired,
+    tagWhitelist: [...cfg.compliance.tagWhitelist],
+  },
+});
+
+const mergeOrgConfig = (ui: OrgEconomyConfig, base: TreasuryOrgConfig): TreasuryOrgConfig => ({
+  ...base,
+  rails: { ...ui.rails },
+  thresholds: {
+    btcMin: parseAmountForKey(ui.thresholds.btcMin, "btcMin"),
+    icpMin: parseAmountForKey(ui.thresholds.icpMin, "icpMin"),
+    ethMin: parseAmountForKey(ui.thresholds.ethMin, "ethMin"),
+  },
+  microTips: {
+    ...base.microTips,
+    enabled: ui.microTips.enabled,
+    btcTipAmount: parseAmountForKey(ui.microTips.btcTipAmount, "btcTipAmount"),
+    icpTipAmount: parseAmountForKey(ui.microTips.icpTipAmount, "icpTipAmount"),
+    ethTipAmount: parseAmountForKey(ui.microTips.ethTipAmount, "ethTipAmount"),
+    maxBtcPerPeriod: parseAmountForKey(ui.microTips.maxBtcPerPeriod, "maxBtcPerPeriod"),
+    maxIcpPerPeriod: parseAmountForKey(ui.microTips.maxIcpPerPeriod, "maxIcpPerPeriod"),
+    maxEthPerPeriod: parseAmountForKey(ui.microTips.maxEthPerPeriod, "maxEthPerPeriod"),
+    maxEventsPerWindow: parseAmountForKey(ui.microTips.maxEventsPerWindow, "maxEventsPerWindow"),
+  },
+  scheduled: {
+    ...base.scheduled,
+    enabled: ui.scheduled.enabled,
+    frequency: ui.scheduled.frequency === "Monthly" ? { Monthly: null } : base.scheduled.frequency,
+    maxBtcPerCycle: parseAmountForKey(ui.scheduled.maxBtcPerCycle, "maxBtcPerCycle"),
+    maxIcpPerCycle: parseAmountForKey(ui.scheduled.maxIcpPerCycle, "maxIcpPerCycle"),
+    maxEthPerCycle: parseAmountForKey(ui.scheduled.maxEthPerCycle, "maxEthPerCycle"),
+  },
+  compliance: {
+    ...base.compliance,
+    kycRequired: ui.compliance.kycRequired,
+    tagWhitelist: [...ui.compliance.tagWhitelist],
+  },
+});
 
 type EconomyHookState = {
   config: OrgEconomyConfig | null;
@@ -87,26 +266,71 @@ type EconomyHookState = {
   update: (updater: (prev: OrgEconomyConfig) => OrgEconomyConfig) => void;
   save: () => Promise<void>;
   reset: () => void;
+  reload: () => Promise<void>;
+  vaultBalance: { btc: bigint; icp: bigint; eth: bigint } | null;
+  refreshVault: () => Promise<void>;
 };
 
 function useOrgEconomyConfig(cid?: string): EconomyHookState {
+  const { getTreasuryActor, isAuthenticated } = useAuth();
   const [config, setConfig] = useState<OrgEconomyConfig | null>(null);
   const [initial, setInitial] = useState<OrgEconomyConfig | null>(null);
+  const [rawConfig, setRawConfig] = useState<TreasuryOrgConfig | null>(null);
+  const [orgPrincipal, setOrgPrincipal] = useState<Principal | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [vaultBalance, setVaultBalance] = useState<{ btc: bigint; icp: bigint; eth: bigint } | null>(null);
 
-  useEffect(() => {
+  const loadConfig = useCallback(async () => {
+    if (!cid) {
+      setConfig(null);
+      setInitial(null);
+      setRawConfig(null);
+      setOrgPrincipal(null);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
-    // TODO: Replace mock load with Treasury canister fetch.
-    const timer = setTimeout(() => {
-      setConfig(mockConfig);
-      setInitial(mockConfig);
+
+    try {
+      const orgId = Principal.fromText(cid);
+      setOrgPrincipal(orgId);
+
+      if (!isAuthenticated) {
+        throw new Error("Connect a wallet with admin rights to configure this organization.");
+      }
+
+      const treasury = await getTreasuryActor();
+      const result = await treasury.getOrgConfig(orgId);
+      const treasuryConfig = normalizeOrgConfig(result.length ? result[0] : null);
+      const vault = await treasury.getOrgVaultBalance(orgId);
+      const uiConfig = mapOrgConfigToUi(treasuryConfig);
+
+      setRawConfig(treasuryConfig);
+      setConfig(uiConfig);
+      setInitial(uiConfig);
+      setVaultBalance(vault);
+    } catch (err: any) {
+      const message =
+        err?.message?.includes("Invalid principal")
+          ? "Invalid organization canister id."
+          : err?.message || "Failed to load treasury config.";
+      setError(message);
+      setConfig(null);
+      setInitial(null);
+      setRawConfig(null);
+      setVaultBalance(null);
+    } finally {
       setLoading(false);
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [cid]);
+    }
+  }, [cid, getTreasuryActor, isAuthenticated]);
+
+  useEffect(() => {
+    loadConfig();
+  }, [loadConfig]);
 
   const dirty = useMemo(() => {
     if (!config || !initial) return false;
@@ -118,11 +342,21 @@ function useOrgEconomyConfig(cid?: string): EconomyHookState {
   };
 
   const save = async () => {
-    if (!config) return;
+    if (!config || !rawConfig || !orgPrincipal) return;
     setSaving(true);
-    // TODO: Persist config to Treasury canister.
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    setInitial(config);
+    setError(null);
+    try {
+      const treasury = await getTreasuryActor();
+      const merged = mergeOrgConfig(config, rawConfig);
+      await treasury.updateOrgConfig(orgPrincipal, merged);
+      setInitial(config);
+      setRawConfig(merged);
+    } catch (err: any) {
+      const message = err?.message || "Failed to save economy settings.";
+      setError(message);
+      setSaving(false);
+      throw (err instanceof Error ? err : new Error(message));
+    }
     setSaving(false);
   };
 
@@ -130,16 +364,41 @@ function useOrgEconomyConfig(cid?: string): EconomyHookState {
     if (initial) setConfig(initial);
   };
 
-  return { config, loading, saving, error, dirty, update, save, reset };
+  const refreshVault = useCallback(async () => {
+    if (!orgPrincipal) return;
+    try {
+      const treasury = await getTreasuryActor();
+      const vault = await treasury.getOrgVaultBalance(orgPrincipal);
+      setVaultBalance(vault);
+    } catch (err) {
+      console.warn("Failed to refresh vault balance", err);
+    }
+  }, [getTreasuryActor, orgPrincipal]);
+
+  return { config, loading, saving, error, dirty, update, save, reset, reload: loadConfig, vaultBalance, refreshVault };
 }
 
 export default function EconomySettingsPage() {
   const navigate = useNavigate();
   const { cid } = useParams<{ cid: string }>();
-  const { isAuthenticated, principal } = useAuth();
+  const { isAuthenticated, principal, getTreasuryActor } = useAuth();
   const { isAdmin, loading: roleLoading, userRole, userName, currentPrincipal } = useRole();
 
   const [submitting, setSubmitting] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [depositing, setDepositing] = useState(false);
+  const [withdrawForm, setWithdrawForm] = useState(() => ({
+    rail: "ICP" as RailSymbol,
+    amount: "",
+    destination: "",
+    memo: "",
+  }));
+  const [depositForm, setDepositForm] = useState(() => ({
+    rail: "ICP" as RailSymbol,
+    amount: "",
+    memo: "",
+  }));
+
   const {
     config,
     loading,
@@ -148,9 +407,36 @@ export default function EconomySettingsPage() {
     update,
     reset,
     save: persistConfig,
+    error,
+    reload,
+    vaultBalance,
+    refreshVault,
   } = useOrgEconomyConfig(cid);
 
   const sidebarPrincipal = currentPrincipal?.toText() || principal?.toText() || "";
+  const depositDetails = useMemo(() => {
+    if (!cid) return null;
+    const subaccountHex = toDefaultSubaccountHex(cid, depositForm.rail);
+    if (!subaccountHex) return null;
+    const owner = treasuryCanisterId;
+    const accountId =
+      depositForm.rail === "ICP" || depositForm.rail === "BTC"
+        ? principalToAccountIdentifier(owner, subaccountHex)
+        : null;
+    return { owner, subaccountHex, accountId };
+  }, [cid, depositForm.rail]);
+  const copyToClipboard = useCallback((label: string, value: string) => {
+    if (!value) return;
+    navigator.clipboard
+      ?.writeText(value)
+      .then(() => toast.success(`${label} copied`))
+      .catch(() => toast.error(`Unable to copy ${label}`));
+  }, []);
+const formatVault = (symbol: RailSymbol) => {
+  const key = VAULT_KEY[symbol];
+  const raw = vaultBalance ? (vaultBalance as any)[key] : 0n;
+  return formatDecimal(raw ?? 0n, RAIL_DECIMALS[symbol]);
+};
 
   const handleRailToggle = (rail: keyof RailToggle, value: boolean) =>
     update((prev) => ({
@@ -161,7 +447,10 @@ export default function EconomySettingsPage() {
   const handleThresholdChange = (rail: keyof Thresholds, value: string) =>
     update((prev) => ({
       ...prev,
-      thresholds: { ...prev.thresholds, [rail]: value.replace(/[^\d]/g, "") },
+      thresholds: {
+        ...prev.thresholds,
+        [rail]: railsAllowDecimal(String(rail)) ? numericMask(value, true) : digitsOnly(value),
+      },
     }));
 
   const handleMicroTipChange = (field: keyof MicroTipsConfig, value: string | boolean) =>
@@ -170,7 +459,11 @@ export default function EconomySettingsPage() {
       microTips: {
         ...prev.microTips,
         [field]:
-          typeof value === "string" ? value.replace(/[^\d]/g, "") : value,
+          typeof value === "string"
+            ? railsAllowDecimal(String(field))
+              ? numericMask(value, true)
+              : digitsOnly(value)
+            : value,
       },
     }));
 
@@ -181,7 +474,9 @@ export default function EconomySettingsPage() {
         ...prev.scheduled,
         [field]:
           typeof value === "string" && field !== "frequency"
-            ? value.replace(/[^\d]/g, "")
+            ? railsAllowDecimal(String(field))
+              ? numericMask(value, true)
+              : digitsOnly(value)
             : value,
       },
     }));
@@ -197,11 +492,94 @@ export default function EconomySettingsPage() {
 
   const tagValue = config?.compliance.tagWhitelist.join(", ") ?? "";
 
+  const canStopAll =
+    !!config &&
+    (config.microTips.enabled || config.scheduled.enabled || config.rails.btc || config.rails.icp || config.rails.eth);
+
   const onSave = async () => {
     if (!dirty || !config) return;
     setSubmitting(true);
-    await persistConfig();
-    setSubmitting(false);
+    try {
+      await persistConfig();
+      toast.success("Economy settings saved");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save economy settings");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleStopAll = () => {
+    update((prev) => ({
+      ...prev,
+      rails: { btc: false, icp: false, eth: false },
+      microTips: { ...prev.microTips, enabled: false },
+      scheduled: { ...prev.scheduled, enabled: false },
+    }));
+    toast.message("Payout rails disabled. Don’t forget to save your changes.");
+  };
+
+  const handleWithdraw = async () => {
+    if (!cid || !config) return;
+    const decimals = RAIL_DECIMALS[withdrawForm.rail];
+    const amount = parseDecimalInput(withdrawForm.amount, decimals);
+    if (amount <= 0n) {
+      toast.error("Enter an amount to withdraw.");
+      return;
+    }
+    if ((withdrawForm.rail === "BTC" || withdrawForm.rail === "ETH") && !withdrawForm.destination.trim()) {
+      toast.error("Destination address is required for BTC/ETH withdrawals.");
+      return;
+    }
+    if (config.microTips.enabled || config.scheduled.enabled) {
+      toast.error("Disable micro-tips and scheduled payouts before withdrawing.");
+      return;
+    }
+    try {
+      setWithdrawing(true);
+      const treasury = await getTreasuryActor();
+      const orgPrincipal = Principal.fromText(cid);
+      const memoArg = withdrawForm.memo ? [withdrawForm.memo] : [];
+      const response = await (treasury as any).withdrawOrgVault(
+        orgPrincipal,
+        railVariant(withdrawForm.rail),
+        amount,
+        withdrawForm.destination.trim(),
+        memoArg
+      );
+      toast.success(typeof response === "string" ? response : "Withdrawal submitted");
+      setWithdrawForm((prev) => ({ ...prev, amount: "", memo: "" }));
+      await refreshVault();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to withdraw funds");
+    } finally {
+      setWithdrawing(false);
+    }
+  };
+
+  const handleDeposit = async () => {
+    if (!cid) return;
+    const decimals = RAIL_DECIMALS[depositForm.rail];
+    const amount = parseDecimalInput(depositForm.amount, decimals);
+    if (amount <= 0n) {
+      toast.error("Enter a deposit amount.");
+      return;
+    }
+    try {
+      setDepositing(true);
+      const treasury = await getTreasuryActor();
+      const orgPrincipal = Principal.fromText(cid);
+      const memoArg = depositForm.memo ? [depositForm.memo] : [];
+      const method = (treasury as any).recordOrgDeposit ?? (treasury as any).notifyLedgerDeposit;
+      await method(orgPrincipal, railVariant(depositForm.rail), amount, memoArg);
+      toast.success("Deposit recorded in treasury.");
+      setDepositForm((prev) => ({ ...prev, amount: "", memo: "" }));
+      refreshVault();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to record deposit");
+    } finally {
+      setDepositing(false);
+    }
   };
 
   if (roleLoading || loading) {
@@ -244,7 +622,25 @@ export default function EconomySettingsPage() {
   }
 
   if (!config) {
-    return null;
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <Card className="glass-card p-6 text-center space-y-4">
+          <AlertTriangle className="w-10 h-10 text-orange-500 mx-auto" />
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Economy settings unavailable</h2>
+            <p className="text-sm text-muted-foreground">
+              {error || "We couldn’t load the treasury configuration for this organization."}
+            </p>
+          </div>
+          <div className="flex justify-center gap-2">
+            <Button onClick={reload}>Retry</Button>
+            <Button variant="outline" onClick={() => navigate("/org-selector")}>
+              Choose another org
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
   }
 
   return (
@@ -276,6 +672,46 @@ export default function EconomySettingsPage() {
 
       <main className="p-6">
         <div className="max-w-6xl mx-auto space-y-8">
+          {error && (
+            <Card className="border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive flex flex-wrap items-center justify-between gap-3">
+              <span>{error}</span>
+              <Button size="sm" variant="outline" onClick={reload} className="gap-2">
+                <RefreshCw className="w-4 h-4" />
+                Retry
+              </Button>
+            </Card>
+          )}
+          <Card className="glass-card border border-border/70">
+            <div className="p-6 space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                  <h2 className="text-xl font-semibold text-foreground">Vault balances</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Locked funds available for micro-tips and scheduled payouts.
+                  </p>
+                </div>
+                <Badge variant="secondary">
+                  {vaultBalance
+                    ? "Live"
+                    : "Not available"}
+                </Badge>
+              </div>
+              <div className="grid md:grid-cols-3 gap-4">
+                {RAILS.map((rail) => (
+                  <div key={rail} className="rounded-xl border border-border/50 p-4 space-y-2">
+                    <p className="text-xs text-muted-foreground">Rail</p>
+                    <div className="flex items-baseline justify-between">
+                      <p className="text-lg font-semibold">{rail}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Balance</p>
+                      <p className="text-2xl font-bold text-foreground">{formatVault(rail)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Card>
           <Card className="glass-card border border-border/70">
             <div className="p-6 space-y-6">
               <div className="flex items-start justify-between flex-wrap gap-4">
@@ -463,7 +899,139 @@ export default function EconomySettingsPage() {
             </div>
           </Card>
 
+          <Card className="glass-card border border-border/70">
+            <div className="p-6 space-y-6">
+              <div className="flex items-start justify-between flex-wrap gap-4">
+                <div>
+                  <h2 className="text-xl font-semibold text-foreground">Record deposit</h2>
+                  <p className="text-sm text-muted-foreground">
+                    After sending ckBTC/ICP/ckETH to the org&apos;s treasury subaccount, record that transfer here to
+                    credit the vault.
+                  </p>
+                </div>
+              </div>
+              <div className="grid md:grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-wide text-muted-foreground">Rail</Label>
+                  <Select
+                    value={depositForm.rail}
+                    onValueChange={(rail: RailSymbol) => setDepositForm((prev) => ({ ...prev, rail }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select rail" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ICP">ICP</SelectItem>
+                      <SelectItem value="BTC">ckBTC</SelectItem>
+                      <SelectItem value="ETH">ckETH</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-wide text-muted-foreground">Amount</Label>
+                  <Input
+                    value={depositForm.amount}
+                    onChange={(e) =>
+                      setDepositForm((prev) => ({ ...prev, amount: numericMask(e.target.value, true) }))
+                    }
+                    inputMode="decimal"
+                    placeholder="0.0"
+                  />
+                </div>
+                <div className="md:col-span-2 space-y-2">
+                  <Label className="text-xs uppercase tracking-wide text-muted-foreground">Memo (optional)</Label>
+                  <Input
+                    value={depositForm.memo}
+                    onChange={(e) => setDepositForm((prev) => ({ ...prev, memo: e.target.value }))}
+                    placeholder="Ledger memo / note"
+                  />
+                </div>
+              </div>
+              {depositDetails && (
+                <div className="rounded-lg border border-border/50 bg-muted/30 p-4 space-y-3 text-sm">
+                  <p className="text-muted-foreground">
+                    Send {depositForm.rail} to this treasury account (owner + subaccount) using your wallet/ledger, then
+                    record the transaction above.
+                  </p>
+                  <div className="grid md:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                        Owner (treasury canister)
+                      </Label>
+                      <div className="flex gap-2">
+                        <Input readOnly value={depositDetails.owner} className="font-mono text-xs" />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => copyToClipboard("Owner principal", depositDetails.owner)}
+                        >
+                          <Copy className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                        Subaccount (hex)
+                      </Label>
+                      <div className="flex gap-2">
+                        <Input readOnly value={depositDetails.subaccountHex} className="font-mono text-xs" />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => copyToClipboard("Subaccount", depositDetails.subaccountHex)}
+                        >
+                          <Copy className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    {depositDetails.accountId && (
+                      <div className="space-y-1 md:col-span-2">
+                        <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                          Account identifier
+                        </Label>
+                        <div className="flex gap-2">
+                          <Input readOnly value={depositDetails.accountId} className="font-mono text-xs" />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => copyToClipboard("Account identifier", depositDetails.accountId!)}
+                          >
+                            <Copy className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <Button onClick={handleDeposit} disabled={depositing} className="gap-2">
+                  {depositing ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Recording…
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      Record deposit
+                    </>
+                  )}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Funds must already be transferred via ledger before recording the deposit.
+                </p>
+              </div>
+            </div>
+          </Card>
+
           <div className="flex flex-wrap items-center gap-3">
+            <Button variant="outline" onClick={handleStopAll} disabled={!canStopAll}>
+              Stop all payouts
+            </Button>
             <Button
               onClick={onSave}
               disabled={!dirty || saving || submitting}
@@ -488,6 +1056,98 @@ export default function EconomySettingsPage() {
               <span className="text-xs text-muted-foreground">All changes saved</span>
             )}
           </div>
+
+          {!config.microTips.enabled && !config.scheduled.enabled && (
+            <Card className="glass-card border border-border/70">
+              <div className="p-6 space-y-6">
+                <div className="flex items-start justify-between flex-wrap gap-4">
+                  <div>
+                    <h2 className="text-xl font-semibold text-foreground">Withdraw vault funds</h2>
+                    <p className="text-sm text-muted-foreground">
+                      With payouts disabled, you can drain remaining vault balances to an admin wallet.
+                    </p>
+                  </div>
+                </div>
+                <div className="grid md:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs uppercase tracking-wide text-muted-foreground">Rail</Label>
+                    <Select
+                      value={withdrawForm.rail}
+                      onValueChange={(value: RailSymbol) =>
+                        setWithdrawForm((prev) => ({ ...prev, rail: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select rail" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ICP">ICP</SelectItem>
+                        <SelectItem value="BTC">ckBTC</SelectItem>
+                        <SelectItem value="ETH">ckETH</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs uppercase tracking-wide text-muted-foreground">Amount</Label>
+                    <Input
+                      value={withdrawForm.amount}
+                      onChange={(e) =>
+                        setWithdrawForm((prev) => ({ ...prev, amount: numericMask(e.target.value, true) }))
+                      }
+                      inputMode="decimal"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Destination
+                    </Label>
+                    <Input
+                      value={withdrawForm.destination}
+                      onChange={(e) =>
+                        setWithdrawForm((prev) => ({ ...prev, destination: e.target.value }))
+                      }
+                      placeholder={
+                        withdrawForm.rail === "ICP"
+                          ? "Leave empty to use your principal"
+                          : "ckBTC / ckETH address"
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs uppercase tracking-wide text-muted-foreground">Memo (optional)</Label>
+                    <Input
+                      value={withdrawForm.memo}
+                      onChange={(e) => setWithdrawForm((prev) => ({ ...prev, memo: e.target.value }))}
+                      placeholder="Reference note"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={handleWithdraw}
+                    disabled={withdrawing || !withdrawForm.amount}
+                    className="gap-2"
+                  >
+                    {withdrawing ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Withdrawing…
+                      </>
+                    ) : (
+                      <>
+                        <ArrowDownToLine className="w-4 h-4" />
+                        Withdraw vault balance
+                      </>
+                    )}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Ensure rails and automation stay disabled while draining funds.
+                  </p>
+                </div>
+              </div>
+            </Card>
+          )}
         </div>
       </main>
     </DashboardLayout>

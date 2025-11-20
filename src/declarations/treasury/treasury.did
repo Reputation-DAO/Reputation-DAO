@@ -203,6 +203,12 @@ service : {
   getRailHealth: (org: OrgId, rail: Rail) -> (opt RailHealth) query;
   getUserBadges: (org: OrgId, user: UserId) -> (UserBadges) query;
   getUserCompliance: (org: OrgId, user: UserId) -> (opt UserCompliance) query;
+  getUserOrgBalances: (org: OrgId, user: UserId) ->
+   (record {
+      btc: nat;
+      eth: nat;
+      icp: nat;
+    }) query;
   isOrgArchived: (org: OrgId) -> (bool) query;
   listConversionIntents: (offset: nat, limit: nat) ->
    (vec ConversionIntent) query;
@@ -213,10 +219,17 @@ service : {
   markConversionCompleted: (conversionId: nat, txid: opt text) -> (text);
   markConversionFailed: (conversionId: nat, reason: text, refundVault:
    bool) -> (text);
+  myOrgBalances: (org: OrgId) -> (record {
+                                    btc: nat;
+                                    eth: nat;
+                                    icp: nat;
+                                  });
   notifyLedgerDeposit: (org: OrgId, rail: Rail, amount: nat, txMemo:
    opt text) -> ();
   recordNativeDeposit: (org: OrgId, rail: Rail, amount: nat, txid: text,
    memo: opt text) -> (nat);
+  recordOrgDeposit: (org: OrgId, rail: Rail, amount: nat, memo: opt text) ->
+   (text);
   recordOrgHeartbeat: (org: OrgId) -> ();
   registerOrg: (org: OrgId, cfg: OrgConfig) -> ();
   repAwarded: (org: OrgId, user: UserId, _repDelta: int, _meta: opt text) ->
@@ -240,4 +253,8 @@ service : {
   setUserCompliance: (org: OrgId, user: UserId, info: UserCompliance) -> ();
   submitPendingConversions: (limit: nat) -> (nat);
   updateOrgConfig: (org: OrgId, newConfig: OrgConfig) -> ();
+  withdrawMy: (org: OrgId, rail: Rail, amount: nat, destination: text, memo:
+   opt text) -> (text);
+  withdrawOrgVault: (org: OrgId, rail: Rail, amount: nat, destination: 
+   text, memo: opt text) -> (text);
 }

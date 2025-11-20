@@ -189,6 +189,11 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Opt(UserCompliance)],
         ['query'],
       ),
+    'getUserOrgBalances' : IDL.Func(
+        [OrgId, UserId],
+        [IDL.Record({ 'btc' : IDL.Nat, 'eth' : IDL.Nat, 'icp' : IDL.Nat })],
+        ['query'],
+      ),
     'isOrgArchived' : IDL.Func([OrgId], [IDL.Bool], ['query']),
     'listConversionIntents' : IDL.Func(
         [IDL.Nat, IDL.Nat],
@@ -221,6 +226,11 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Text],
         [],
       ),
+    'myOrgBalances' : IDL.Func(
+        [OrgId],
+        [IDL.Record({ 'btc' : IDL.Nat, 'eth' : IDL.Nat, 'icp' : IDL.Nat })],
+        [],
+      ),
     'notifyLedgerDeposit' : IDL.Func(
         [OrgId, Rail, IDL.Nat, IDL.Opt(IDL.Text)],
         [],
@@ -229,6 +239,11 @@ export const idlFactory = ({ IDL }) => {
     'recordNativeDeposit' : IDL.Func(
         [OrgId, Rail, IDL.Nat, IDL.Text, IDL.Opt(IDL.Text)],
         [IDL.Nat],
+        [],
+      ),
+    'recordOrgDeposit' : IDL.Func(
+        [OrgId, Rail, IDL.Nat, IDL.Opt(IDL.Text)],
+        [IDL.Text],
         [],
       ),
     'recordOrgHeartbeat' : IDL.Func([OrgId], [], []),
@@ -270,6 +285,16 @@ export const idlFactory = ({ IDL }) => {
     'setUserCompliance' : IDL.Func([OrgId, UserId, UserCompliance], [], []),
     'submitPendingConversions' : IDL.Func([IDL.Nat], [IDL.Nat], []),
     'updateOrgConfig' : IDL.Func([OrgId, OrgConfig], [], []),
+    'withdrawMy' : IDL.Func(
+        [OrgId, Rail, IDL.Nat, IDL.Text, IDL.Opt(IDL.Text)],
+        [IDL.Text],
+        [],
+      ),
+    'withdrawOrgVault' : IDL.Func(
+        [OrgId, Rail, IDL.Nat, IDL.Text, IDL.Opt(IDL.Text)],
+        [IDL.Text],
+        [],
+      ),
   });
 };
 export const init = ({ IDL }) => { return []; };
