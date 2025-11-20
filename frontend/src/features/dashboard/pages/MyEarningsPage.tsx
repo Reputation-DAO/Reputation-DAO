@@ -10,11 +10,28 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import WalletCopyBadge from "../components/WalletCopyBadge";
-import { AlertTriangle, Coins, Wallet, ArrowDownToLine } from "lucide-react";
+import { AlertTriangle, Wallet, ArrowDownToLine, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { Rail as TreasuryRail, TipEvent } from "@/declarations/treasury/treasury.did";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export type RailSymbol = "BTC" | "ICP" | "ETH";
 
@@ -39,6 +56,11 @@ export type MyEarningsSummary = {
   history: MyEarningsEvent[];
 };
 
+type TreasuryBalanceApi = {
+  myOrgBalances?: (org: Principal) => Promise<{ btc: bigint; icp: bigint; eth: bigint }>;
+  getUserOrgBalances?: (org: Principal, user: Principal) => Promise<{ btc: bigint; icp: bigint; eth: bigint }>;
+};
+
 const RAILS: RailSymbol[] = ["BTC", "ICP", "ETH"];
 
 const railVariant = (symbol: RailSymbol): TreasuryRail =>
@@ -55,6 +77,28 @@ const RAIL_DECIMALS: Record<RailSymbol, number> = {
   ICP: 8,
   ETH: 18,
 };
+
+const ICP_ACCOUNT_ID_HEX = /^[0-9a-fA-F]{64}$/;
+const BTC_LEGACY_ADDRESS = /^[13][a-km-zA-HJ-NP-Z1-9]{25,39}$/;
+const BTC_BECH32_ADDRESS = /^(bc1|tb1)[0-9ac-hj-np-z]{11,71}$/;
+const BTC_LEDGER_ACCOUNT = /^[0-9a-fA-F]{64}$/;
+const ETH_ADDRESS = /^0x[a-fA-F0-9]{40}$/;
+const ETH_LEDGER_ACCOUNT = /^[0-9a-fA-F]{64}$/;
+
+const isValidIcpDestination = (value: string) => {
+  if (!value) return false;
+  try {
+    Principal.fromText(value);
+    return true;
+  } catch {
+    return ICP_ACCOUNT_ID_HEX.test(value);
+  }
+};
+
+const isValidBtcDestination = (value: string) =>
+  BTC_LEGACY_ADDRESS.test(value) || BTC_BECH32_ADDRESS.test(value.toLowerCase()) || BTC_LEDGER_ACCOUNT.test(value);
+
+const isValidEthDestination = (value: string) => ETH_ADDRESS.test(value) || ETH_LEDGER_ACCOUNT.test(value);
 
 const formatAmount = (value: bigint, decimals: number) => {
   if (decimals === 0) return value.toString();
@@ -93,11 +137,12 @@ function useMyEarnings(cid?: string) {
         throw new Error("Invalid organization id");
       }
       const treasury = await getTreasuryActor();
+      const treasuryWithBalances = treasury as TreasuryActor & TreasuryBalanceApi;
       let balances: { btc: bigint; icp: bigint; eth: bigint } | null = null;
-      if ("myOrgBalances" in treasury) {
-        balances = await (treasury as any).myOrgBalances(orgPrincipal);
-      } else if ("getUserOrgBalances" in treasury) {
-        balances = await (treasury as any).getUserOrgBalances(orgPrincipal, principal);
+      if (typeof treasuryWithBalances.myOrgBalances === "function") {
+        balances = await treasuryWithBalances.myOrgBalances(orgPrincipal);
+      } else if (typeof treasuryWithBalances.getUserOrgBalances === "function") {
+        balances = await treasuryWithBalances.getUserOrgBalances(orgPrincipal, principal!);
       }
       if (!balances) {
         throw new Error("Treasury API missing balance query");
@@ -149,8 +194,9 @@ function useMyEarnings(cid?: string) {
       }
 
       setSummary({ rails, history });
-    } catch (err: any) {
-      setError(err?.message || "Failed to load earnings");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to load earnings";
+      setError(message);
       setSummary({
         rails: RAILS.map((symbol) => ({
           symbol,
@@ -170,53 +216,48 @@ function useMyEarnings(cid?: string) {
   }, [load]);
 
   const withdraw = useCallback(
-    async (rail: MyRailEarnings, cid?: string) => {
+    async ({ rail, cid, destination }: { rail: MyRailEarnings; cid?: string; destination: string }) => {
       if (!cid) return;
       if (rail.rawAvailable === 0n) {
         toast.info(`No ${rail.symbol} available to withdraw.`);
         return;
       }
+      const trimmedDestination = destination.trim();
+      if (!trimmedDestination) {
+        toast.error("Destination required for withdrawal");
+        return;
+      }
       try {
+        if (rail.symbol === "ICP" && !isValidIcpDestination(trimmedDestination)) {
+          toast.error("Destination must be a valid ICP account or principal");
+          return;
+        }
+        if (rail.symbol === "BTC" && !isValidBtcDestination(trimmedDestination)) {
+          toast.error("Destination must be a valid BTC or ckBTC address");
+          return;
+        }
+        if (rail.symbol === "ETH" && !isValidEthDestination(trimmedDestination)) {
+          toast.error("Destination must be a valid ETH or ckETH address");
+          return;
+        }
         const treasury = await getTreasuryActor();
         const orgPrincipal = Principal.fromText(cid);
-
-        let destination = "";
-        if (rail.symbol === "ICP") {
-          const defaultPrincipal = principal?.toText() ?? "";
-          const promptMessage =
-            "Enter the destination principal for this ICP withdrawal (leave blank to use your current wallet).";
-          destination = window.prompt(promptMessage, defaultPrincipal)?.trim() ?? defaultPrincipal;
-          if (!destination) {
-            toast.message("Withdrawal cancelled");
-            return;
-          }
-        } else {
-          const promptMessage =
-            rail.symbol === "BTC"
-              ? "Enter destination BTC address (ckBTC withdrawal)"
-              : "Enter destination ETH / ckETH address";
-          destination = window.prompt(promptMessage, "")?.trim() ?? "";
-          if (!destination) {
-            toast.message("Withdrawal cancelled");
-            return;
-          }
-        }
-
         const res = await treasury.withdrawMy(
           orgPrincipal,
           railVariant(rail.symbol),
           rail.rawAvailable,
-          destination,
+          trimmedDestination,
           []
         );
         toast.success(res);
         await load();
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error(err);
-        toast.error(err?.message || "Failed to submit withdrawal");
+        const message = err instanceof Error ? err.message : "Failed to submit withdrawal";
+        toast.error(message);
       }
     },
-    [getTreasuryActor, load, principal]
+    [getTreasuryActor, load]
   );
 
   return { summary, loading, error, withdraw };
@@ -229,6 +270,98 @@ export default function MyEarningsPage() {
   const { userRole, loading: roleLoading, currentPrincipal, userName } = useRole();
   const sidebarPrincipal = currentPrincipal?.toText() || principal?.toText() || "";
   const { summary, loading, error, withdraw } = useMyEarnings(cid);
+  const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
+  const [selectedRailSymbol, setSelectedRailSymbol] = useState<RailSymbol | null>(null);
+  const [destinationInput, setDestinationInput] = useState("");
+  const [isSubmittingWithdrawal, setIsSubmittingWithdrawal] = useState(false);
+  const [showWithdrawErrors, setShowWithdrawErrors] = useState(false);
+
+  const selectedRail = useMemo(() => {
+    if (!summary || !selectedRailSymbol) return null;
+    return summary.rails.find((rail) => rail.symbol === selectedRailSymbol) ?? null;
+  }, [selectedRailSymbol, summary]);
+
+  const destinationError = useMemo(() => {
+    if (!withdrawDialogOpen) return null;
+    if (!selectedRail) return "Select a rail to continue";
+    if (selectedRail.rawAvailable === 0n) return `No ${selectedRail.symbol} available to withdraw`;
+    const trimmed = destinationInput.trim();
+    if (!trimmed) return "Destination is required";
+    if (selectedRail.symbol === "ICP" && !isValidIcpDestination(trimmed)) {
+      return "Enter a valid ICP account or principal";
+    }
+    if (selectedRail.symbol === "BTC" && !isValidBtcDestination(trimmed)) {
+      return "Enter a valid BTC or ckBTC address";
+    }
+    if (selectedRail.symbol === "ETH" && !isValidEthDestination(trimmed)) {
+      return "Enter a valid ETH or ckETH address";
+    }
+    return null;
+  }, [destinationInput, selectedRail, withdrawDialogOpen]);
+
+  const canSubmitWithdrawal = Boolean(selectedRail && !destinationError && !isSubmittingWithdrawal);
+
+  const destinationPlaceholder = useMemo(() => {
+    switch (selectedRail?.symbol) {
+      case "ICP":
+        return "Account identifier or principal";
+      case "BTC":
+        return "ckBTC address";
+      case "ETH":
+        return "ETH or ckETH address";
+      default:
+        return "Destination";
+    }
+  }, [selectedRail]);
+
+  const destinationHelper = useMemo(() => {
+    switch (selectedRail?.symbol) {
+      case "ICP":
+        return "Enter a 64-character ICP account identifier or a principal.";
+      case "BTC":
+        return "Accepted formats: bc1/tb1 bech32, legacy 1/3 addresses, or 64-char ckBTC ledger accounts.";
+      case "ETH":
+        return "Enter a 0x-prefixed ETH address or a 64-char ckETH ledger account.";
+      default:
+        return "Choose an asset and target address.";
+    }
+  }, [selectedRail]);
+
+  const openWithdrawDialog = useCallback(
+    (railSymbol?: RailSymbol) => {
+      if (!summary) return;
+      const fallback =
+        railSymbol || summary.rails.find((rail) => rail.rawAvailable > 0n)?.symbol || summary.rails[0]?.symbol || null;
+      setSelectedRailSymbol(fallback);
+      setDestinationInput("");
+      setShowWithdrawErrors(false);
+      setWithdrawDialogOpen(true);
+    },
+    [summary]
+  );
+
+  const handleWithdrawSubmit = useCallback(async () => {
+    if (!selectedRail || !cid) return;
+    setShowWithdrawErrors(true);
+    if (destinationError) return;
+    setIsSubmittingWithdrawal(true);
+    try {
+      await withdraw({ rail: selectedRail, cid, destination: destinationInput.trim() });
+      setWithdrawDialogOpen(false);
+      setDestinationInput("");
+      setShowWithdrawErrors(false);
+    } finally {
+      setIsSubmittingWithdrawal(false);
+    }
+  }, [cid, destinationError, destinationInput, selectedRail, withdraw]);
+
+  const closeWithdrawDialog = useCallback((open: boolean) => {
+    setWithdrawDialogOpen(open);
+    if (!open) {
+      setDestinationInput("");
+      setShowWithdrawErrors(false);
+    }
+  }, []);
 
   if (!cid || !isAuthenticated) {
     return (
@@ -315,7 +448,12 @@ export default function MyEarningsPage() {
                   <p className="text-xs text-muted-foreground">Pending</p>
                   <p className="text-lg text-muted-foreground">{rail.pending}</p>
                 </div>
-                <Button className="w-full gap-2" onClick={() => withdraw(rail, cid)}>
+                <Button
+                  className="w-full gap-2"
+                  onClick={() => openWithdrawDialog(rail.symbol)}
+                  disabled={rail.rawAvailable === 0n}
+                  title={rail.rawAvailable === 0n ? `No ${rail.symbol} available to withdraw` : undefined}
+                >
                   <ArrowDownToLine className="w-4 h-4" />
                   Withdraw
                 </Button>
@@ -368,6 +506,73 @@ export default function MyEarningsPage() {
           </Card>
         </div>
       </main>
+      <Dialog open={withdrawDialogOpen} onOpenChange={closeWithdrawDialog}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Withdraw funds</DialogTitle>
+            <DialogDescription>Choose which rail to withdraw from and confirm the destination address.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="withdraw-rail">Rail</Label>
+              <Select
+                value={selectedRailSymbol ?? undefined}
+                onValueChange={(value) => {
+                  setSelectedRailSymbol(value as RailSymbol);
+                  setDestinationInput("");
+                  setShowWithdrawErrors(false);
+                }}
+              >
+                <SelectTrigger id="withdraw-rail">
+                  <SelectValue placeholder="Select rail" />
+                </SelectTrigger>
+                <SelectContent>
+                  {summary?.rails.map((rail) => (
+                    <SelectItem key={rail.symbol} value={rail.symbol}>
+                      {rail.symbol} · {rail.available} available
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="withdraw-destination">Destination address</Label>
+              <Input
+                id="withdraw-destination"
+                value={destinationInput}
+                onChange={(event) => setDestinationInput(event.target.value)}
+                placeholder={destinationPlaceholder}
+              />
+              <p className="text-xs text-muted-foreground">{destinationHelper}</p>
+              {showWithdrawErrors && destinationError && (
+                <p className="text-xs text-destructive">{destinationError}</p>
+              )}
+            </div>
+
+            {selectedRail && (
+              <div className="rounded-lg border border-border/60 bg-muted/20 p-4 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Withdraw amount</span>
+                  <span className="font-semibold text-foreground">{selectedRail.available} {selectedRail.symbol}</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Entire available balance will be sent. Network fees may apply depending on the rail.
+                </p>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-4">
+            <Button variant="ghost" onClick={() => closeWithdrawDialog(false)} disabled={isSubmittingWithdrawal}>
+              Cancel
+            </Button>
+            <Button onClick={handleWithdrawSubmit} disabled={!canSubmitWithdrawal} className="gap-2">
+              {isSubmittingWithdrawal && <Loader2 className="h-4 w-4 animate-spin" />}
+              Confirm withdrawal
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

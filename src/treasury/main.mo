@@ -10,6 +10,7 @@ import Iter "mo:base/Iter";
 import HashMap "mo:base/HashMap";
 import Buffer "mo:base/Buffer";
 import Blob "mo:base/Blob";
+import Char "mo:base/Char";
 import Text "mo:base/Text";
 import Nat32 "mo:base/Nat32";
 import Nat64 "mo:base/Nat64";
@@ -25,6 +26,8 @@ actor Treasury {
   let TIP_RATE_WINDOW_SECONDS : Nat = 60;           // burst limiter
   let TIP_LOG_LIMIT : Nat = 2_000;                  // ring buffer length
   let PAYOUT_LOG_LIMIT : Nat = 1_000;
+  let ICP_TRANSFER_FEE_E8S : Nat = 10_000;          // 0.0001 ICP
+  let MAX_NAT64 : Nat = 18_446_744_073_709_551_615;
 
   // ------------- Type aliases & records -------------
   public type OrgId = TreasuryTypes.OrgId;
@@ -114,17 +117,30 @@ actor Treasury {
     timestamp : Nat;
   };
 
+  public type Tokens = { e8s : Nat64 };
+  public type Timestamp = { timestamp_nanos : Nat64 };
   public type TransferArgs = {
     from_subaccount : ?Blob;
     to : Blob;
-    amount : Nat;
-    fee : ?Nat;
-    memo : ?Blob;
-    created_at_time : ?Nat64;
+    amount : Tokens;
+    fee : Tokens;
+    memo : Nat64;
+    created_at_time : ?Timestamp;
+  };
+  public type TransferError = {
+    #TxTooOld : { allowed_window_nanos : Nat64 };
+    #BadFee : { expected_fee : Tokens };
+    #TxDuplicate : { duplicate_of : Nat64 };
+    #TxCreatedInFuture : {};
+    #InsufficientFunds : { balance : Tokens };
+    #TemporarilyUnavailable : {};
+    #BadBurn : { min_burn_amount : Tokens };
+    #TxThrottled : {};
+    #GenericError : { error_code : Nat32; message : Text };
   };
   public type TransferResult = {
-    #Ok : Nat;
-    #Err : { code : Nat; message : Text };
+    #Ok : Nat64;
+    #Err : TransferError;
   };
   type Ledger = actor { transfer : (TransferArgs) -> async TransferResult };
 
@@ -1068,22 +1084,32 @@ var userConversionFlags = HashMap.HashMap<Nat, Bool>(0, Nat.equal, natHash);
 
     switch (rail) {
       case (#ICP) {
-        let recipientPrincipal =
+        let recipientAccount : Blob =
           if (destination.size() == 0) {
-            user
-          } else {
-            try {
-              Principal.fromText(destination)
-            } catch (_) {
-              restoreUserBalance(org, user, rail, amount);
-              return "Error: invalid ICP destination";
+            Principal.toBlob(user)
+          } else if (isAccountIdentifier(destination)) {
+            switch (decodeAccountIdentifier(destination)) {
+              case (?account) account;
+              case null {
+                restoreUserBalance(org, user, rail, amount);
+                return "Error: invalid ICP destination";
+              };
             }
+          } else {
+            let recipientPrincipal =
+              try {
+                Principal.fromText(destination)
+              } catch (_) {
+                restoreUserBalance(org, user, rail, amount);
+                return "Error: invalid ICP destination";
+              };
+            Principal.toBlob(recipientPrincipal)
           };
         let memoBlob : ?Blob = switch (memo) {
           case (?m) ?Text.encodeUtf8(m);
           case null null;
         };
-        let success = await sendRailPayment(#ICP, org, Principal.toBlob(recipientPrincipal), amount, memoBlob);
+        let success = await sendRailPayment(#ICP, org, recipientAccount, amount, memoBlob);
         if (success) {
           "Success: withdrawal sent"
         } else {
@@ -1345,15 +1371,30 @@ var userConversionFlags = HashMap.HashMap<Nat, Bool>(0, Nat.equal, natHash);
 
   func sendRailPayment(rail : Rail, org : OrgId, toAccount : Blob, amount : Nat, memo : ?Blob) : async Bool {
     if (amount == 0) return true;
+    let amountTokens = switch (tokensFromNat(amount)) {
+      case (?tokens) tokens;
+      case null {
+        Debug.print("Treasury transfer failed: amount exceeds Nat64");
+        return false;
+      };
+    };
+    let feeValue : Nat = switch (rail) {
+      case (#ICP) ICP_TRANSFER_FEE_E8S;
+      case _ 0;
+    };
+    let feeTokens = switch (tokensFromNat(feeValue)) {
+      case (?tokens) tokens;
+      case null return false;
+    };
     let args : TransferArgs = {
       from_subaccount = ?orgRailSubaccount(org, rail);
       to = toAccount;
-      amount;
-      fee = null;
-      memo;
-      created_at_time = ?Nat64.fromNat(nowSeconds());
+      amount = amountTokens;
+      fee = feeTokens;
+      memo = encodeMemoNat64(memo);
+      created_at_time = ?{ timestamp_nanos = nowTimestampNanos() };
     };
-    let missing : TransferResult = #Err({ code = 500; message = "ledger not configured" });
+    let missing : TransferResult = #Err(#GenericError({ error_code = Nat32.fromNat(500); message = "ledger not configured" }));
     let res : TransferResult = switch (rail) {
       case (#BTC) {
         switch (ledgerActor(ckbtcLedgerPrincipal)) {
@@ -1376,8 +1417,101 @@ var userConversionFlags = HashMap.HashMap<Nat, Bool>(0, Nat.equal, natHash);
     };
     switch (res) {
       case (#Ok _) true;
-      case (#Err e) { Debug.print("Treasury transfer failed: " # debug_show(e)); false };
+      case (#Err e) {
+        Debug.print("Treasury transfer failed: " # debug_show(e));
+        false
+      };
     }
+  };
+
+  func tokensFromNat(value : Nat) : ?Tokens {
+    if (value > MAX_NAT64) return null;
+    ?{ e8s = Nat64.fromNat(value) }
+  };
+
+  func encodeMemoNat64(memo : ?Blob) : Nat64 {
+    switch (memo) {
+      case null 0;
+      case (?blob) {
+        let bytes = Blob.toArray(blob);
+        let limit = Nat.min(bytes.size(), 8);
+        var idx : Nat = 0;
+        var acc : Nat = 0;
+        while (idx < limit) {
+          acc := (acc * 256) + Nat8.toNat(bytes[idx]);
+          idx += 1;
+        };
+        Nat64.fromNat(acc)
+      };
+    }
+  };
+
+  func nowTimestampNanos() : Nat64 {
+    let seconds = nowSeconds();
+    let nanos = seconds * 1_000_000_000;
+    Nat64.fromNat(nanos)
+  };
+
+  func isAccountIdentifier(value : Text) : Bool {
+    if (Text.size(value) != 64) return false;
+    for (char in Text.toIter(value)) {
+      if (hexDigit(char) == null) {
+        return false;
+      };
+    };
+    true
+  };
+
+  func decodeAccountIdentifier(value : Text) : ?Blob {
+    switch (decodeHexBlob(value)) {
+      case (?blob) {
+        if (blob.size() == 32) {
+          ?blob
+        } else {
+          null
+        }
+      };
+      case null null;
+    }
+  };
+
+  func decodeHexBlob(value : Text) : ?Blob {
+    let charCount = Text.size(value);
+    if (charCount % 2 != 0) return null;
+    let buf = Buffer.Buffer<Nat8>(charCount / 2);
+    var high : ?Nat8 = null;
+    label chars for (char in Text.toIter(value)) {
+      switch (hexDigit(char)) {
+        case (?digit) {
+          switch (high) {
+            case null high := ?digit;
+            case (?hi) {
+              let upper = Nat.mul(Nat8.toNat(hi), 16);
+              let byte = Nat8.fromNat(Nat.add(upper, Nat8.toNat(digit)));
+              buf.add(byte);
+              high := null;
+            };
+          };
+        };
+        case null return null;
+      };
+    };
+    if (high != null) return null;
+    ?Blob.fromArray(Buffer.toArray(buf));
+  };
+
+  func hexDigit(char : Char) : ?Nat8 {
+    let code = Nat32.toNat(Char.toNat32(char));
+    if (code >= 48 and code <= 57) {
+      return ?Nat8.fromNat(code - 48);
+    };
+    if (code >= 65 and code <= 70) {
+      return ?Nat8.fromNat(code - 55);
+    };
+    if (code >= 97 and code <= 102) {
+      return ?Nat8.fromNat(code - 87);
+    };
+    null;
   };
 
   // ------------- Scheduled payouts -------------
