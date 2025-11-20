@@ -100,6 +100,28 @@ const isValidBtcDestination = (value: string) =>
 
 const isValidEthDestination = (value: string) => ETH_ADDRESS.test(value) || ETH_LEDGER_ACCOUNT.test(value);
 
+const AMOUNT_INPUT_PATTERN = /^\d*(?:\.\d*)?$/;
+
+const READ_STATE_ERROR_PATTERNS = ["invalid certificate", "invalid read state", "fail to decode read state response"];
+
+const parseAmountInput = (value: string, symbol: RailSymbol): bigint | null => {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (!AMOUNT_INPUT_PATTERN.test(trimmed)) return null;
+  const decimals = RAIL_DECIMALS[symbol];
+  if (decimals === 0 && trimmed.includes(".")) return null;
+  const [integerPartRaw, fractionPartRaw = ""] = trimmed.split(".");
+  const integerPart = integerPartRaw === "" ? "0" : integerPartRaw.replace(/^0+(?=\d)/, "") || "0";
+  if (fractionPartRaw.length > decimals) return null;
+  const fractionPart = (fractionPartRaw + "0".repeat(decimals)).slice(0, decimals);
+  const combined = `${integerPart}${fractionPart}`.replace(/^0+/, "") || "0";
+  try {
+    return BigInt(combined);
+  } catch {
+    return null;
+  }
+};
+
 const formatAmount = (value: bigint, decimals: number) => {
   if (decimals === 0) return value.toString();
   const negative = value < 0n;
@@ -216,10 +238,18 @@ function useMyEarnings(cid?: string) {
   }, [load]);
 
   const withdraw = useCallback(
-    async ({ rail, cid, destination }: { rail: MyRailEarnings; cid?: string; destination: string }) => {
+    async ({ rail, cid, destination, amountRaw }: { rail: MyRailEarnings; cid?: string; destination: string; amountRaw: bigint }) => {
       if (!cid) return;
       if (rail.rawAvailable === 0n) {
         toast.info(`No ${rail.symbol} available to withdraw.`);
+        return;
+      }
+      if (amountRaw <= 0n) {
+        toast.error("Amount must be greater than zero");
+        return;
+      }
+      if (amountRaw > rail.rawAvailable) {
+        toast.error("Amount exceeds available balance");
         return;
       }
       const trimmedDestination = destination.trim();
@@ -245,7 +275,7 @@ function useMyEarnings(cid?: string) {
         const res = await treasury.withdrawMy(
           orgPrincipal,
           railVariant(rail.symbol),
-          rail.rawAvailable,
+          amountRaw,
           trimmedDestination,
           []
         );
@@ -253,8 +283,16 @@ function useMyEarnings(cid?: string) {
         await load();
       } catch (err: unknown) {
         console.error(err);
-        const message = err instanceof Error ? err.message : "Failed to submit withdrawal";
-        toast.error(message);
+        const message = err instanceof Error ? err.message ?? "" : String(err);
+        const isReadStateError = READ_STATE_ERROR_PATTERNS.some((pattern) =>
+          message.toLowerCase().includes(pattern)
+        );
+        if (isReadStateError) {
+          toast.info("Withdrawal submitted. Network confirmation may take a few seconds—check history shortly.");
+          await load();
+        } else {
+          toast.error(message || "Failed to submit withdrawal");
+        }
       }
     },
     [getTreasuryActor, load]
@@ -273,6 +311,7 @@ export default function MyEarningsPage() {
   const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
   const [selectedRailSymbol, setSelectedRailSymbol] = useState<RailSymbol | null>(null);
   const [destinationInput, setDestinationInput] = useState("");
+  const [withdrawAmountInput, setWithdrawAmountInput] = useState("");
   const [isSubmittingWithdrawal, setIsSubmittingWithdrawal] = useState(false);
   const [showWithdrawErrors, setShowWithdrawErrors] = useState(false);
 
@@ -280,6 +319,11 @@ export default function MyEarningsPage() {
     if (!summary || !selectedRailSymbol) return null;
     return summary.rails.find((rail) => rail.symbol === selectedRailSymbol) ?? null;
   }, [selectedRailSymbol, summary]);
+
+  const parsedWithdrawAmount = useMemo(() => {
+    if (!selectedRail) return null;
+    return parseAmountInput(withdrawAmountInput, selectedRail.symbol);
+  }, [selectedRail, withdrawAmountInput]);
 
   const destinationError = useMemo(() => {
     if (!withdrawDialogOpen) return null;
@@ -299,7 +343,21 @@ export default function MyEarningsPage() {
     return null;
   }, [destinationInput, selectedRail, withdrawDialogOpen]);
 
-  const canSubmitWithdrawal = Boolean(selectedRail && !destinationError && !isSubmittingWithdrawal);
+  const amountError = useMemo(() => {
+    if (!withdrawDialogOpen) return null;
+    if (!selectedRail) return "Select a rail to continue";
+    if (selectedRail.rawAvailable === 0n) return `No ${selectedRail.symbol} available to withdraw`;
+    const trimmed = withdrawAmountInput.trim();
+    if (!trimmed) return "Enter an amount to withdraw";
+    if (!parsedWithdrawAmount) return "Enter a valid amount";
+    if (parsedWithdrawAmount <= 0n) return "Amount must be greater than zero";
+    if (parsedWithdrawAmount > selectedRail.rawAvailable) return "Amount exceeds available balance";
+    return null;
+  }, [parsedWithdrawAmount, selectedRail, withdrawAmountInput, withdrawDialogOpen]);
+
+  const canSubmitWithdrawal = Boolean(
+    selectedRail && !destinationError && !amountError && parsedWithdrawAmount && parsedWithdrawAmount > 0n && !isSubmittingWithdrawal
+  );
 
   const destinationPlaceholder = useMemo(() => {
     switch (selectedRail?.symbol) {
@@ -330,10 +388,14 @@ export default function MyEarningsPage() {
   const openWithdrawDialog = useCallback(
     (railSymbol?: RailSymbol) => {
       if (!summary) return;
-      const fallback =
-        railSymbol || summary.rails.find((rail) => rail.rawAvailable > 0n)?.symbol || summary.rails[0]?.symbol || null;
-      setSelectedRailSymbol(fallback);
+      const fallbackRail =
+        summary.rails.find((rail) => rail.symbol === railSymbol) ||
+        summary.rails.find((rail) => rail.rawAvailable > 0n) ||
+        summary.rails[0] ||
+        null;
+      setSelectedRailSymbol(fallbackRail?.symbol ?? null);
       setDestinationInput("");
+      setWithdrawAmountInput(fallbackRail?.available ?? "");
       setShowWithdrawErrors(false);
       setWithdrawDialogOpen(true);
     },
@@ -343,22 +405,24 @@ export default function MyEarningsPage() {
   const handleWithdrawSubmit = useCallback(async () => {
     if (!selectedRail || !cid) return;
     setShowWithdrawErrors(true);
-    if (destinationError) return;
+    if (destinationError || amountError || !parsedWithdrawAmount) return;
     setIsSubmittingWithdrawal(true);
     try {
-      await withdraw({ rail: selectedRail, cid, destination: destinationInput.trim() });
+      await withdraw({ rail: selectedRail, cid, destination: destinationInput.trim(), amountRaw: parsedWithdrawAmount });
       setWithdrawDialogOpen(false);
       setDestinationInput("");
+      setWithdrawAmountInput("");
       setShowWithdrawErrors(false);
     } finally {
       setIsSubmittingWithdrawal(false);
     }
-  }, [cid, destinationError, destinationInput, selectedRail, withdraw]);
+  }, [amountError, cid, destinationError, destinationInput, parsedWithdrawAmount, selectedRail, withdraw]);
 
   const closeWithdrawDialog = useCallback((open: boolean) => {
     setWithdrawDialogOpen(open);
     if (!open) {
       setDestinationInput("");
+      setWithdrawAmountInput("");
       setShowWithdrawErrors(false);
     }
   }, []);
@@ -519,6 +583,8 @@ export default function MyEarningsPage() {
                 value={selectedRailSymbol ?? undefined}
                 onValueChange={(value) => {
                   setSelectedRailSymbol(value as RailSymbol);
+                  const nextRail = summary?.rails.find((rail) => rail.symbol === value) ?? null;
+                  setWithdrawAmountInput(nextRail?.available ?? "");
                   setDestinationInput("");
                   setShowWithdrawErrors(false);
                 }}
@@ -550,14 +616,42 @@ export default function MyEarningsPage() {
               )}
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="withdraw-amount">Amount</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="withdraw-amount"
+                  value={withdrawAmountInput}
+                  onChange={(event) => setWithdrawAmountInput(event.target.value)}
+                  placeholder="0.00"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setWithdrawAmountInput(selectedRail?.available ?? "")}
+                  disabled={!selectedRail}
+                >
+                  Max
+                </Button>
+              </div>
+              {selectedRail && (
+                <p className="text-xs text-muted-foreground">
+                  Available: {selectedRail.available} {selectedRail.symbol}
+                </p>
+              )}
+              {showWithdrawErrors && amountError && <p className="text-xs text-destructive">{amountError}</p>}
+            </div>
+
             {selectedRail && (
               <div className="rounded-lg border border-border/60 bg-muted/20 p-4 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Withdraw amount</span>
-                  <span className="font-semibold text-foreground">{selectedRail.available} {selectedRail.symbol}</span>
+                  <span className="font-semibold text-foreground">
+                    {withdrawAmountInput || "0"} {selectedRail.symbol}
+                  </span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Entire available balance will be sent. Network fees may apply depending on the rail.
+                  Requested amount will be transferred. Network fees may apply depending on the rail.
                 </p>
               </div>
             )}

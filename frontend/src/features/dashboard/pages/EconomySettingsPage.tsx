@@ -19,7 +19,11 @@ import WalletCopyBadge from "../components/WalletCopyBadge";
 import { AlertTriangle, Coins, RefreshCw, Save, ArrowDownToLine, Copy } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import type { OrgConfig as TreasuryOrgConfig } from "@/declarations/treasury/treasury.did";
+import type {
+  OrgConfig as TreasuryOrgConfig,
+  _SERVICE as TreasuryActor,
+  VaultBalance as TreasuryVaultBalance,
+} from "@/declarations/treasury/treasury.did";
 import { getTreasuryCanisterId } from "@/lib/canisters";
 import { principalToAccountIdentifier } from "@/utils/accountIdentifier";
 
@@ -133,7 +137,7 @@ const formatDecimal = (value: bigint, decimals: number) => {
   const absValue = negative ? -value : value;
   const str = absValue.toString().padStart(decimals + 1, "0");
   const integerPart = str.slice(0, -decimals) || "0";
-  let fraction = str.slice(-decimals).replace(/0+$/, "");
+  const fraction = str.slice(-decimals).replace(/0+$/, "");
   const formatted = fraction ? `${integerPart}.${fraction}` : integerPart;
   return negative ? `-${formatted}` : formatted;
 };
@@ -175,6 +179,34 @@ type RailSymbol = "BTC" | "ICP" | "ETH";
 
 const railVariant = (symbol: RailSymbol) =>
   symbol === "BTC" ? ({ BTC: null } as const) : symbol === "ICP" ? ({ ICP: null } as const) : ({ ETH: null } as const);
+
+const ICP_ACCOUNT_ID_HEX = /^[0-9a-fA-F]{64}$/;
+const BTC_LEGACY_ADDRESS = /^[13][a-km-zA-HJ-NP-Z1-9]{25,39}$/;
+const BTC_BECH32_ADDRESS = /^(bc1|tb1)[0-9ac-hj-np-z]{11,71}$/i;
+const BTC_LEDGER_ACCOUNT = /^[0-9a-fA-F]{64}$/;
+const ETH_ADDRESS = /^0x[a-fA-F0-9]{40}$/;
+const ETH_LEDGER_ACCOUNT = /^[0-9a-fA-F]{64}$/;
+const READ_STATE_ERROR_PATTERNS = [
+  "invalid certificate",
+  "invalid read state",
+  "fail to decode read state response",
+  "ic0503",
+];
+
+const isValidIcpDestination = (value: string) => {
+  if (!value) return false;
+  try {
+    Principal.fromText(value);
+    return true;
+  } catch {
+    return ICP_ACCOUNT_ID_HEX.test(value);
+  }
+};
+
+const isValidBtcDestination = (value: string) =>
+  BTC_LEGACY_ADDRESS.test(value) || BTC_BECH32_ADDRESS.test(value) || BTC_LEDGER_ACCOUNT.test(value);
+
+const isValidEthDestination = (value: string) => ETH_ADDRESS.test(value) || ETH_LEDGER_ACCOUNT.test(value);
 
 const normalizeOrgConfig = (cfg?: TreasuryOrgConfig | null): TreasuryOrgConfig => {
   const base = cfg ?? defaultTreasuryConfig;
@@ -267,7 +299,7 @@ type EconomyHookState = {
   save: () => Promise<void>;
   reset: () => void;
   reload: () => Promise<void>;
-  vaultBalance: { btc: bigint; icp: bigint; eth: bigint } | null;
+  vaultBalance: TreasuryVaultBalance | null;
   refreshVault: () => Promise<void>;
 };
 
@@ -280,7 +312,7 @@ function useOrgEconomyConfig(cid?: string): EconomyHookState {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [vaultBalance, setVaultBalance] = useState<{ btc: bigint; icp: bigint; eth: bigint } | null>(null);
+  const [vaultBalance, setVaultBalance] = useState<TreasuryVaultBalance | null>(null);
 
   const loadConfig = useCallback(async () => {
     if (!cid) {
@@ -313,11 +345,12 @@ function useOrgEconomyConfig(cid?: string): EconomyHookState {
       setConfig(uiConfig);
       setInitial(uiConfig);
       setVaultBalance(vault);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const rawMessage = err instanceof Error ? err.message : String(err);
       const message =
-        err?.message?.includes("Invalid principal")
+        rawMessage?.includes("Invalid principal")
           ? "Invalid organization canister id."
-          : err?.message || "Failed to load treasury config.";
+          : rawMessage || "Failed to load treasury config.";
       setError(message);
       setConfig(null);
       setInitial(null);
@@ -351,8 +384,8 @@ function useOrgEconomyConfig(cid?: string): EconomyHookState {
       await treasury.updateOrgConfig(orgPrincipal, merged);
       setInitial(config);
       setRawConfig(merged);
-    } catch (err: any) {
-      const message = err?.message || "Failed to save economy settings.";
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to save economy settings.";
       setError(message);
       setSaving(false);
       throw (err instanceof Error ? err : new Error(message));
@@ -432,11 +465,44 @@ export default function EconomySettingsPage() {
       .then(() => toast.success(`${label} copied`))
       .catch(() => toast.error(`Unable to copy ${label}`));
   }, []);
-const formatVault = (symbol: RailSymbol) => {
-  const key = VAULT_KEY[symbol];
-  const raw = vaultBalance ? (vaultBalance as any)[key] : 0n;
-  return formatDecimal(raw ?? 0n, RAIL_DECIMALS[symbol]);
-};
+  const formatVault = (symbol: RailSymbol) => {
+    const key = VAULT_KEY[symbol];
+    const raw = vaultBalance ? vaultBalance[key] : 0n;
+    return formatDecimal(raw ?? 0n, RAIL_DECIMALS[symbol]);
+  };
+  const withdrawRailRaw = useMemo(() => {
+    if (!vaultBalance) return 0n;
+    const key = VAULT_KEY[withdrawForm.rail];
+    return vaultBalance?.[key] ?? 0n;
+  }, [vaultBalance, withdrawForm.rail]);
+
+  const parsedWithdrawAmount = useMemo(
+    () => parseDecimalInput(withdrawForm.amount, RAIL_DECIMALS[withdrawForm.rail]),
+    [withdrawForm.amount, withdrawForm.rail]
+  );
+
+  const withdrawDestinationError = useMemo(() => {
+    const trimmed = withdrawForm.destination.trim();
+    if (withdrawForm.rail === "BTC" || withdrawForm.rail === "ETH") {
+      if (!trimmed) return "Destination address is required for this rail.";
+      if (withdrawForm.rail === "BTC" && !isValidBtcDestination(trimmed)) return "Enter a valid BTC or ckBTC address.";
+      if (withdrawForm.rail === "ETH" && !isValidEthDestination(trimmed)) return "Enter a valid ETH or ckETH address.";
+      return null;
+    }
+    if (withdrawForm.rail === "ICP" && trimmed && !isValidIcpDestination(trimmed)) {
+      return "Enter a valid ICP principal or 64-character account identifier.";
+    }
+    return null;
+  }, [withdrawForm.destination, withdrawForm.rail]);
+
+  const withdrawAmountError = useMemo(() => {
+    if (!withdrawForm.amount.trim()) return "Enter an amount to withdraw.";
+    if (parsedWithdrawAmount <= 0n) return "Amount must be greater than zero.";
+    if (parsedWithdrawAmount > withdrawRailRaw) return "Amount exceeds available vault balance.";
+    return null;
+  }, [parsedWithdrawAmount, withdrawForm.amount, withdrawRailRaw]);
+
+  const canSubmitWithdraw = !withdrawing && !withdrawAmountError && !withdrawDestinationError;
 
   const handleRailToggle = (rail: keyof RailToggle, value: boolean) =>
     update((prev) => ({
@@ -502,8 +568,9 @@ const formatVault = (symbol: RailSymbol) => {
     try {
       await persistConfig();
       toast.success("Economy settings saved");
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to save economy settings");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to save economy settings";
+      toast.error(message);
     } finally {
       setSubmitting(false);
     }
@@ -521,37 +588,45 @@ const formatVault = (symbol: RailSymbol) => {
 
   const handleWithdraw = async () => {
     if (!cid || !config) return;
-    const decimals = RAIL_DECIMALS[withdrawForm.rail];
-    const amount = parseDecimalInput(withdrawForm.amount, decimals);
-    if (amount <= 0n) {
-      toast.error("Enter an amount to withdraw.");
-      return;
-    }
-    if ((withdrawForm.rail === "BTC" || withdrawForm.rail === "ETH") && !withdrawForm.destination.trim()) {
-      toast.error("Destination address is required for BTC/ETH withdrawals.");
-      return;
-    }
     if (config.microTips.enabled || config.scheduled.enabled) {
       toast.error("Disable micro-tips and scheduled payouts before withdrawing.");
       return;
     }
+    if (withdrawAmountError || withdrawDestinationError) {
+      toast.error(withdrawAmountError || withdrawDestinationError || "Invalid withdrawal request.");
+      return;
+    }
+    const amount = parsedWithdrawAmount;
+    if (!amount || amount <= 0n) {
+      toast.error("Enter an amount to withdraw.");
+      return;
+    }
     try {
       setWithdrawing(true);
-      const treasury = await getTreasuryActor();
+      const treasury: TreasuryActor = await getTreasuryActor();
       const orgPrincipal = Principal.fromText(cid);
       const memoArg = withdrawForm.memo ? [withdrawForm.memo] : [];
-      const response = await (treasury as any).withdrawOrgVault(
+      const destination = withdrawForm.destination.trim();
+      const response = await treasury.withdrawOrgVault(
         orgPrincipal,
         railVariant(withdrawForm.rail),
         amount,
-        withdrawForm.destination.trim(),
+        destination,
         memoArg
       );
       toast.success(typeof response === "string" ? response : "Withdrawal submitted");
       setWithdrawForm((prev) => ({ ...prev, amount: "", memo: "" }));
       await refreshVault();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to withdraw funds");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to withdraw funds";
+      const lowered = message.toLowerCase();
+      const isReadStateError = READ_STATE_ERROR_PATTERNS.some((pattern) => lowered.includes(pattern));
+      if (isReadStateError) {
+        toast.info("Withdrawal submitted. Network confirmation may take a few seconds—verify balances shortly.");
+        await refreshVault();
+      } else {
+        toast.error(message);
+      }
     } finally {
       setWithdrawing(false);
     }
@@ -567,16 +642,20 @@ const formatVault = (symbol: RailSymbol) => {
     }
     try {
       setDepositing(true);
-      const treasury = await getTreasuryActor();
+      const treasury: TreasuryActor = await getTreasuryActor();
       const orgPrincipal = Principal.fromText(cid);
       const memoArg = depositForm.memo ? [depositForm.memo] : [];
-      const method = (treasury as any).recordOrgDeposit ?? (treasury as any).notifyLedgerDeposit;
-      await method(orgPrincipal, railVariant(depositForm.rail), amount, memoArg);
+      if (treasury.recordOrgDeposit) {
+        await treasury.recordOrgDeposit(orgPrincipal, railVariant(depositForm.rail), amount, memoArg);
+      } else {
+        await treasury.notifyLedgerDeposit(orgPrincipal, railVariant(depositForm.rail), amount, memoArg);
+      }
       toast.success("Deposit recorded in treasury.");
       setDepositForm((prev) => ({ ...prev, amount: "", memo: "" }));
       refreshVault();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to record deposit");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to record deposit";
+      toast.error(message);
     } finally {
       setDepositing(false);
     }
@@ -1074,7 +1153,12 @@ const formatVault = (symbol: RailSymbol) => {
                     <Select
                       value={withdrawForm.rail}
                       onValueChange={(value: RailSymbol) =>
-                        setWithdrawForm((prev) => ({ ...prev, rail: value }))
+                        setWithdrawForm((prev) => ({
+                          ...prev,
+                          rail: value,
+                          amount: formatVault(value),
+                          destination: value === "ICP" ? "" : prev.destination,
+                        }))
                       }
                     >
                       <SelectTrigger>
@@ -1089,14 +1173,27 @@ const formatVault = (symbol: RailSymbol) => {
                   </div>
                   <div className="space-y-2">
                     <Label className="text-xs uppercase tracking-wide text-muted-foreground">Amount</Label>
-                    <Input
-                      value={withdrawForm.amount}
-                      onChange={(e) =>
-                        setWithdrawForm((prev) => ({ ...prev, amount: numericMask(e.target.value, true) }))
-                      }
-                      inputMode="decimal"
-                      placeholder="0"
-                    />
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={withdrawForm.amount}
+                        onChange={(e) =>
+                          setWithdrawForm((prev) => ({ ...prev, amount: numericMask(e.target.value, true) }))
+                        }
+                        inputMode="decimal"
+                        placeholder="0"
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => setWithdrawForm((prev) => ({ ...prev, amount: formatVault(withdrawForm.rail) }))}
+                      >
+                        Max
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Available: {formatVault(withdrawForm.rail)} {withdrawForm.rail}
+                    </p>
+                    {withdrawAmountError && <p className="text-xs text-destructive">{withdrawAmountError}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -1109,10 +1206,18 @@ const formatVault = (symbol: RailSymbol) => {
                       }
                       placeholder={
                         withdrawForm.rail === "ICP"
-                          ? "Leave empty to use your principal"
-                          : "ckBTC / ckETH address"
+                          ? "Principal or account (leave blank to use your principal)"
+                          : withdrawForm.rail === "BTC"
+                          ? "ckBTC/BTC address"
+                          : "ckETH/ETH address"
                       }
                     />
+                    <p className="text-xs text-muted-foreground">
+                      {withdrawForm.rail === "ICP"
+                        ? "Blank defaults to your current principal. Account identifiers must be 64 hex chars."
+                        : "Provide an address controlled by the treasury admin."}
+                    </p>
+                    {withdrawDestinationError && <p className="text-xs text-destructive">{withdrawDestinationError}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label className="text-xs uppercase tracking-wide text-muted-foreground">Memo (optional)</Label>
@@ -1126,7 +1231,7 @@ const formatVault = (symbol: RailSymbol) => {
                 <div className="flex items-center gap-2">
                   <Button
                     onClick={handleWithdraw}
-                    disabled={withdrawing || !withdrawForm.amount}
+                    disabled={!canSubmitWithdraw}
                     className="gap-2"
                   >
                     {withdrawing ? (

@@ -1145,7 +1145,7 @@ var userConversionFlags = HashMap.HashMap<Nat, Bool>(0, Nat.equal, natHash);
   };
 
   public shared ({ caller }) func withdrawOrgVault(org : OrgId, rail : Rail, amount : Nat, destination : Text, memo : ?Text) : async Text {
-    ensurePrivileged(caller);
+    ensureOrgCaller(org, caller);
     if (amount == 0) return "Error: amount must be > 0";
     let state = switch (orgs.get(org)) {
       case (?s) s;
@@ -1167,22 +1167,29 @@ var userConversionFlags = HashMap.HashMap<Nat, Bool>(0, Nat.equal, natHash);
 
     switch (rail) {
       case (#ICP) {
-        let recipient : Principal =
+        let recipientAccount : Blob =
           if (destination.size() == 0) {
-            caller
-          } else {
-            try {
-              Principal.fromText(destination)
-            } catch (_) {
-              return "Error: invalid ICP destination";
+            Principal.toBlob(caller)
+          } else if (isAccountIdentifier(destination)) {
+            switch (decodeAccountIdentifier(destination)) {
+              case (?account) account;
+              case null return "Error: invalid ICP destination";
             }
+          } else {
+            let recipientPrincipal =
+              try {
+                Principal.fromText(destination)
+              } catch (_) {
+                return "Error: invalid ICP destination";
+              };
+            Principal.toBlob(recipientPrincipal)
           };
         if (not debitVault(org, #ICP, amount)) return "Error: vault underflow";
         let memoBlob : ?Blob = switch (memo) {
           case (?m) ?Text.encodeUtf8(m);
           case null null;
         };
-        if (await sendRailPayment(#ICP, org, Principal.toBlob(recipient), amount, memoBlob)) {
+        if (await sendRailPayment(#ICP, org, recipientAccount, amount, memoBlob)) {
           "Success: ICP withdrawn"
         } else {
           creditVault(org, #ICP, amount);
