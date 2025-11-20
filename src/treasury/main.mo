@@ -1301,10 +1301,16 @@ var userConversionFlags = HashMap.HashMap<Nat, Bool>(0, Nat.equal, natHash);
       case (?state) {
         if (state.archived) return;
         let cfg = state.config.microTips;
+        let now = nowSeconds();
         if (not cfg.enabled) {
-          orgs.put(org, { state with lastActiveTimestamp = nowSeconds() });
+          orgs.put(org, { state with lastActiveTimestamp = now });
           return;
         };
+        if (_repDelta <= 0) {
+          orgs.put(org, { state with lastActiveTimestamp = now });
+          return;
+        };
+        let repGain = Nat64.toNat(Nat64.fromIntWrap(_repDelta));
 
         if (not ensureCompliance(org, user, state.config.compliance)) {
           recordTipEvent(org, user, #ICP, 0, false, ?"compliance check failed");
@@ -1313,7 +1319,6 @@ var userConversionFlags = HashMap.HashMap<Nat, Bool>(0, Nat.equal, natHash);
 
         var windowStart = state.tipWindowStart;
         var windowCount = state.tipEventsInWindow;
-        let now = nowSeconds();
         if (now >= windowStart + TIP_RATE_WINDOW_SECONDS) {
           windowStart := now;
           windowCount := 0;
@@ -1324,9 +1329,9 @@ var userConversionFlags = HashMap.HashMap<Nat, Bool>(0, Nat.equal, natHash);
         };
         windowCount += 1;
 
-        await processMicroTip(org, user, state, #BTC, cfg.btcTipAmount, cfg.maxBtcPerPeriod);
-        await processMicroTip(org, user, state, #ICP, cfg.icpTipAmount, cfg.maxIcpPerPeriod);
-        await processMicroTip(org, user, state, #ETH, cfg.ethTipAmount, cfg.maxEthPerPeriod);
+        await processMicroTip(org, user, state, #BTC, cfg.btcTipAmount, cfg.maxBtcPerPeriod, repGain);
+        await processMicroTip(org, user, state, #ICP, cfg.icpTipAmount, cfg.maxIcpPerPeriod, repGain);
+        await processMicroTip(org, user, state, #ETH, cfg.ethTipAmount, cfg.maxEthPerPeriod, repGain);
 
         orgs.put(org, {
           state with
@@ -1339,8 +1344,9 @@ var userConversionFlags = HashMap.HashMap<Nat, Bool>(0, Nat.equal, natHash);
     };
   };
 
-  func processMicroTip(org : OrgId, user : UserId, state : OrgState, rail : Rail, amount : Nat, maxPerPeriod : Nat) : async () {
-    if (amount == 0 or maxPerPeriod == 0) return;
+  func processMicroTip(org : OrgId, user : UserId, state : OrgState, rail : Rail, unitAmount : Nat, maxPerPeriod : Nat, repGain : Nat) : async () {
+    if (unitAmount == 0 or maxPerPeriod == 0 or repGain == 0) return;
+    let amount = Nat.mul(unitAmount, repGain);
     if (not state.config.rails.btc and rail == #BTC) return;
     if (not state.config.rails.icp and rail == #ICP) return;
     if (not state.config.rails.eth and rail == #ETH) return;

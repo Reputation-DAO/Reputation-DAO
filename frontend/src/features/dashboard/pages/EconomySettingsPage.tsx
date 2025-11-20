@@ -834,7 +834,7 @@ export default function EconomySettingsPage() {
                 <div>
                   <h2 className="text-xl font-semibold text-foreground">Micro-tips</h2>
                   <p className="text-sm text-muted-foreground">
-                    Event-driven tips triggered when reputation is awarded. Use per-rail caps to control spend.
+                    Event-driven tips triggered when reputation is awarded. Set the tip per REP to automatically scale the payout.
                   </p>
                 </div>
                 <Switch
@@ -847,7 +847,7 @@ export default function EconomySettingsPage() {
                 {(["btc", "icp", "eth"] as const).map((rail) => (
                   <div key={rail} className="space-y-2">
                     <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-                      {rail.toUpperCase()} tip amount
+                      {rail.toUpperCase()} tip per REP
                     </Label>
                     <Input
                       value={config.microTips[`${rail}TipAmount` as keyof MicroTipsConfig] as string}
