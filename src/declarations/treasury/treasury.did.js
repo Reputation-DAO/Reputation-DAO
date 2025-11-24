@@ -103,6 +103,16 @@ export const idlFactory = ({ IDL }) => {
     'thresholds' : RailThresholds,
     'rails' : RailsEnabled,
   });
+  const IcrcAccount = IDL.Record({
+    'owner' : IDL.Principal,
+    'subaccount' : IDL.Opt(IDL.Vec(IDL.Nat8)),
+  });
+  const DepositSnapshot = IDL.Record({
+    'creditedBalance' : IDL.Nat,
+    'available' : IDL.Nat,
+    'account' : IcrcAccount,
+    'ledgerBalance' : IDL.Nat,
+  });
   const SpendSnapshot = IDL.Record({
     'btc' : IDL.Nat,
     'day' : IDL.Nat,
@@ -178,6 +188,11 @@ export const idlFactory = ({ IDL }) => {
     'getFactoryVaultBalance' : IDL.Func([], [VaultBalance], ['query']),
     'getOrgAdmin' : IDL.Func([OrgId], [IDL.Opt(IDL.Principal)], ['query']),
     'getOrgConfig' : IDL.Func([OrgId], [IDL.Opt(OrgConfig)], ['query']),
+    'getOrgDepositStatus' : IDL.Func(
+        [OrgId, Rail],
+        [IDL.Variant({ 'ok' : DepositSnapshot, 'err' : IDL.Text })],
+        [],
+      ),
     'getOrgRails' : IDL.Func([OrgId], [IDL.Opt(RailsEnabled)], ['query']),
     'getOrgSpendSnapshot' : IDL.Func([OrgId], [SpendSnapshot], ['query']),
     'getOrgState' : IDL.Func([OrgId], [IDL.Opt(OrgState)], ['query']),

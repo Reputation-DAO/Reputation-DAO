@@ -29,6 +29,16 @@ export interface DeadManConfig {
   'inactivityThresholdSeconds' : bigint,
   'enabled' : boolean,
 }
+export interface DepositSnapshot {
+  'creditedBalance' : bigint,
+  'available' : bigint,
+  'account' : IcrcAccount,
+  'ledgerBalance' : bigint,
+}
+export interface IcrcAccount {
+  'owner' : Principal,
+  'subaccount' : [] | [Uint8Array | number[]],
+}
 export interface MicroTipConfig {
   'maxBtcPerPeriod' : bigint,
   'maxIcpPerPeriod' : bigint,
@@ -159,6 +169,11 @@ export interface _SERVICE {
   'getFactoryVaultBalance' : ActorMethod<[], VaultBalance>,
   'getOrgAdmin' : ActorMethod<[OrgId], [] | [Principal]>,
   'getOrgConfig' : ActorMethod<[OrgId], [] | [OrgConfig]>,
+  'getOrgDepositStatus' : ActorMethod<
+    [OrgId, Rail],
+    { 'ok' : DepositSnapshot } |
+      { 'err' : string }
+  >,
   'getOrgRails' : ActorMethod<[OrgId], [] | [RailsEnabled]>,
   'getOrgSpendSnapshot' : ActorMethod<[OrgId], SpendSnapshot>,
   'getOrgState' : ActorMethod<[OrgId], [] | [OrgState]>,

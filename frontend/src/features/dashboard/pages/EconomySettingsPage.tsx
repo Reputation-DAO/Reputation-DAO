@@ -432,6 +432,13 @@ export default function EconomySettingsPage() {
     amount: "",
     memo: "",
   }));
+  const [depositStatus, setDepositStatus] = useState<{
+    account: { owner: string; subaccount: Uint8Array | number[] | null };
+    ledgerBalance: bigint;
+    creditedBalance: bigint;
+    available: bigint;
+  } | null>(null);
+  const [depositStatusLoading, setDepositStatusLoading] = useState(false);
 
   const restoreScrollPosition = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -485,15 +492,62 @@ export default function EconomySettingsPage() {
   }, [roleLoading, loading, restoreScrollPosition]);
 
   const sidebarPrincipal = currentPrincipal?.toText() || principal?.toText() || "";
+
+  const refreshDepositStatus = useCallback(async () => {
+    if (!cid || !isAuthenticated) {
+      setDepositStatus(null);
+      return;
+    }
+    setDepositStatusLoading(true);
+    try {
+      const treasury = await getTreasuryActor();
+      const orgPrincipal = Principal.fromText(cid);
+      const res = await treasury.getOrgDepositStatus(orgPrincipal, railVariant(depositForm.rail));
+      if ("ok" in res) {
+        const accountSub = res.ok.account.subaccount.length ? res.ok.account.subaccount[0] : null;
+        const ownerValue = res.ok.account.owner as unknown;
+        const ownerText =
+          typeof (ownerValue as any)?.toText === "function"
+            ? (ownerValue as any).toText()
+            : String(ownerValue);
+        setDepositStatus({
+          account: {
+            owner: ownerText,
+            subaccount: accountSub,
+          },
+          ledgerBalance: res.ok.ledgerBalance,
+          creditedBalance: res.ok.creditedBalance,
+          available: res.ok.available,
+        });
+      } else {
+        setDepositStatus(null);
+        toast.error(res.err || "Unable to fetch deposit status");
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to refresh deposit status";
+      toast.error(message);
+      setDepositStatus(null);
+    } finally {
+      setDepositStatusLoading(false);
+    }
+  }, [cid, depositForm.rail, getTreasuryActor, isAuthenticated]);
+
+  useEffect(() => {
+    refreshDepositStatus();
+  }, [refreshDepositStatus]);
+
   const depositDetails = useMemo(() => {
     if (!cid) return null;
-    const subaccountHex = toDefaultSubaccountHex(cid, depositForm.rail);
+    const subaccountHex =
+      depositStatus?.account?.subaccount && depositStatus.account.subaccount.length
+        ? Buffer.from(Uint8Array.from(depositStatus.account.subaccount)).toString("hex").toUpperCase()
+        : toDefaultSubaccountHex(cid, depositForm.rail);
     if (!subaccountHex) return null;
-    const owner = treasuryCanisterId;
+    const owner = depositStatus?.account?.owner || treasuryCanisterId;
     const supportsAccountId = depositForm.rail === "ICP" || depositForm.rail === "BTC" || depositForm.rail === "ETH";
     const accountId = supportsAccountId ? principalToAccountIdentifier(owner, subaccountHex) : null;
     return { owner, subaccountHex, accountId };
-  }, [cid, depositForm.rail]);
+  }, [cid, depositForm.rail, depositStatus]);
 
   const depositAssetLabel = useMemo(() => {
     switch (depositForm.rail) {
@@ -505,6 +559,7 @@ export default function EconomySettingsPage() {
         return "ICP";
     }
   }, [depositForm.rail]);
+  const depositRailDecimals = RAIL_DECIMALS[depositForm.rail];
   const copyToClipboard = useCallback((label: string, value: string) => {
     if (!value) return;
     navigator.clipboard
@@ -687,6 +742,20 @@ export default function EconomySettingsPage() {
       toast.error("Enter a deposit amount.");
       return;
     }
+    if (!depositStatus) {
+      toast.error("Refresh the deposit status before recording funds.");
+      return;
+    }
+    if (depositStatus.available <= 0n) {
+      toast.error("No uncredited deposits detected for this rail.");
+      return;
+    }
+    if (amount > depositStatus.available) {
+      toast.error(
+        `Only ${formatDecimal(depositStatus.available, decimals)} ${depositForm.rail} available to credit from the ledger.`
+      );
+      return;
+    }
     try {
       setDepositing(true);
       const treasury: TreasuryActor = await getTreasuryActor();
@@ -699,6 +768,7 @@ export default function EconomySettingsPage() {
       }
       toast.success("Deposit recorded in treasury.");
       setDepositForm((prev) => ({ ...prev, amount: "", memo: "" }));
+      await refreshDepositStatus();
       refreshVault();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to record deposit";
@@ -1035,34 +1105,79 @@ export default function EconomySettingsPage() {
                     credit the vault.
                   </p>
                 </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={refreshDepositStatus}
+                    disabled={depositStatusLoading}
+                  >
+                    <RefreshCw className={cn("w-4 h-4", depositStatusLoading && "animate-spin")} />
+                    Refresh status
+                  </Button>
+                  {depositStatus && (
+                    <Badge
+                      variant={depositStatus.available > 0n ? "default" : "secondary"}
+                      className="text-xs"
+                    >
+                      {formatDecimal(depositStatus.available, depositRailDecimals)} {depositForm.rail} available
+                    </Badge>
+                  )}
+                </div>
               </div>
               <div className="grid md:grid-cols-4 gap-4">
                 <div className="space-y-2">
                   <Label className="text-xs uppercase tracking-wide text-muted-foreground">Rail</Label>
                   <Select
                     value={depositForm.rail}
-                    onValueChange={(rail: RailSymbol) => setDepositForm((prev) => ({ ...prev, rail }))}
+                    onValueChange={(rail: RailSymbol) => {
+                      setDepositStatus(null);
+                      setDepositForm((prev) => ({ ...prev, rail }));
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select rail" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ICP">ICP</SelectItem>
-                      <SelectItem value="BTC">ckBTC</SelectItem>
-                      <SelectItem value="ETH">ckETH</SelectItem>
+                      <SelectItem value="BTC">BTC</SelectItem>
+                      <SelectItem value="ETH">ETH</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs uppercase tracking-wide text-muted-foreground">Amount</Label>
-                  <Input
-                    value={depositForm.amount}
-                    onChange={(e) =>
-                      setDepositForm((prev) => ({ ...prev, amount: numericMask(e.target.value, true) }))
-                    }
-                    inputMode="decimal"
-                    placeholder="0.0"
-                  />
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={depositForm.amount}
+                      onChange={(e) =>
+                        setDepositForm((prev) => ({ ...prev, amount: numericMask(e.target.value, true) }))
+                      }
+                      inputMode="decimal"
+                      placeholder="0.0"
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={!depositStatus || depositStatus.available <= 0n}
+                      onClick={() =>
+                        depositStatus &&
+                        setDepositForm((prev) => ({
+                          ...prev,
+                          amount: formatDecimal(depositStatus.available, depositRailDecimals),
+                        }))
+                      }
+                    >
+                      Use detected
+                    </Button>
+                  </div>
+                  {depositStatus && (
+                    <p className="text-xs text-muted-foreground">
+                      Uncredited on ledger: {formatDecimal(depositStatus.available, depositRailDecimals)}{" "}
+                      {depositForm.rail}
+                    </p>
+                  )}
                 </div>
                 <div className="md:col-span-2 space-y-2">
                   <Label className="text-xs uppercase tracking-wide text-muted-foreground">Memo (optional)</Label>
@@ -1073,6 +1188,28 @@ export default function EconomySettingsPage() {
                   />
                 </div>
               </div>
+              {depositStatus && (
+                <div className="rounded-lg border border-border/50 bg-muted/30 p-4 grid md:grid-cols-3 gap-3 text-sm">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Ledger balance</p>
+                    <p className="font-semibold">
+                      {formatDecimal(depositStatus.ledgerBalance, depositRailDecimals)} {depositForm.rail}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Credited to vault</p>
+                    <p className="font-semibold">
+                      {formatDecimal(depositStatus.creditedBalance, depositRailDecimals)} {depositForm.rail}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Available to credit</p>
+                    <p className="font-semibold">
+                      {formatDecimal(depositStatus.available, depositRailDecimals)} {depositForm.rail}
+                    </p>
+                  </div>
+                </div>
+              )}
               {depositDetails && (
                 <div className="rounded-lg border border-border/50 bg-muted/30 p-4 space-y-3 text-sm">
                   <p className="text-muted-foreground">

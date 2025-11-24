@@ -146,6 +146,18 @@ type MicroTipConfig =
    maxEventsPerWindow: nat;
    maxIcpPerPeriod: nat;
  };
+type IcrcAccount = 
+ record {
+   owner: principal;
+   subaccount: opt blob;
+ };
+type DepositSnapshot = 
+ record {
+   account: IcrcAccount;
+   available: nat;
+   creditedBalance: nat;
+   ledgerBalance: nat;
+ };
 type DeadManConfig = 
  record {
    enabled: bool;
@@ -196,6 +208,11 @@ service : {
   getFactoryVaultBalance: () -> (VaultBalance) query;
   getOrgAdmin: (org: OrgId) -> (opt principal) query;
   getOrgConfig: (org: OrgId) -> (opt OrgConfig) query;
+  getOrgDepositStatus: (org: OrgId, rail: Rail) ->
+   (variant {
+      err: text;
+      ok: DepositSnapshot;
+    });
   getOrgRails: (org: OrgId) -> (opt RailsEnabled) query;
   getOrgSpendSnapshot: (org: OrgId) -> (SpendSnapshot) query;
   getOrgState: (org: OrgId) -> (opt OrgState) query;
