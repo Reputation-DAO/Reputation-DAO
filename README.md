@@ -32,13 +32,23 @@
 - [License](#license)
 
 ## Overview
-> [!NOTE]
-> Reputation DAO provides a tamper-proof trust layer. Reputation points are non-transferable ("soulbound"), subject to configurable decay, and fully auditable on-chain.
+Digital trust is scattered, opaque, and centrally controlled. Reputation DAO fixes that with a universal, soulbound reputation layer on the Internet Computer and an optional, policy-driven money layer that never mutates reputation.
+
+**What it is**
+- Soulbound reputation per org: non-transferable, earned-only scores bound to a user’s identity; configurable decay keeps scores fresh.
+- Factory + child pattern: the factory mints/archives child canisters, sets controllers, and stores the canonical child WASM; each child runs its own org rules, award/revoke flows, and analytics.
+- Optional economic layer: a treasury canister can listen to reputation events and (if an org enables it) pay out via ckBTC, ICP, or ckETH/EVM assets. Payments respond to trust signals; they never adjust the underlying reputation.
+- Live site: [reputationdao.com](https://reputationdao.com/)
+
+**Why it matters**
+- Trust-first, money-optional: communities can run pure reputation or attach one/many rails later without code changes to the core.
+- Self-regulating and scalable: caps/blacklists/pause switches, decay engine, automated negative scoring hooks, and room for on-chain AI anomaly detection/Sybil resistance.
+- Cross-ecosystem ready: reputation stays on ICP; attestations and identity bridges can make it portable to other chains.
 
 **Stack highlights**
-- Motoko canisters for reputation logic, multi-tenant orchestration, and marketing/blog content.
-- A factory canister that mints dedicated child canisters per organization, manages controllers, and automates cycle top-ups.
-- A modern React/Vite frontend (shadcn + Tailwind + MUI blend) that surfaces dashboards, role-based flows, docs, and community content.
+- Motoko canisters for the factory, child reputation logic, treasury, and blog CMS; optional Rust SIWB/SIWE providers.
+- Factory-managed multi-tenancy with cycle top-ups, lifecycle state, and audit logs.
+- React/Vite frontend (shadcn + Tailwind + MUI blend) with Plug/II/SIWB/SIWE auth, org dashboards, docs, and community content.
 
 ## Architecture
 
@@ -235,7 +245,7 @@ Refer to `src/reputation_dao/main.mo` for complete signatures and inline documen
 
 ### Ethereum Sign-In (SIWE)
 
-- SIWE support mirrors the SIWB flow but uses the `ic_siwe_provider` canister and your Ethereum wallet (e.g., MetaMask/Rainbow via WalletConnect-capable bridges).
+- SIWE support mirrors the SIWB flow via [kristopher lund](https://github.com/kristoferlund/ic-siwe) (bald but genius guys) uses the `ic_siwe_provider` canister and your Ethereum wallet (e.g., MetaMask/Rainbow via WalletConnect-capable bridges).
 - Configure `.env` with:
   ```
   VITE_SIWE_PROVIDER_CANISTER_ID=uopo7-siaaa-aaaam-qeppq-cai
