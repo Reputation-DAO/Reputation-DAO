@@ -28,6 +28,8 @@ import {
   PanelLeft,
   Eye,
   EyeOff,
+  Coins,
+  DollarSign,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -46,11 +48,13 @@ const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 const mainNavItems = [
   { id: "dashboard", title: "Dashboard", slug: "home", icon: LayoutDashboard, roles: ["admin", "awarder", "member"] },
   { id: "decay", title: "Decay System", slug: "decay-system", icon: Timer, roles: ["admin"] },
+  { id: "economy", title: "Economy Settings", slug: "economy-settings", icon: Coins, roles: ["admin"] },
   { id: "award", title: "Award Rep", slug: "award-rep", icon: Award, roles: ["admin", "awarder"] },
   { id: "revoke", title: "Revoke Rep", slug: "revoke-rep", icon: UserMinus, roles: ["admin"] },
   { id: "manage", title: "Manage Awarders", slug: "manage-awarders", icon: Users, roles: ["admin"] },
   { id: "balances", title: "View Balances", slug: "view-balances", icon: Wallet, roles: ["admin", "awarder", "member"] },
   { id: "transactions", title: "Transaction Log", slug: "transaction-log", icon: FileText, roles: ["admin", "awarder", "member"] },
+  { id: "earnings", title: "My Earnings", slug: "my-earnings", icon: DollarSign, roles: ["admin", "awarder", "member"] },
 ];
 
 const supportItems = [
@@ -373,6 +377,7 @@ function SidebarContent({
           size="icon"
           onClick={toggle}
           className="w-8 h-8 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </Button>

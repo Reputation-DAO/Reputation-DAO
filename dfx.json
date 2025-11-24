@@ -20,6 +20,21 @@
       "type": "motoko",
       "main": "src/blog_backend/main.mo",
       "id": "oy2j4-syaaa-aaaam-qdvxq-cai"
+    },
+    "treasury": {
+      "type": "motoko",
+      "main": "src/treasury/main.mo",
+      "id": "qyncc-5qaaa-aaaam-qeqsq-cai"
+    },
+    "ic_siwb_provider": {
+      "type": "rust",
+      "package": "ic_siwb_provider",
+      "candid": "src/siwb/ic_siwb_provider/ic_siwb_provider.did"
+    },
+    "ic_siwe_provider": {
+      "type": "rust",
+      "package": "ic_siwe_provider",
+      "candid": "src/siwe/ic_siwe_provider/ic_siwe_provider.did"
     }
   },
   "dfx": "0.27.0",

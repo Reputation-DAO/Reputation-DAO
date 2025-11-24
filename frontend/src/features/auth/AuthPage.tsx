@@ -2,10 +2,12 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Wallet, Shield, Zap, ArrowRight, CheckCircle } from "lucide-react";
+import { Wallet, Shield, Zap, ArrowRight, CheckCircle, Coins } from "lucide-react";
 import Navigation from "@/components/ui/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRole } from "@/contexts/RoleContext";
+import { useSiwbIdentity, type WalletProviderKey } from "@/lib/siwb-identity";
+import { useSiweIdentity, type EthereumWalletKey } from "@/lib/siwe-identity";
 
 const WalletOption = ({ icon: Icon, name, description, isRecommended, isConnected, onConnect, isLoading }: {
   icon: any;
@@ -61,19 +63,27 @@ const WalletOption = ({ icon: Icon, name, description, isRecommended, isConnecte
 
 const AuthPage = () => {
   const navigate = useNavigate();
-  const { 
+  const {
     isAuthenticated, 
     authMethod, 
     principal, 
     isLoading, 
     loginWithPlug, 
     loginWithInternetIdentity,
+    loginWithSiwb,
+    loginWithSiwe,
     logout, 
     checkConnection 
   } = useAuth();
+  const siwb = useSiwbIdentity();
+  const siwe = useSiweIdentity();
   const { userRole, loading: roleLoading } = useRole();
-  const [isConnecting, setIsConnecting] = useState<"plug" | "internetIdentity" | null>(null);
+  const [isConnecting, setIsConnecting] = useState<"plug" | "internetIdentity" | "siwb" | "siwe" | null>(null);
   const [showConnected, setShowConnected] = useState(false);
+  const [selectedWallet, setSelectedWallet] = useState<WalletProviderKey | null>(null);
+  const [selectedEthWallet, setSelectedEthWallet] = useState<EthereumWalletKey | null>(null);
+  const [siwbStatus, setSiwbStatus] = useState<string | null>(null);
+  const [siweStatus, setSiweStatus] = useState<string | null>(null);
 
   // Check connection status on mount
   useEffect(() => {
@@ -86,6 +96,24 @@ const AuthPage = () => {
       setShowConnected(true);
     }
   }, [isAuthenticated, principal, roleLoading]);
+
+  useEffect(() => {
+    if (siwb.selectedProvider) {
+      setSelectedWallet(siwb.selectedProvider);
+    }
+  }, [siwb.selectedProvider]);
+
+  useEffect(() => {
+    if (siwb.connectedBtcAddress) {
+      setSiwbStatus(`Wallet ready: ${siwb.connectedBtcAddress.slice(0, 6)}...${siwb.connectedBtcAddress.slice(-4)}`);
+    }
+  }, [siwb.connectedBtcAddress]);
+
+  useEffect(() => {
+    if (siwe.connectedEthAddress) {
+      setSiweStatus(`Wallet ready: ${siwe.connectedEthAddress.slice(0, 6)}...${siwe.connectedEthAddress.slice(-4)}`);
+    }
+  }, [siwe.connectedEthAddress]);
 
   const handleWalletConnect = async (walletType: "plug" | "internetIdentity") => {
     setIsConnecting(walletType);
@@ -133,6 +161,91 @@ const AuthPage = () => {
     },
   ];
 
+  const btcWalletOptions: { id: WalletProviderKey; label: string; description: string }[] = [
+    { id: "xverse", label: "Xverse", description: "Recommended Taproot wallet" },
+    { id: "unisat", label: "Unisat", description: "Popular ordinals wallet" },
+    { id: "okxwallet.bitcoin", label: "OKX Wallet", description: "Mainnet" },
+    { id: "okxwallet.bitcoinTestnet", label: "OKX Wallet (Testnet)", description: "Testing networks" },
+    { id: "BitcoinProvider", label: "LaserEyes (Generic)", description: "Browser provider" },
+  ];
+
+  const ethWalletOptions: { id: EthereumWalletKey; label: string; description: string }[] = [
+    { id: "metamask", label: "MetaMask", description: "Most common browser wallet" },
+    { id: "rabby", label: "Rabby", description: "DeBank's alternative wallet" },
+    { id: "brave", label: "Brave Wallet", description: "Built into Brave browser" },
+    { id: "coinbase", label: "Coinbase Wallet", description: "Coinbase browser extension" },
+    { id: "other", label: "Generic (EIP-1193)", description: "Any other injected wallet" },
+  ];
+
+  const handleBitcoinWalletSelect = async (wallet: WalletProviderKey) => {
+    setSiwbStatus(null);
+    try {
+      setIsConnecting("siwb");
+      await siwb.setWalletProvider(wallet);
+      setSelectedWallet(wallet);
+      setSiwbStatus("Wallet connected. You can now sign the login request.");
+    } catch (error: any) {
+      const msg = error?.message || "Unable to connect wallet";
+      setSiwbStatus(msg);
+      console.error("Failed to connect SIWB wallet:", error);
+    } finally {
+      setIsConnecting(null);
+    }
+  };
+
+  const handleBitcoinLogin = async () => {
+    if (!selectedWallet) {
+      setSiwbStatus("Select a Bitcoin wallet first.");
+      return;
+    }
+    setSiwbStatus(null);
+    setIsConnecting("siwb");
+    try {
+      await loginWithSiwb();
+    } catch (error: any) {
+      const msg = error?.message || "Bitcoin login failed";
+      setSiwbStatus(msg);
+    } finally {
+      setIsConnecting(null);
+    }
+  };
+
+  const handleEthereumConnect = async () => {
+    if (!selectedEthWallet) {
+      setSiweStatus("Select an Ethereum wallet first.");
+      return;
+    }
+    setSiweStatus(null);
+    setIsConnecting("siwe");
+    try {
+      const address = await siwe.connectWallet(selectedEthWallet);
+      setSiweStatus(`Wallet ready: ${address.slice(0, 6)}...${address.slice(-4)}`);
+    } catch (error: any) {
+      const msg = error?.message || "Unable to connect wallet";
+      setSiweStatus(msg);
+      console.error("Failed to connect SIWE wallet:", error);
+    } finally {
+      setIsConnecting(null);
+    }
+  };
+
+  const handleEthereumLogin = async () => {
+    if (!selectedEthWallet) {
+      setSiweStatus("Select an Ethereum wallet first.");
+      return;
+    }
+    setSiweStatus(null);
+    setIsConnecting("siwe");
+    try {
+      await loginWithSiwe();
+    } catch (error: any) {
+      const msg = error?.message || "Ethereum login failed";
+      setSiweStatus(msg);
+    } finally {
+      setIsConnecting(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-muted/20">
       <Navigation />
@@ -171,11 +284,28 @@ const AuthPage = () => {
                     </div>
                     <div>
                       <h3 className="text-lg font-semibold text-foreground">
-                        {authMethod === 'plug' ? 'Plug Wallet' : 'Internet Identity'} Connected
+                        {authMethod === 'plug'
+                          ? 'Plug Wallet'
+                          : authMethod === 'internetIdentity'
+                          ? 'Internet Identity'
+                          : authMethod === 'siwb'
+                          ? 'Bitcoin Wallet'
+                          : 'Ethereum Wallet'}{' '}
+                        Connected
                       </h3>
                       <p className="text-sm text-muted-foreground font-mono">
                         {principal.toString().slice(0, 8)}...{principal.toString().slice(-8)}
                       </p>
+                      {authMethod === 'siwb' && siwb.identityAddress && (
+                        <p className="text-xs text-muted-foreground font-mono">
+                          BTC · {siwb.identityAddress.slice(0, 6)}...{siwb.identityAddress.slice(-4)}
+                        </p>
+                      )}
+                      {authMethod === 'siwe' && siwe.identityAddress && (
+                        <p className="text-xs text-muted-foreground font-mono">
+                          ETH · {siwe.identityAddress.slice(0, 6)}...{siwe.identityAddress.slice(-4)}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -213,6 +343,131 @@ const AuthPage = () => {
                 />
               </div>
             ))}
+          </div>
+
+          <div className="mt-8 max-w-2xl mx-auto animate-fade-in" style={{ animationDelay: `${walletOptions.length * 0.1 + 0.1}s` }}>
+            <Card className="glass-card p-6">
+              <div className="flex items-start gap-4 mb-6">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/10 to-primary-glow/10 flex items-center justify-center">
+                  <Wallet className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-foreground mb-1">Sign in with Ethereum</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Connect an Ethereum wallet that injects <code className="font-mono text-xs">window.ethereum</code> (for example MetaMask, Rabby, Frame, Brave Wallet, or other EIP-1193 compatible wallets) and sign a SIWE request for access.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 mb-4">
+                {ethWalletOptions.map(wallet => (
+                  <Button
+                    key={wallet.id}
+                    variant={selectedEthWallet === wallet.id ? "hero" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setSelectedEthWallet(wallet.id);
+                      setSiweStatus(null);
+                    }}
+                    disabled={isConnecting === "siwe"}
+                  >
+                    {wallet.label}
+                  </Button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mb-4">
+                {selectedEthWallet
+                  ? ethWalletOptions.find(option => option.id === selectedEthWallet)?.description
+                  : "Select an Ethereum wallet to continue"}
+              </p>
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Button
+                  onClick={handleEthereumConnect}
+                  disabled={isConnecting === "siwe" || siwe.isLoggingIn}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  {isConnecting === "siwe" ? "Connecting..." : "Connect Ethereum Wallet"}
+                </Button>
+                <Button
+                  onClick={handleEthereumLogin}
+                  disabled={isConnecting === "siwe" || siwe.isLoggingIn}
+                  className="flex-1"
+                >
+                  {siwe.isLoggingIn ? "Awaiting signature..." : "Sign in with Ethereum"}
+                </Button>
+              </div>
+
+              {siweStatus && <p className="text-xs text-red-400 mt-3">{siweStatus}</p>}
+              {siwe.identityAddress && (
+                <p className="text-xs text-muted-foreground mt-3 font-mono">
+                  Active ETH address: {siwe.identityAddress.slice(0, 8)}...{siwe.identityAddress.slice(-6)}
+                </p>
+              )}
+            </Card>
+          </div>
+
+          <div className="mt-8 max-w-2xl mx-auto animate-fade-in" style={{ animationDelay: `${walletOptions.length * 0.1 + 0.2}s` }}>
+            <Card className="glass-card p-6">
+              <div className="flex items-start gap-4 mb-6">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/10 to-primary-glow/10 flex items-center justify-center">
+                  <Coins className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-foreground mb-1">Sign in with Bitcoin</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Connect a LaserEyes-compatible wallet and sign a Sign-In with Bitcoin (SIWB) request to access the dashboard.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 mb-4">
+                {btcWalletOptions.map((wallet) => (
+                  <Button
+                    key={wallet.id}
+                    variant={selectedWallet === wallet.id ? "hero" : "outline"}
+                    size="sm"
+                    onClick={() => handleBitcoinWalletSelect(wallet.id)}
+                    disabled={isConnecting === "siwb"}
+                  >
+                    {wallet.label}
+                  </Button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mb-4">
+                {selectedWallet
+                  ? btcWalletOptions.find((w) => w.id === selectedWallet)?.description
+                  : "Select a wallet to continue"}
+              </p>
+
+              <Button
+                onClick={handleBitcoinLogin}
+                disabled={isConnecting === "siwb" || siwb.isLoggingIn}
+                className="w-full"
+              >
+                {isConnecting === "siwb" || siwb.isLoggingIn ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin mr-2" />
+                    {siwb.isLoggingIn ? "Awaiting signature..." : "Preparing..."}
+                  </>
+                ) : (
+                  <>
+                    Connect Bitcoin Wallet
+                    <ArrowRight className="w-4 h-4 ml-2" />
+                  </>
+                )}
+              </Button>
+
+              {siwbStatus && (
+                <p className="text-xs text-red-400 mt-3">{siwbStatus}</p>
+              )}
+              {siwb.identityAddress && (
+                <p className="text-xs text-muted-foreground mt-3 font-mono">
+                  Active BTC address: {siwb.identityAddress.slice(0, 8)}...{siwb.identityAddress.slice(-6)}
+                </p>
+              )}
+            </Card>
           </div>
 
           {/* Security Notice */}

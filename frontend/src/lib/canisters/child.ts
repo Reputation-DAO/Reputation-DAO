@@ -1,6 +1,6 @@
 // lib/canisters/child.ts
 import { HttpAgent, Actor } from "@dfinity/agent";
-import type { ActorSubclass } from "@dfinity/agent";
+import type { ActorSubclass, Identity } from "@dfinity/agent";
 
 import { idlFactory } from "../../declarations/reputation_dao/reputation_dao.did.js";
 import type { _SERVICE } from "../../declarations/reputation_dao/reputation_dao.did.d.ts";
@@ -56,6 +56,21 @@ export async function makeChildWithPlug(opts: MakeChildOpts): Promise<ChildActor
 export async function makeChildWithInternetIdentity(opts: MakeChildOpts): Promise<ChildActor> {
   const host = opts.host ?? DEFAULT_HOST;
   const agent = await ensureInternetIdentityAgent({ host });
+  return Actor.createActor<_SERVICE>(idlFactory, {
+    agent,
+    canisterId: opts.canisterId,
+  }) as ChildActor;
+}
+
+export async function makeChildWithIdentity(
+  identity: Identity,
+  opts: MakeChildOpts
+): Promise<ChildActor> {
+  const host = opts.host ?? DEFAULT_HOST;
+  const agent = new HttpAgent({ host, identity });
+  if (host.includes("127.0.0.1") || host.includes("localhost")) {
+    await agent.fetchRootKey();
+  }
   return Actor.createActor<_SERVICE>(idlFactory, {
     agent,
     canisterId: opts.canisterId,

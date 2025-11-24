@@ -10,17 +10,21 @@ import Nat "mo:base/Nat";
 import Int "mo:base/Int";
 import Array "mo:base/Array";
 import Buffer "mo:base/Buffer";
-import Iter "mo:base/Iter";
 import Char "mo:base/Char";
 import Nat64 "mo:base/Nat64";
 import Blob "mo:base/Blob";
 import Text "mo:base/Text";
 import Cycles "mo:base/ExperimentalCycles";
 import Nat32 "mo:base/Nat32";
+import Order "mo:base/Order";
+import Error "mo:base/Error";
+import TreasuryTypes "../common/TreasuryTypes";
 
 
 // Actor class so Factory can pass the admin/owner at deploy time
 actor class ReputationChild(initOwner : Principal, initFactory : Principal) = this {
+  let MAX_DAILY_LIMIT : Nat = 1_000_000;
+  let DECAY_BATCH_DEFAULT : Nat = 256;
   // ——— Types ———
   //Defining a type for TransactionType Enum
   stable var factory : Principal = initFactory;
@@ -39,6 +43,31 @@ actor class ReputationChild(initOwner : Principal, initFactory : Principal) = th
 
   // Awarder Object
   public type Awarder = { id: Principal; name: Text };
+
+  public type Rail = TreasuryTypes.Rail;
+  public type RailsEnabled = TreasuryTypes.RailsEnabled;
+  public type PayoutFrequency = TreasuryTypes.PayoutFrequency;
+  public type Tier = TreasuryTypes.Tier;
+  public type TierPayout = TreasuryTypes.TierPayout;
+  public type ScheduledPayoutConfig = TreasuryTypes.ScheduledPayoutConfig;
+  public type DeadManConfig = TreasuryTypes.DeadManConfig;
+  public type RailThresholds = TreasuryTypes.RailThresholds;
+  public type ComplianceRule = TreasuryTypes.ComplianceRule;
+  public type OrgConfig = TreasuryTypes.OrgConfig;
+  public type Badge = TreasuryTypes.Badge;
+  public type UserBadges = TreasuryTypes.UserBadges;
+  public type UserCompliance = TreasuryTypes.UserCompliance;
+  public type TierRule = { tier : Tier; minPoints : Nat; maxPoints : ?Nat };
+
+  type TreasuryActor = actor {
+    repAwarded : (Principal, Principal, Int, ?Text) -> async ();
+    updateOrgConfig : (Principal, OrgConfig) -> async ();
+    setRails : (Principal, RailsEnabled) -> async ();
+    runPayoutCycle : (Principal) -> async ();
+    setUserBadges : (Principal, Principal, UserBadges) -> async ();
+    setUserCompliance : (Principal, Principal, UserCompliance) -> async ();
+    notifyLedgerDeposit : (Principal, Rail, Nat, ?Text) -> async ();
+  };
 
   public type DecayConfig = {
     decayRate: Nat;        // basis points; 100 = 1%
@@ -60,19 +89,33 @@ actor class ReputationChild(initOwner : Principal, initFactory : Principal) = th
   public type AwarderBreakdown = { awarder: Principal; total: Nat; lastAward: Nat };
 
   // NEW: Dedicated top-up record (kept separate from reputation txns)
-  public type TopUp = { id: Nat; from: Principal; amount: Nat; timestamp: Nat };
+  public type TopUp = { id: Nat; from: ?Principal; amount: Nat; timestamp: Nat };
 
   // ——— Stable State ———
   stable var owner : Principal = initOwner; // admin/owner of this child
   stable var pendingOwner : ?Principal = null; // for two-step transfer
+  stable var schemaVersion : Nat = 1;
 
   // Policy knobs
   stable var paused : Bool = false; // 1) pause switch
   stable var dailyMintLimit : Nat = 50; // per-awarder per 24h (default)
   stable var perAwarderDailyLimit : Trie.Trie<Principal, Nat> = Trie.empty(); // 2) overrides
   stable var blacklistT : Trie.Trie<Principal, Bool> = Trie.empty(); // 3) blacklist
+  stable var blacklistInfo : Trie.Trie<Principal, { reason : ?Text; updatedAt : Nat }> = Trie.empty();
   stable var minCyclesAlert : Nat = 0; // cycles alert threshold
   stable let VERSION : Text = "1.0.1";
+  stable var decayBatchSize : Nat = DECAY_BATCH_DEFAULT;
+  stable var decayCursor : Nat = 0;
+  stable var autoAwarderEnabled : Bool = true;
+  stable var bootstrappedAwarder : Bool = false;
+  stable var treasury : ?Principal = null;
+  stable var treasuryEvents : Nat = 0;
+  stable var treasuryFailures : Nat = 0;
+  stable var tierRules : [TierRule] = [
+    { tier = #Bronze; minPoints = 0; maxPoints = ?999 },
+    { tier = #Silver; minPoints = 1_000; maxPoints = ?4_999 },
+    { tier = #Gold; minPoints = 5_000; maxPoints = null }
+  ];
 
   // Balances & Awarders use Trie for O(log n)
   stable var balances : Trie.Trie<Principal, Nat> = Trie.empty();
@@ -103,6 +146,18 @@ actor class ReputationChild(initOwner : Principal, initFactory : Principal) = th
   stable var parent : ?Principal = null;
   stable var events : [Event] = [];
   stable var nextEventId : Nat = 1;
+
+  system func preupgrade() {};
+
+  system func postupgrade() {
+    if (schemaVersion < 1) {
+      // placeholder for migrations
+    };
+    if (decayConfig.enabled and lastGlobalDecayProcess > 0 and lastGlobalDecayProcess > decayConfig.decayInterval) {
+      lastGlobalDecayProcess := lastGlobalDecayProcess - decayConfig.decayInterval;
+    };
+    schemaVersion := 1;
+  };
 
   // ——— Utils ———
   func now() : Nat { Int.abs(Time.now() / 1_000_000_000) }; // seconds
@@ -139,6 +194,120 @@ actor class ReputationChild(initOwner : Principal, initFactory : Principal) = th
     };
   };
 
+  func readMintedToday_(awardee: Principal) : Nat {
+    let t = now();
+    let day = 86_400;
+    let lm = switch (Trie.get(lastMintTimestamp, pKey(awardee), Principal.equal)) { case (?x) x; case null 0 };
+    if (lm == 0 or t >= lm + day) 0 else switch (Trie.get(dailyMinted, pKey(awardee), Principal.equal)) { case (?x) x; case null 0 }
+  };
+
+  func clampDailyLimit(limit : Nat) : ?Nat {
+    if (limit == 0 or limit > MAX_DAILY_LIMIT) null else ?limit
+  };
+
+  func newestWindow<T>(arr : [T], offset : Nat, limit : Nat) : [T] {
+    let n = arr.size();
+    if (offset >= n) return [];
+    let remaining = Nat.sub(n, offset);
+    let take = Nat.min(limit, remaining);
+    if (take == 0) return [];
+    let start = Nat.sub(n, offset + take);
+    let base = Nat.sub(start + take, 1);
+    Array.tabulate<T>(
+      take,
+      func(i : Nat) = arr[Nat.sub(base, i)]
+    )
+  };
+
+  func treasuryActor() : ?TreasuryActor =
+    switch (treasury) {
+      case (?pid) ?(actor (Principal.toText(pid)) : TreasuryActor);
+      case null null;
+    };
+
+  func orgId() : Principal = Principal.fromActor(this);
+
+  func tierForPoints(points : Nat) : Tier {
+    for (rule in tierRules.vals()) {
+      let withinUpper = switch (rule.maxPoints) {
+        case (?m) points <= m;
+        case null true;
+      };
+      if (points >= rule.minPoints and withinUpper) {
+        return rule.tier;
+      };
+    };
+    #Custom("Unranked")
+  };
+
+  func computeTierListing() : [(Principal, Tier)] {
+    let buf = Buffer.Buffer<(Principal, Tier)>(Trie.size(balances));
+    for ((user, bal) in Trie.iter(balances)) {
+      buf.add((user, tierForPoints(bal)));
+    };
+    Buffer.toArray(buf);
+  };
+
+  func validateTierRules(rules : [TierRule]) : ?[TierRule] {
+    if (rules.size() == 0) return null;
+    let sorted = Array.sort<TierRule>(
+      rules,
+      func(a : TierRule, b : TierRule) : Order.Order {
+        if (a.minPoints < b.minPoints) { #less }
+        else if (a.minPoints > b.minPoints) { #greater }
+        else { #equal }
+      }
+    );
+    let buf = Buffer.Buffer<TierRule>(sorted.size());
+    var prevMin : Nat = 0;
+    var idx : Nat = 0;
+    for (rule in sorted.vals()) {
+      switch (rule.maxPoints) {
+        case (?m) { if (m < rule.minPoints) return null };
+        case null {};
+      };
+      if (idx > 0 and rule.minPoints < prevMin) return null;
+      buf.add(rule);
+      prevMin := rule.minPoints;
+      idx += 1;
+    };
+    if (buf.size() == 0) return null;
+    ?Buffer.toArray(buf)
+  };
+
+  func notifyTreasuryRep(user : Principal, delta : Int, meta : ?Text) : async () {
+    switch (treasuryActor()) {
+      case (?t) {
+        treasuryEvents += 1;
+        try {
+          await t.repAwarded(orgId(), user, delta, meta);
+        } catch (err) {
+          treasuryFailures += 1;
+          Debug.print("treasury rep hook failed: " # Error.message(err));
+        };
+      };
+      case null {};
+    };
+  };
+
+  func isOwnerOrFactory(caller : Principal) : Bool {
+    caller == owner or caller == factory
+  };
+
+  func withTreasury(op : (TreasuryActor) -> async ()) : async { #ok : (); #err : Text } {
+    switch (treasuryActor()) {
+      case (?t) {
+        try {
+          await op(t);
+          #ok(())
+        } catch (err) {
+          #err(Error.message(err))
+        }
+      };
+      case null { #err("Treasury not linked") };
+    }
+  };
+
   func addTx(txType: TransactionType, from: Principal, to: Principal, amount: Nat, reason: ?Text) {
     let tx : Transaction = {
       id = nextTransactionId;
@@ -155,15 +324,21 @@ actor class ReputationChild(initOwner : Principal, initFactory : Principal) = th
     nextTransactionId += 1;
   };
 
-  func addTopUp(from: Principal, amount: Nat) {
-    let t : TopUp = { id = nextTopUpId; from = from; amount = amount; timestamp = now() };
+  func addTopUp(from: ?Principal, amount: Nat) {
+    let t : TopUp = { id = nextTopUpId; from; amount = amount; timestamp = now() };
     let buf = Buffer.fromArray<TopUp>(topUps); buf.add(t); topUps := Buffer.toArray(buf); nextTopUpId += 1;
+    let payload = "from=" #
+      (switch (from) { case (?p) Principal.toText(p); case null "(unknown)" }) #
+      ";amount=" # Nat.toText(amount);
+    emitText("cycles.topup", payload);
   };
 
   func emit(kind: Text, payload: Blob) { // internal
     let e : Event = { id = nextEventId; kind; payload; timestamp = now() };
     let buf = Buffer.fromArray<Event>(events); buf.add(e); events := Buffer.toArray(buf); nextEventId += 1;
   };
+
+  func emitText(kind : Text, message : Text) { emit(kind, Text.encodeUtf8(message)) };
 
   func initDecayInfo_(p: Principal) : UserDecayInfo {
     switch (Trie.get(userDecayInfo, pKey(p), Principal.equal)) {
@@ -187,6 +362,9 @@ actor class ReputationChild(initOwner : Principal, initFactory : Principal) = th
     let periods = if (decayConfig.decayInterval > 0) elapsed / decayConfig.decayInterval else 1;
     if (periods == 0) return 0;
     let raw = (bal * decayConfig.decayRate * periods) / 10_000;
+    if (raw == 0) {
+      Debug.print("Decay configured but produced zero delta for " # Principal.toText(p));
+    };
     if (bal >= raw) {
       let nb = Nat.sub(bal, raw);
       if (nb < decayConfig.minThreshold and bal >= decayConfig.minThreshold) Nat.sub(bal, decayConfig.minThreshold) else raw
@@ -236,17 +414,43 @@ actor class ReputationChild(initOwner : Principal, initFactory : Principal) = th
   };
 
   public shared({ caller }) func setDailyMintLimit(limit: Nat) : async Text {
-    if (caller != owner) return "Error: Only owner"; dailyMintLimit := limit; "Success: Daily limit updated"
+    if (caller != owner) return "Error: Only owner";
+    switch (clampDailyLimit(limit)) {
+      case (?valid) { dailyMintLimit := valid; "Success: Daily limit updated" };
+      case null { "Error: Limit out of range" };
+    }
   };
 
   public shared({ caller }) func setPerAwarderDailyLimit(awardee: Principal, limit: Nat) : async Text {
     if (caller != owner) return "Error: Only owner";
-    perAwarderDailyLimit := Trie.put(perAwarderDailyLimit, pKey(awardee), Principal.equal, limit).0; "Success: Per-awarder limit set"
+    switch (clampDailyLimit(limit)) {
+      case (?valid) {
+        perAwarderDailyLimit := Trie.put(perAwarderDailyLimit, pKey(awardee), Principal.equal, valid).0; "Success: Per-awarder limit set"
+      };
+      case null { "Error: Limit out of range" };
+    }
   };
 
-  public shared({ caller }) func blacklist(user: Principal, on: Bool) : async Text {
+  public shared func blacklist(user: Principal, on: Bool) : async Text {
+    await blacklistWithReason(user, on, null)
+  };
+
+  public shared({ caller }) func blacklistWithReason(user: Principal, on: Bool, reason: ?Text) : async Text {
     if (caller != owner) return "Error: Only owner";
-    let v = if (on) ?true else null; let (t, _) = Trie.replace(blacklistT, pKey(user), Principal.equal, v); blacklistT := t;
+    let v = if (on) ?true else null;
+    let (t, _) = Trie.replace(blacklistT, pKey(user), Principal.equal, v);
+    blacklistT := t;
+    if (on) {
+      blacklistInfo := Trie.put(
+        blacklistInfo,
+        pKey(user),
+        Principal.equal,
+        { reason = reason; updatedAt = now() }
+      ).0;
+    } else {
+      let (infoTrie, _) = Trie.replace(blacklistInfo, pKey(user), Principal.equal, null);
+      blacklistInfo := infoTrie;
+    };
     "Success: blacklist updated"
   };
 
@@ -260,6 +464,102 @@ actor class ReputationChild(initOwner : Principal, initFactory : Principal) = th
 
   public shared({ caller }) func setMinCyclesAlert(threshold: Nat) : async Text {
     if (caller != owner) return "Error: Only owner"; minCyclesAlert := threshold; "Success: alert set"
+  };
+
+  public shared({ caller }) func configureAutoAwarder(enable : Bool) : async Text {
+    if (caller != owner) return "Error: Only owner";
+    autoAwarderEnabled := enable;
+    "Success: auto-awarder " # (if (enable) "enabled" else "disabled")
+  };
+
+  // ——— Treasury + Tier Controls ———
+  public shared({ caller }) func setTreasuryLink(target : ?Principal) : async Text {
+    if (not isOwnerOrFactory(caller)) return "Error: Only owner";
+    treasury := target;
+    switch (target) {
+      case (?p) "Success: treasury linked to " # Principal.toText(p);
+      case null "Success: treasury link cleared";
+    }
+  };
+
+  public query func getTreasuryLink() : async ?Principal { treasury };
+
+  public query func getTreasuryStats() : async { treasury : ?Principal; events : Nat; failures : Nat } {
+    { treasury; events = treasuryEvents; failures = treasuryFailures }
+  };
+
+  public shared({ caller }) func syncTreasuryConfig(cfg : OrgConfig) : async Text {
+    if (not isOwnerOrFactory(caller)) return "Error: Only owner";
+    switch (await withTreasury(func (t : TreasuryActor) : async () { await t.updateOrgConfig(orgId(), cfg) })) {
+      case (#ok _) "Success: treasury config updated";
+      case (#err msg) "Error: " # msg;
+    }
+  };
+
+  public shared({ caller }) func setTreasuryRails(rails : RailsEnabled) : async Text {
+    if (not isOwnerOrFactory(caller)) return "Error: Only owner";
+    switch (await withTreasury(func (t : TreasuryActor) : async () { await t.setRails(orgId(), rails) })) {
+      case (#ok _) "Success: rails updated";
+      case (#err msg) "Error: " # msg;
+    }
+  };
+
+  public shared({ caller }) func runTreasuryPayoutCycle() : async Text {
+    if (not isOwnerOrFactory(caller)) return "Error: Only owner";
+    switch (await withTreasury(func (t : TreasuryActor) : async () { await t.runPayoutCycle(orgId()) })) {
+      case (#ok _) "Success: payout cycle triggered";
+      case (#err msg) "Error: " # msg;
+    }
+  };
+
+  public shared({ caller }) func setTreasuryBadges(user : Principal, badges : UserBadges) : async Text {
+    if (not isOwnerOrFactory(caller)) return "Error: Only owner";
+    switch (await withTreasury(func (t : TreasuryActor) : async () { await t.setUserBadges(orgId(), user, badges) })) {
+      case (#ok _) "Success: treasury badges updated";
+      case (#err msg) "Error: " # msg;
+    }
+  };
+
+  public shared({ caller }) func setTreasuryCompliance(user : Principal, info : UserCompliance) : async Text {
+    if (not isOwnerOrFactory(caller)) return "Error: Only owner";
+    switch (await withTreasury(func (t : TreasuryActor) : async () { await t.setUserCompliance(orgId(), user, info) })) {
+      case (#ok _) "Success: compliance record updated";
+      case (#err msg) "Error: " # msg;
+    }
+  };
+
+  public shared({ caller }) func notifyTreasuryDeposit(rail : Rail, amount : Nat, memo : ?Text) : async Text {
+    if (not isOwnerOrFactory(caller)) return "Error: Only owner";
+    if (amount == 0) return "Error: amount must be > 0";
+    switch (await withTreasury(func (t : TreasuryActor) : async () { await t.notifyLedgerDeposit(orgId(), rail, amount, memo) })) {
+      case (#ok _) "Success: treasury notified of deposit";
+      case (#err msg) "Error: " # msg;
+    }
+  };
+
+  public shared({ caller }) func setTierRules(rules : [TierRule]) : async Text {
+    if (not isOwnerOrFactory(caller)) return "Error: Only owner";
+    switch (validateTierRules(rules)) {
+      case (?valid) { tierRules := valid; "Success: tier rules updated" };
+      case null "Error: invalid tier rules";
+    }
+  };
+
+  public query func getTierRules() : async [TierRule] { tierRules };
+
+  public query func getUserTier(user : Principal) : async Tier {
+    tierForPoints(getBalance_(user))
+  };
+
+  public query func getUsersByTier() : async [(Principal, Tier)] {
+    computeTierListing()
+  };
+
+  public query func getUsersByTierPaged(offset : Nat, limit : Nat) : async [(Principal, Tier)] {
+    let arr = computeTierListing();
+    if (offset >= arr.size()) return [];
+    let take = Nat.min(limit, arr.size() - offset);
+    Array.subArray(arr, offset, take)
   };
 
   // ——— Award / Revoke ———
@@ -291,32 +591,62 @@ actor class ReputationChild(initOwner : Principal, initFactory : Principal) = th
     if (not bump.ok) return "Error: Daily mint cap exceeded";
     let bal = getBalance_(to); putBalance_(to, bal + amount);
     addTx(#Award, caller, to, amount, reason); touchActivity_(to);
+    await notifyTreasuryRep(to, amount, reason);
     Debug.print("Awarded " # Nat.toText(amount) # " to " # Principal.toText(to)); "Success: " # Nat.toText(amount) # " points awarded"
   };
 
   public shared({ caller }) func multiAward(pairs: [(Principal, Nat, ?Text)], atomic: Bool) : async Text {
     if (paused) return "Error: Paused";
     if (not isTrusted_(caller)) return "Error: Not a trusted awarder";
-    // Precheck for atomic
-    if (atomic) {
-      // ensure all pass caps/blacklist upfront
-      for ((to, amount, _r) in pairs.vals()) {
-        if (amount == 0 or caller == to or isBlacklisted_(caller) or isBlacklisted_(to)) return "Error: Atomic precheck failed";
-        let tmp = bumpDaily_(caller, 0); // read current
-        let lim = effectiveDailyLimit_(caller);
-        if (tmp.mintedToday + amount > lim) return "Error: Daily cap would be exceeded";
-      }
-    };
-    var success : Nat = 0;
+    let limit = effectiveDailyLimit_(caller);
+    var preview = readMintedToday_(caller);
+    var validPairs = Buffer.Buffer<(Principal, Nat, ?Text)>(pairs.size());
+    var skipped : Nat = 0;
+
     for ((to, amount, r) in pairs.vals()) {
-      if (amount == 0 or caller == to or isBlacklisted_(caller) or isBlacklisted_(to)) { if (atomic) return "Error: Atomic fail" } else {
-        let bump = bumpDaily_(caller, amount);
-        if (not bump.ok) { if (atomic) return "Error: Atomic daily cap fail" } else {
-          ignore applyDecay_(to); let bal = getBalance_(to); putBalance_(to, bal + amount); addTx(#Award, caller, to, amount, r); touchActivity_(to); success += 1
-        }
+      if (amount == 0 or caller == to or isBlacklisted_(caller) or isBlacklisted_(to)) {
+        if (atomic) {
+          return "Error: Invalid entry in batch";
+        } else {
+          skipped += 1;
+        };
+      } else if (preview + amount > limit) {
+        if (atomic) {
+          return "Error: Daily cap would be exceeded";
+        } else {
+          skipped += 1;
+        };
+      } else {
+        preview += amount;
+        validPairs.add((to, amount, r));
+      };
+    };
+
+    if (validPairs.size() == 0) {
+      if (atomic) {
+        return "Error: No valid recipients";
+      } else {
+        return "No awards processed; skipped " # Nat.toText(skipped);
+      };
+    };
+
+    var success : Nat = 0;
+    for ((to, amount, r) in Buffer.toArray(validPairs).vals()) {
+      let bump = bumpDaily_(caller, amount);
+      if (not bump.ok) {
+        if (atomic) return "Error: Daily cap enforcement triggered mid-run";
+        skipped += 1;
+      } else {
+        ignore applyDecay_(to);
+        let bal = getBalance_(to);
+        putBalance_(to, bal + amount);
+        addTx(#Award, caller, to, amount, r);
+        touchActivity_(to);
+        await notifyTreasuryRep(to, amount, r);
+        success += 1;
       }
     };
-    "Success: awarded to " # Nat.toText(success) # " users"
+    "Success: awarded to " # Nat.toText(success) # " users (skipped " # Nat.toText(skipped) # ")"
   };
 
   public shared({ caller }) func revokeRep(from: Principal, amount: Nat, reason: ?Text) : async Text {
@@ -329,12 +659,20 @@ actor class ReputationChild(initOwner : Principal, initFactory : Principal) = th
     if (bal == 0) return "Error: User has no points";
     if (bal < amount) return "Error: Insufficient balance to revoke";
     putBalance_(from, Nat.sub(bal, amount)); addTx(#Revoke, caller, from, amount, reason); touchActivity_(from);
+    let delta : Int = 0 - (amount : Int);
+    await notifyTreasuryRep(from, delta, reason);
     Debug.print("Revoked " # Nat.toText(amount) # " from " # Principal.toText(from)); "Success: " # Nat.toText(amount) # " points revoked"
   };
 
   public shared({ caller }) func resetUser(user: Principal, reason: ?Text) : async Text {
     if (caller != owner) return "Error: Only owner";
-    putBalance_(user, 0); addTx(#Revoke, caller, user, 0, reason); touchActivity_(user); "Success: user reset"
+    let bal = getBalance_(user);
+    putBalance_(user, 0); addTx(#Revoke, caller, user, 0, reason); touchActivity_(user);
+    if (bal > 0) {
+      let resetDelta : Int = 0 - (bal : Int);
+      await notifyTreasuryRep(user, resetDelta, reason);
+    };
+    "Success: user reset"
   };
 
   // ——— Queries ———
@@ -344,6 +682,20 @@ actor class ReputationChild(initOwner : Principal, initFactory : Principal) = th
     let buf = Buffer.Buffer<Awarder>(0);
     for ((k, v) in Trie.iter(trustedAwarders)) { buf.add({ id = k; name = v }) };
     Buffer.toArray(buf)
+  };
+
+  public query func getBlacklistEntry(user : Principal) : async ?{ active : Bool; reason : ?Text; updatedAt : Nat } {
+    switch (Trie.get(blacklistT, pKey(user), Principal.equal)) {
+      case (?flag) {
+        let info = Trie.get(blacklistInfo, pKey(user), Principal.equal);
+        ?{
+          active = flag;
+          reason = switch (info) { case (?meta) meta.reason; case null null };
+          updatedAt = switch (info) { case (?meta) meta.updatedAt; case null 0 };
+        }
+      };
+      case null null;
+    }
   };
 
   public query func getTransactionHistory() : async [Transaction] {
@@ -356,16 +708,7 @@ actor class ReputationChild(initOwner : Principal, initFactory : Principal) = th
 
 
   public query func getTransactionsPaged(offset: Nat, limit: Nat) : async [Transaction] {
-    let n = transactionHistory.size();
-    if (offset >= n) { return [] };
-
-    let end  = Nat.sub(n, offset);          // slice end (exclusive)
-    let take = Nat.min(limit, end);
-
-    Array.tabulate<Transaction>(
-      take,
-      func(i) = transactionHistory[end - 1 - i]  // reverse within the window
-    )
+    newestWindow<Transaction>(transactionHistory, offset, limit)
   };
 
 
@@ -572,29 +915,48 @@ actor class ReputationChild(initOwner : Principal, initFactory : Principal) = th
   // ——— Maintenance ———
   public shared({ caller }) func processBatchDecay() : async Text {
     if (caller != owner and caller != Principal.fromActor(this)) return "Error: Only owner";
-    let pairs = Buffer.Buffer<(Principal, Nat)>(0); for (entry in Trie.iter(balances)) { pairs.add(entry) };
+    let pairs = Buffer.Buffer<(Principal, Nat)>(0);
+    for (entry in Trie.iter(balances)) { pairs.add(entry) };
     let arr = Buffer.toArray(pairs);
-    var usersProcessed : Nat = 0; var total : Nat = 0;
-    for ((p, bal) in arr.vals()) { if (bal > 0) { let d = applyDecay_(p); if (d > 0) { usersProcessed += 1; total += d } } };
-    lastGlobalDecayProcess := now(); Debug.print("Batch decay: " # Nat.toText(usersProcessed) # " users, " # Nat.toText(total) # " points");
+    if (arr.size() == 0) return "No users to decay";
+    let batch = if (decayBatchSize == 0) DECAY_BATCH_DEFAULT else decayBatchSize;
+    var cursor = if (decayCursor >= arr.size()) 0 else decayCursor;
+    var processed : Nat = 0;
+    var usersProcessed : Nat = 0;
+    var total : Nat = 0;
+    label L while (processed < batch and processed < arr.size()) {
+      let idx = (cursor + processed) % arr.size();
+      let (user, bal) = arr[idx];
+      if (bal > 0) {
+        let d = applyDecay_(user);
+        if (d > 0) {
+          usersProcessed += 1;
+          total += d;
+        }
+      };
+      processed += 1;
+    };
+    decayCursor := (cursor + processed) % arr.size();
+    lastGlobalDecayProcess := now();
+    Debug.print("Decay chunk: users=" # Nat.toText(usersProcessed) # " total=" # Nat.toText(total));
     "Success: Processed " # Nat.toText(usersProcessed) # " users; total decay " # Nat.toText(total)
+  };
+
+  public shared({ caller }) func setDecayBatchSize(size : Nat) : async Text {
+    if (caller != owner) return "Error: Only owner";
+    decayBatchSize := if (size == 0) DECAY_BATCH_DEFAULT else size;
+    "Success: decay batch size updated"
   };
 
   public shared({ caller }) func triggerManualDecay() : async Text {
      if (caller != owner) return "Error: Only owner";
      await processBatchDecay()
   };
-
-
-  // ——— Upgrade hooks ———
-  system func postupgrade() { if (decayConfig.enabled and lastGlobalDecayProcess > 0 and lastGlobalDecayProcess > decayConfig.decayInterval) { lastGlobalDecayProcess := lastGlobalDecayProcess - decayConfig.decayInterval } };
-
-
   // === CYCLES ===
-  public func wallet_receive() : async Nat {
+  public shared({ caller }) func wallet_receive() : async Nat {
     let avail = Cycles.available();
     let accepted = Cycles.accept<system>(avail);   // <- add <system>
-    addTopUp(Principal.fromActor(this), accepted);
+    addTopUp(?caller, accepted);
     accepted
   };
 
@@ -602,13 +964,18 @@ actor class ReputationChild(initOwner : Principal, initFactory : Principal) = th
 
   // this will be only used when canister is archieved back to pool
   public shared({ caller }) func withdrawCycles(to: Principal, amount: Nat) : async Text {
-    if (caller != owner) return "Error: Only owner";
+    if (caller != owner and caller != factory) return "Error: Unauthorized";
+    if (to != factory) return "Error: Target must be factory";
     if (amount == 0) return "Error: Amount must be > 0";
 
     // keep some reply buffer so we don't starve the canister
     let replyBuffer : Nat = 100_000_000_000; // ~0.1T cycles (tune)
     let bal = Cycles.balance();
-    if (bal <= replyBuffer or amount > bal - replyBuffer) {
+    if (bal <= replyBuffer) {
+      return "Error: Insufficient cycles (balance=" # Nat.toText(bal) # ")";
+    };
+    let headroom = Nat.sub(bal, replyBuffer);
+    if (amount > headroom) {
       return "Error: Insufficient cycles (balance=" # Nat.toText(bal) # ")";
     };
 
@@ -616,14 +983,13 @@ actor class ReputationChild(initOwner : Principal, initFactory : Principal) = th
     let target : Wallet = actor (Principal.toText(to));
 
     try {
-      Cycles.add(amount);                // <-- attach cycles (old moc-compatible)
-      let accepted = await target.wallet_receive();
+      let accepted = await (with cycles = amount) target.wallet_receive();
       if (accepted == amount) {
         "Success: transferred " # Nat.toText(amount) # " cycles"
       } else {
         "Warning: target accepted " # Nat.toText(accepted) # " / " # Nat.toText(amount) # " cycles"
       }
-    } catch (e) {
+    } catch (_) {
       "Error: transfer failed"
     }
   };
@@ -637,13 +1003,16 @@ actor class ReputationChild(initOwner : Principal, initFactory : Principal) = th
   public shared({ caller }) func topUp() : async Nat {
     let avail = Cycles.available();
     let accepted = Cycles.accept<system>(avail);   // <- add <system>
-    addTopUp(caller, accepted);
+    addTopUp(?caller, accepted);
     accepted
   };
 
 
   // ——— Snapshot / Audit ———
   public query func snapshotHash() : async Nat { stateHash_() };
+  public query func getEventsPaged(offset: Nat, limit: Nat) : async [Event] {
+    newestWindow<Event>(events, offset, limit)
+  };
 
   // ——— DX Events ———
   public shared({ caller }) func emitEvent(kind: Text, payload: Blob) : async Text {
@@ -696,30 +1065,21 @@ actor class ReputationChild(initOwner : Principal, initFactory : Principal) = th
     let bal = Cycles.balance();
     if (bal <= replyBuffer) return 0;
 
-    let send : Nat = bal - replyBuffer;
+    let send : Nat = Nat.sub(bal, replyBuffer);
 
     type Wallet = actor { wallet_receive : () -> async Nat };
     let target : Wallet = actor (Principal.toText(factory));
 
     try {
-      Cycles.add(send);
-      let accepted = await target.wallet_receive();
+      let accepted = await (with cycles = send) target.wallet_receive();
       // If the target accepted less, that's fine — we still return what landed.
       accepted
     } catch (_) {
       0
     }
   };
-  // some non necessary code added on the basis of aomeones request
-  stable var bootstrappedAwarder : Bool = false;
-  if (not bootstrappedAwarder) {
-    // show in getTrustedAwarders() immediately, but still removable
-    trustedAwarders := Trie.put(
-      trustedAwarders,
-      pKey(initOwner),
-      Principal.equal,
-      "Admin"
-    ).0;
+  if (autoAwarderEnabled and not bootstrappedAwarder) {
+    trustedAwarders := Trie.put(trustedAwarders, pKey(initOwner), Principal.equal, "Admin").0;
     bootstrappedAwarder := true;
   };
 

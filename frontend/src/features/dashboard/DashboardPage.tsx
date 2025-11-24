@@ -87,10 +87,10 @@ const StatCard = ({
   trend?: string;
   description?: string;
 }) => (
-  <Card className="glass-card p-6 hover:shadow-[var(--shadow-glow)] transition-all duration-300 group">
+  <Card className="glass-card p-6 hover:shadow-[var(--shadow-glow)] transition-shadow duration-300 group">
     <div className="flex items-center justify-between mb-4">
-      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/10 to-primary-glow/10 flex items-center justify-center group-hover:from-primary/20 group-hover:to-primary-glow/20 transition-all duration-300">
-        <Icon className="w-6 h-6 text-primary group-hover:scale-110 transition-transform duration-300" />
+      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/10 to-primary-glow/10 flex items-center justify-center">
+        <Icon className="w-6 h-6 text-primary" />
       </div>
       {trend && (
         <Badge variant="secondary" className="text-green-600 bg-green-600/10">
@@ -597,7 +597,7 @@ function QuickActionsSection({ cid, canAward, isAdmin }: { cid: string; canAward
             key={action.title}
             variant={action.variant}
             onClick={action.action}
-            className="h-auto p-4 flex flex-col items-start gap-2 hover:scale-105 transition-all duration-300"
+            className="h-auto p-4 flex flex-col items-start gap-2 transition-shadow duration-300"
           >
             <action.icon className="w-5 h-5" />
             <div className="text-left">

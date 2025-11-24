@@ -419,7 +419,7 @@ function InnerDecaySystem(props: any) {
 
               {hasUnsavedChanges && (
                 <Button variant="hero" onClick={handleSaveSettings} disabled={loading} className="group">
-                  <Save className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
+                  <Save className="w-4 h-4 mr-2" />
                   {loading ? "Saving…" : "Save Changes"}
                 </Button>
               )}
@@ -602,7 +602,7 @@ function InnerDecaySystem(props: any) {
                       className="w-full justify-start group"
                       disabled={!settings.enabled || loading}
                     >
-                      <Play className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
+                      <Play className="w-4 h-4 mr-2" />
                       {loading ? "Running…" : "Run Manual Decay"}
                     </Button>
 

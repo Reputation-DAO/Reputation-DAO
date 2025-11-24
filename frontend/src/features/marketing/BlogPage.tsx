@@ -67,6 +67,7 @@ const HeroImage = ({ media, alt, className = "", imageClassName = "" }: HeroImag
         alt={alt}
         className={`w-full h-full object-cover ${imageClassName}`}
         loading="lazy"
+        decoding="async"
       />
     </div>
   );

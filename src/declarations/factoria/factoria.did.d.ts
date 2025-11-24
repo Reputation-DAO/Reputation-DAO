@@ -2,6 +2,14 @@ import type { Principal } from '@dfinity/principal';
 import type { ActorMethod } from '@dfinity/agent';
 import type { IDL } from '@dfinity/candid';
 
+export interface AuditEvent {
+  'id' : bigint,
+  'ts' : bigint,
+  'child' : [] | [Principal],
+  'kind' : string,
+  'detail' : string,
+  'caller' : Principal,
+}
 export interface BasicPayInfo {
   'account_owner' : Principal,
   'memo' : string,
@@ -34,6 +42,20 @@ export interface _SERVICE {
   'adminArchiveExpired' : ActorMethod<[bigint], bigint>,
   'adminBackfillPlanDefaults' : ActorMethod<[Plan], string>,
   'adminDrainChild' : ActorMethod<[Principal, bigint], bigint>,
+  'adminForceArchive' : ActorMethod<[Principal], string>,
+  'adminReattachChild' : ActorMethod<
+    [
+      Principal,
+      Principal,
+      string,
+      Visibility,
+      Plan,
+      [] | [Status],
+      [] | [bigint],
+      boolean,
+    ],
+    string
+  >,
   'adminSetPool' : ActorMethod<[Array<Principal>], string>,
   'adminTreasuryWithdraw' : ActorMethod<
     [Principal, [] | [Uint8Array | number[]], bigint],
@@ -41,6 +63,7 @@ export interface _SERVICE {
       { 'err' : string }
   >,
   'archiveChild' : ActorMethod<[Principal], string>,
+  'auditEventCount' : ActorMethod<[], bigint>,
   'childHealth' : ActorMethod<
     [Principal],
     [] | [
@@ -77,18 +100,46 @@ export interface _SERVICE {
       { 'err' : string }
   >,
   'deleteChild' : ActorMethod<[Principal], string>,
+  'factoryHealth' : ActorMethod<
+    [],
+    {
+      'admin' : Principal,
+      'pool' : bigint,
+      'vaultCycles' : bigint,
+      'totals' : { 'total' : bigint, 'active' : bigint, 'archived' : bigint },
+      'wasmSet' : boolean,
+      'treasuryUsage' : { 'cap' : bigint, 'day' : bigint, 'used' : bigint },
+      'walletEvents' : bigint,
+      'schemaVersion' : bigint,
+      'treasury' : [] | [Principal],
+    }
+  >,
   'getAdmin' : ActorMethod<[], Principal>,
   'getBasicPayInfoForChild' : ActorMethod<[Principal], BasicPayInfo>,
+  'getBasicPrice' : ActorMethod<[], bigint>,
   'getChild' : ActorMethod<[Principal], [] | [Child]>,
+  'getChildExtended' : ActorMethod<
+    [Principal],
+    [] | [{ 'child' : Child, 'lastEvent' : [] | [AuditEvent] }]
+  >,
+  'getTreasuryPrincipal' : ActorMethod<[], [] | [Principal]>,
+  'getTreasuryUsage' : ActorMethod<
+    [],
+    { 'cap' : bigint, 'day' : bigint, 'used' : bigint }
+  >,
+  'listAuditEvents' : ActorMethod<[bigint, bigint], Array<AuditEvent>>,
   'listByOwner' : ActorMethod<[Principal], Array<Principal>>,
   'listChildren' : ActorMethod<[], Array<Child>>,
   'poolSize' : ActorMethod<[], bigint>,
   'reassignOwner' : ActorMethod<[Principal, Principal], string>,
   'reinstallChild' : ActorMethod<[Principal, Principal, Principal], undefined>,
   'setAdmin' : ActorMethod<[Principal], undefined>,
+  'setBasicPrice' : ActorMethod<[bigint], string>,
   'setDefaultChildWasm' : ActorMethod<[Uint8Array | number[]], undefined>,
+  'setTreasuryPrincipal' : ActorMethod<[[] | [Principal]], string>,
   'startChild' : ActorMethod<[Principal], undefined>,
   'stopChild' : ActorMethod<[Principal], undefined>,
+  'syncTreasuryForChild' : ActorMethod<[Principal, boolean], string>,
   'toggleVisibility' : ActorMethod<[Principal], Visibility>,
   'topUpChild' : ActorMethod<
     [Principal, bigint],

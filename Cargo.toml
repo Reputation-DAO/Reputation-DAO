@@ -1,0 +1,8 @@
+[workspace]
+resolver = "2"
+members = [
+    "src/siwb/ic_siwb",
+    "src/siwb/ic_siwb_provider",
+    "src/siwe/ic_siwe",
+    "src/siwe/ic_siwe_provider",
+]

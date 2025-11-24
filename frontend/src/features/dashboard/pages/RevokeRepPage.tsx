@@ -510,7 +510,7 @@ function InnerRevokeRep(props: InnerRevokeRepProps) {
                               </>
                             ) : (
                               <>
-                                <UserMinus className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                                <UserMinus className="w-5 h-5 mr-2" />
                                 Confirm Revocation
                               </>
                             )}
@@ -533,7 +533,7 @@ function InnerRevokeRep(props: InnerRevokeRepProps) {
                           className="w-full group"
                           disabled={loading}
                         >
-                          <UserMinus className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                          <UserMinus className="w-5 h-5 mr-2" />
                           Revoke Reputation
                         </Button>
                       )}

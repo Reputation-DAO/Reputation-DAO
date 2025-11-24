@@ -32,6 +32,15 @@ type BasicPayInfo =
    memo: text;
    subaccount: blob;
  };
+type AuditEvent = 
+ record {
+   caller: principal;
+   child: opt principal;
+   detail: text;
+   id: nat;
+   kind: text;
+   ts: nat64;
+ };
 service : {
   activateBasicForChildAfterPayment: (cid: principal) ->
    (variant {
@@ -41,6 +50,12 @@ service : {
   adminArchiveExpired: (limit: nat) -> (nat);
   adminBackfillPlanDefaults: (plan: Plan) -> (text);
   adminDrainChild: (canister_id: principal, minRemain: nat) -> (nat);
+  adminForceArchive: (canister_id: principal) -> (text);
+  /// Admin: reattach a canister that is not (or no longer) tracked in byId/store.
+  /// This lets the factory "remember" an orphan child and optionally add it to the reuse pool.
+  adminReattachChild: (canister_id: principal, owner: principal, note: 
+   text, visibility: Visibility, plan: Plan, status: opt Status, expires_opt:
+   opt nat64, addToPool: bool) -> (text);
   adminSetPool: (newPool: vec principal) -> (text);
   adminTreasuryWithdraw: (to_owner: principal, to_sub: opt blob, amount_e8s:
    nat) -> (variant {
@@ -49,6 +64,7 @@ service : {
             });
   /// Archive a child back to pool.
   archiveChild: (canister_id: principal) -> (text);
+  auditEventCount: () -> (nat) query;
   childHealth: (cid: principal) ->
    (opt
      record {
@@ -83,9 +99,42 @@ service : {
                                        });
   /// Delete permanently.
   deleteChild: (canister_id: principal) -> (text);
+  factoryHealth: () ->
+   (record {
+      admin: principal;
+      pool: nat;
+      schemaVersion: nat;
+      totals: record {
+                active: nat;
+                archived: nat;
+                total: nat;
+              };
+      treasury: opt principal;
+      treasuryUsage: record {
+                       cap: nat;
+                       day: nat64;
+                       used: nat;
+                     };
+      vaultCycles: nat;
+      walletEvents: nat;
+      wasmSet: bool;
+    }) query;
   getAdmin: () -> (principal) query;
   getBasicPayInfoForChild: (cid: principal) -> (BasicPayInfo) query;
+  getBasicPrice: () -> (nat) query;
   getChild: (canister_id: principal) -> (opt Child) query;
+  getChildExtended: (canister_id: principal) ->
+   (opt record {
+          child: Child;
+          lastEvent: opt AuditEvent;
+        }) query;
+  getTreasuryPrincipal: () -> (opt principal) query;
+  getTreasuryUsage: () -> (record {
+                             cap: nat;
+                             day: nat64;
+                             used: nat;
+                           }) query;
+  listAuditEvents: (offset: nat, limit: nat) -> (vec AuditEvent) query;
   listByOwner: (owner: principal) -> (vec principal) query;
   listChildren: () -> (vec Child) query;
   poolSize: () -> (nat) query;
@@ -93,9 +142,12 @@ service : {
   reinstallChild: (canister_id: principal, owner: principal, factory:
    principal) -> ();
   setAdmin: (p: principal) -> ();
+  setBasicPrice: (newPriceE8s: nat) -> (text);
   setDefaultChildWasm: (w: blob) -> ();
+  setTreasuryPrincipal: (p: opt principal) -> (text);
   startChild: (canister_id: principal) -> ();
   stopChild: (canister_id: principal) -> ();
+  syncTreasuryForChild: (canister_id: principal, reset: bool) -> (text);
   toggleVisibility: (canister_id: principal) -> (Visibility);
   topUpChild: (canister_id: principal, amount: nat) ->
    (variant {

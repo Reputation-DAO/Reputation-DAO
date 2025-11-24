@@ -1,0 +1,277 @@
+type VaultBalance = 
+ record {
+   btc: nat;
+   eth: nat;
+   icp: nat;
+ };
+type UserId = principal;
+type UserCompliance = 
+ record {
+   kycVerified: bool;
+   tags: vec text;
+ };
+type UserBadges = vec Badge;
+type TipEvent = 
+ record {
+   amount: nat;
+   error: opt text;
+   id: nat;
+   org: OrgId;
+   rail: Rail;
+   success: bool;
+   timestamp: nat;
+   user: UserId;
+ };
+type TierPayout = 
+ record {
+   btcAmount: nat;
+   ethAmount: nat;
+   icpAmount: nat;
+   tier: Tier;
+ };
+type Tier = 
+ variant {
+   Bronze;
+   Custom: text;
+   Gold;
+   Silver;
+ };
+type SpendSnapshot = 
+ record {
+   btc: nat;
+   day: nat;
+   eth: nat;
+   icp: nat;
+   usdE8s: nat;
+ };
+type SpendControl = 
+ record {
+   railDailyCaps: record {
+                    btc: opt nat;
+                    eth: opt nat;
+                    icp: opt nat;
+                  };
+   usdCapE8s: opt nat;
+ };
+type ScheduledPayoutConfig = 
+ record {
+   enabled: bool;
+   frequency: PayoutFrequency;
+   maxBtcPerCycle: nat;
+   maxEthPerCycle: nat;
+   maxIcpPerCycle: nat;
+   tiers: vec TierPayout;
+ };
+type RailsEnabled = 
+ record {
+   btc: bool;
+   eth: bool;
+   icp: bool;
+ };
+type RailThresholds = 
+ record {
+   btcMin: nat;
+   ethMin: nat;
+   icpMin: nat;
+ };
+type RailHealth = 
+ record {
+   available: nat;
+   healthy: bool;
+   minBuffer: nat;
+ };
+type Rail = 
+ variant {
+   BTC;
+   ETH;
+   ICP;
+ };
+type PayoutFrequency = 
+ variant {
+   CustomDays: nat;
+   Monthly;
+   Weekly;
+ };
+type PayoutEvent = 
+ record {
+   error: opt text;
+   id: nat;
+   org: OrgId;
+   rail: Rail;
+   recipients: nat;
+   success: bool;
+   timestamp: nat;
+   totalAmount: nat;
+ };
+type OrgState = 
+ record {
+   archived: bool;
+   child: OrgId;
+   config: OrgConfig;
+   lastActiveTimestamp: nat;
+   lastPayoutTimestamp: nat;
+   nextPayoutDue: nat;
+   tipEventsInWindow: nat;
+   tipWindowStart: nat;
+ };
+type OrgId = principal;
+type OrgConfig = 
+ record {
+   compliance: ComplianceRule;
+   deadman: DeadManConfig;
+   microTips: MicroTipConfig;
+   rails: RailsEnabled;
+   scheduled: ScheduledPayoutConfig;
+   spendControl: opt SpendControl;
+   thresholds: RailThresholds;
+ };
+type NativeDeposit = 
+ record {
+   amount: nat;
+   id: nat;
+   memo: opt text;
+   org: OrgId;
+   rail: Rail;
+   timestamp: nat;
+   txid: text;
+ };
+type MicroTipConfig = 
+ record {
+   btcTipAmount: nat;
+   enabled: bool;
+   ethTipAmount: nat;
+   icpTipAmount: nat;
+   maxBtcPerPeriod: nat;
+   maxEthPerPeriod: nat;
+   maxEventsPerWindow: nat;
+   maxIcpPerPeriod: nat;
+ };
+type IcrcAccount = 
+ record {
+   owner: principal;
+   subaccount: opt blob;
+ };
+type DepositSnapshot = 
+ record {
+   account: IcrcAccount;
+   available: nat;
+   creditedBalance: nat;
+   ledgerBalance: nat;
+ };
+type DeadManConfig = 
+ record {
+   enabled: bool;
+   inactivityThresholdSeconds: nat;
+ };
+type ConversionStatus = 
+ variant {
+   Completed: record {txid: opt text;};
+   Failed: record {reason: text;};
+   Pending;
+   Submitted: record {txid: opt text;};
+ };
+type ConversionIntent = 
+ record {
+   amount: nat;
+   createdAt: nat;
+   direction: ConversionDirection;
+   id: nat;
+   memo: opt text;
+   org: OrgId;
+   rail: Rail;
+   status: ConversionStatus;
+   targetAddress: text;
+   user: UserId;
+ };
+type ConversionDirection = 
+ variant {
+   ToChain;
+   ToNative;
+ };
+type ComplianceRule = 
+ record {
+   kycRequired: bool;
+   tagWhitelist: vec text;
+ };
+type Badge = 
+ record {
+   name: text;
+   rail: opt Rail;
+ };
+service : {
+  allocateFactoryFunds: (org: OrgId, rail: Rail, amount: nat) -> ();
+  checkAllOrgsForDeadman: () -> ();
+  checkAndArchiveOrg: (org: OrgId) -> ();
+  configureGovernanceControllers: (controllers: vec principal) -> ();
+  forceArchiveOrg: (org: OrgId) -> ();
+  getConversionIntent: (id: nat) -> (opt ConversionIntent) query;
+  getFactoryVaultBalance: () -> (VaultBalance) query;
+  getOrgAdmin: (org: OrgId) -> (opt principal) query;
+  getOrgConfig: (org: OrgId) -> (opt OrgConfig) query;
+  getOrgDepositStatus: (org: OrgId, rail: Rail) ->
+   (variant {
+      err: text;
+      ok: DepositSnapshot;
+    });
+  getOrgRails: (org: OrgId) -> (opt RailsEnabled) query;
+  getOrgSpendSnapshot: (org: OrgId) -> (SpendSnapshot) query;
+  getOrgState: (org: OrgId) -> (opt OrgState) query;
+  getOrgVaultBalance: (org: OrgId) -> (VaultBalance) query;
+  getRailHealth: (org: OrgId, rail: Rail) -> (opt RailHealth) query;
+  getUserBadges: (org: OrgId, user: UserId) -> (UserBadges) query;
+  getUserCompliance: (org: OrgId, user: UserId) -> (opt UserCompliance) query;
+  getUserOrgBalances: (org: OrgId, user: UserId) ->
+   (record {
+      btc: nat;
+      eth: nat;
+      icp: nat;
+    }) query;
+  isOrgArchived: (org: OrgId) -> (bool) query;
+  listConversionIntents: (offset: nat, limit: nat) ->
+   (vec ConversionIntent) query;
+  listNativeDeposits: (offset: nat, limit: nat) -> (vec NativeDeposit) query;
+  listPayoutEvents: (offset: nat, limit: nat) -> (vec PayoutEvent) query;
+  listRegisteredOrgs: () -> (vec OrgId) query;
+  listTipEvents: (offset: nat, limit: nat) -> (vec TipEvent) query;
+  markConversionCompleted: (conversionId: nat, txid: opt text) -> (text);
+  markConversionFailed: (conversionId: nat, reason: text, refundVault:
+   bool) -> (text);
+  myOrgBalances: (org: OrgId) -> (record {
+                                    btc: nat;
+                                    eth: nat;
+                                    icp: nat;
+                                  });
+  notifyLedgerDeposit: (org: OrgId, rail: Rail, amount: nat, txMemo:
+   opt text) -> ();
+  recordNativeDeposit: (org: OrgId, rail: Rail, amount: nat, txid: text,
+   memo: opt text) -> (nat);
+  recordOrgDeposit: (org: OrgId, rail: Rail, amount: nat, memo: opt text) ->
+   (text);
+  recordOrgHeartbeat: (org: OrgId) -> ();
+  registerOrg: (org: OrgId, cfg: OrgConfig) -> ();
+  repAwarded: (org: OrgId, user: UserId, _repDelta: int, _meta: opt text) ->
+   ();
+  requestNativeWithdrawal: (org: OrgId, user: UserId, rail: Rail, amount:
+   nat, destination: text, memo: opt text) -> (nat);
+  resetOrgState: (org: OrgId, cfg: OrgConfig, adminPrincipal: principal) ->
+   ();
+  retryConversion: (conversionId: nat) -> (text);
+  runDuePayoutCycles: () -> ();
+  runPayoutCycle: (org: OrgId) -> ();
+  setAdmin: (newAdmin: principal) -> ();
+  setFactory: (p: principal) -> ();
+  setLedgers: (ckbtc: principal, icp: principal, cketh: principal) -> ();
+  setOrgAdmin: (org: OrgId, adminPrincipal: principal) -> ();
+  setOrgRailSubaccount: (org: OrgId, rail: Rail, subaccount: opt blob) ->
+   (text);
+  setRailMinters: (ckbtc: opt principal, cketh: opt principal) -> ();
+  setRailUsdPrice: (rail: Rail, priceE8s: nat) -> ();
+  setUserBadges: (org: OrgId, user: UserId, badges: UserBadges) -> ();
+  setUserCompliance: (org: OrgId, user: UserId, info: UserCompliance) -> ();
+  submitPendingConversions: (limit: nat) -> (nat);
+  updateOrgConfig: (org: OrgId, newConfig: OrgConfig) -> ();
+  withdrawMy: (org: OrgId, rail: Rail, amount: nat, destination: text, memo:
+   opt text) -> (text);
+  withdrawOrgVault: (org: OrgId, rail: Rail, amount: nat, destination: 
+   text, memo: opt text) -> (text);
+}

@@ -45,7 +45,7 @@ const short = (t?: string | null) => (t ? `${t.slice(0, 6)}…${t.slice(-6)}` : 
 /** Read :cid from URL */
 function extractCidFromPathname(pathname: string): string | null {
   const m = pathname.match(
-    /\/dashboard\/(?:home|award-rep|revoke-rep|manage-awarders|view-balances|transaction-log|decay-system|settings)\/([^/]+)/i
+    /\/dashboard\/(?:home|award-rep|revoke-rep|manage-awarders|view-balances|transaction-log|decay-system|settings|economy-settings|my-earnings)\/([^/]+)/i
   );
   return m?.[1] || null;
 }
